@@ -1,0 +1,74 @@
+<UserControl x:Class="SurveillanceGateway.Client.Views.ConnectView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Border Width="760" Style="{StaticResource Card}" Padding="0"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="{StaticResource SideBgBrush}" CornerRadius="14,0,0,14" Padding="26">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Width="48" Height="48" HorizontalAlignment="Left">
+                            <Ellipse Fill="{DynamicResource BrandYellowBrush}" />
+                            <Ellipse Width="24" Height="24" Fill="{StaticResource SideBgBrush}" />
+                            <Ellipse Width="9" Height="9" Margin="0,0,13,13" Fill="White" />
+                        </Grid>
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource BrandYellowBrush}" Text="{svc:T connect.workspace}" />
+                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="24" FontWeight="SemiBold"
+                                       Foreground="White" TextWrapping="Wrap" Margin="0,9,0,0"
+                                       Text="{svc:T connect.welcome}" />
+                            <TextBlock FontFamily="{StaticResource UiFont}" FontSize="12" Foreground="#B7C3BA"
+                                       TextWrapping="Wrap" Margin="0,11,0,0" Text="{svc:T connect.welcomeSub}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="2" FontFamily="{StaticResource MonoFont}" FontSize="10.5"
+                                   Foreground="#8F9A91" Text="{svc:T connect.secure}" />
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="30,28,30,28">
+                    <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T connect.workspace}" />
+                    <TextBlock Style="{StaticResource DisplayText}" FontSize="25" Margin="0,6,0,0"
+                               Text="{svc:T connect.title}" />
+                    <TextBlock Style="{StaticResource LabelText}" Margin="0,6,0,0"
+                               Text="{svc:T connect.subtitle}" />
+
+                    <TextBlock x:Name="ProfilesLabel" Style="{StaticResource LabelText}"
+                               Margin="0,22,0,6" Text="{svc:T connect.savedKeys}" Visibility="Collapsed" />
+                    <ComboBox x:Name="ProfileBox" Style="{StaticResource FieldCombo}"
+                              Margin="0,0,0,4" Visibility="Collapsed" />
+
+                    <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold"
+                               Margin="0,20,0,7" Text="{svc:T connect.serverUrl}" />
+                    <TextBox x:Name="ServerBox" Style="{StaticResource FieldInput}" />
+
+                    <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold"
+                               Margin="0,17,0,7" Text="{svc:T connect.apiKey}" />
+                    <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource FieldPassword}" />
+                    <TextBlock x:Name="KeyHintText" Style="{StaticResource MonoText}" Margin="0,6,0,0" />
+                    <TextBlock Style="{StaticResource LabelText}" Margin="0,11,0,0"
+                               Text="{svc:T connect.lostKey}" />
+
+                    <TextBlock x:Name="StatusText" Style="{StaticResource LabelText}"
+                               Margin="0,15,0,0" Foreground="{DynamicResource StatusCritBrush}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                        <Button x:Name="ConnectButton" Style="{StaticResource PrimaryButton}"
+                                Content="{svc:T connect.connect}" IsDefault="True" />
+                        <Button x:Name="ForgetButton" Style="{StaticResource GhostButton}"
+                                Margin="10,0,0,0" Content="{svc:T connect.forget}"
+                                Visibility="Collapsed" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

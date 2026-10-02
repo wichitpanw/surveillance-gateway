@@ -1,0 +1,88 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Dark tokens. Same keys as Tokens.Light.xaml, so swapping the merged dictionary swaps the
+        whole theme.
+
+        Dark is the default and the one this client is designed around: an operator wall runs dark
+        for a whole shift, and a paper-white surround around live video reads as glare in a
+        room-lit control room.
+
+        The ground is a neutral charcoal so live pictures and status colours remain distinct.
+    -->
+
+    <!-- Grounds and surfaces, darkest first. Panels sit on the ground; nothing is pure black
+         except the video cell itself, which has to be black so letterboxing is invisible. -->
+    <Color x:Key="BackgroundColor">#101315</Color>
+    <Color x:Key="SurfaceColor">#16191B</Color>
+    <Color x:Key="CardColor">#1D2224</Color>
+    <Color x:Key="MutedColor">#23282A</Color>
+    <Color x:Key="ElevatedColor">#2B3133</Color>
+    <Color x:Key="BorderColor">#353C3E</Color>
+
+    <!-- Three levels of ink, so a label can recede without being invisible. -->
+    <Color x:Key="ForegroundColor">#F2F3F1</Color>
+    <Color x:Key="MutedForegroundColor">#A6ADAC</Color>
+    <Color x:Key="FaintForegroundColor">#929C98</Color>
+
+    <Color x:Key="PrimaryColor">#B68C20</Color>
+    <Color x:Key="PrimaryForegroundColor">#FFFFFF</Color>
+
+    <!-- brand yellow. Spent in one place at a time - the selected cell, the primary action - so it
+         keeps meaning "this one". -->
+    <Color x:Key="BrandYellowColor">#FDD20A</Color>
+    <Color x:Key="BrandYellowTextColor">#FDD20A</Color>
+    <Color x:Key="BrandYellowInkColor">#1A1606</Color>
+    <Color x:Key="BrandYellowSoftColor">#2A2510</Color>
+    <Color x:Key="BrandYellowLineColor">#4A3F14</Color>
+
+    <!-- Data blue: charts, codec chips, anything informational. Separate from the accent on
+         purpose, so a chart never looks like a selection. -->
+    <Color x:Key="DataColor">#5C8BFF</Color>
+    <Color x:Key="DataSoftColor">#1A2544</Color>
+    <Color x:Key="DataLineColor">#2E4380</Color>
+
+    <!-- Semantic only. Never used for decoration. -->
+    <Color x:Key="StatusOkColor">#43B17E</Color>
+    <Color x:Key="StatusWarnColor">#EE862B</Color>
+    <Color x:Key="StatusCritColor">#F06B60</Color>
+    <Color x:Key="StatusCritInkColor">#101315</Color>
+    <Color x:Key="StatusCritSoftColor">#2A1716</Color>
+
+    <Color x:Key="VideoGroundColor">#05070E</Color>
+
+    <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+    <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
+    <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" />
+    <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}" />
+    <SolidColorBrush x:Key="ElevatedBrush" Color="{StaticResource ElevatedColor}" />
+    <SolidColorBrush x:Key="MutedForegroundBrush" Color="{StaticResource MutedForegroundColor}" />
+    <SolidColorBrush x:Key="FaintForegroundBrush" Color="{StaticResource FaintForegroundColor}" />
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+    <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
+    <SolidColorBrush x:Key="PrimaryForegroundBrush" Color="{StaticResource PrimaryForegroundColor}" />
+    <SolidColorBrush x:Key="BrandYellowBrush" Color="{StaticResource BrandYellowColor}" />
+    <SolidColorBrush x:Key="BrandYellowTextBrush" Color="{StaticResource BrandYellowTextColor}" />
+    <SolidColorBrush x:Key="BrandYellowInkBrush" Color="{StaticResource BrandYellowInkColor}" />
+    <SolidColorBrush x:Key="BrandYellowSoftBrush" Color="{StaticResource BrandYellowSoftColor}" />
+    <SolidColorBrush x:Key="BrandYellowLineBrush" Color="{StaticResource BrandYellowLineColor}" />
+    <SolidColorBrush x:Key="DataBrush" Color="{StaticResource DataColor}" />
+    <SolidColorBrush x:Key="DataSoftBrush" Color="{StaticResource DataSoftColor}" />
+    <SolidColorBrush x:Key="DataLineBrush" Color="{StaticResource DataLineColor}" />
+    <SolidColorBrush x:Key="StatusOkBrush" Color="{StaticResource StatusOkColor}" />
+    <SolidColorBrush x:Key="StatusWarnBrush" Color="{StaticResource StatusWarnColor}" />
+    <SolidColorBrush x:Key="StatusCritBrush" Color="{StaticResource StatusCritColor}" />
+    <SolidColorBrush x:Key="StatusCritInkBrush" Color="{StaticResource StatusCritInkColor}" />
+    <SolidColorBrush x:Key="StatusCritSoftBrush" Color="{StaticResource StatusCritSoftColor}" />
+    <SolidColorBrush x:Key="VideoGroundBrush" Color="{StaticResource VideoGroundColor}" />
+
+    <!-- Panels are lit slightly from the top, the way the reference design is. One gradient,
+         reused, rather than a different fill per panel. -->
+    <LinearGradientBrush x:Key="PanelBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="{StaticResource CardColor}" />
+        <GradientStop Offset="1" Color="{StaticResource CardColor}" />
+    </LinearGradientBrush>
+
+</ResourceDictionary>

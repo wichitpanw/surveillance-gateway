@@ -1,0 +1,182 @@
+<UserControl x:Class="SurveillanceGateway.Client.Views.CameraDetailView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:SurveillanceGateway.Client.Views"
+             xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
+    <UserControl.Resources>
+        <views:StatusDotConverter x:Key="StatusDot" />
+    </UserControl.Resources>
+
+    <!--
+        Information only. The picture moved to its own window: this page used to be half video and
+        half text, which made it both a poor player (fixed size, one camera at a time) and a poor
+        reference (the text squeezed into a column). Watching is PlayerWindow's job now.
+    -->
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Picker, so this page can be opened on its own and browsed. -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="12,12,0,12" Padding="0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="16,17,16,12">
+                <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T detail.library}" />
+                <TextBlock Style="{StaticResource HeadingText}" Margin="0,5,0,0"
+                           Text="{svc:T detail.pick}" />
+                <TextBlock x:Name="CameraCountText" Style="{StaticResource MonoText}" Margin="0,5,0,0" />
+                <Grid Margin="0,15,0,0">
+                    <TextBox x:Name="SearchBox" Style="{StaticResource FieldInput}" />
+                    <TextBlock x:Name="SearchHint" Style="{StaticResource LabelText}" Margin="13,0,0,0"
+                               VerticalAlignment="Center" IsHitTestVisible="False"
+                               Text="{svc:T wall.search}" />
+                </Grid>
+            </StackPanel>
+
+            <ListBox x:Name="CameraList"
+                     Grid.Row="1"
+                     Margin="9,0,9,12"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.ContainerStyle>
+                            <Style TargetType="GroupItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <Expander IsExpanded="False" Tag="CameraGroup" Loaded="OnCameraGroupLoaded"
+                                                      Background="Transparent"
+                                                      BorderThickness="0"
+                                                      Margin="0,4,0,2">
+                                                <Expander.Header>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource EyebrowText}"
+                                                                   VerticalAlignment="Center"
+                                                                   Text="{Binding Name}" />
+                                                        <!-- The count is what tells someone a
+                                                             collapsed group still has cameras. -->
+                                                        <TextBlock Style="{StaticResource MonoText}"
+                                                                   Margin="8,0,0,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource FaintForegroundBrush}"
+                                                                   Text="{Binding ItemCount}" />
+                                                    </StackPanel>
+                                                </Expander.Header>
+                                                <ItemsPresenter Margin="0,4,0,0" />
+                                            </Expander>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </GroupStyle.ContainerStyle>
+                    </GroupStyle>
+                </ListBox.GroupStyle>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0,0,0,3" />
+                        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+                        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Row" Background="Transparent" BorderBrush="Transparent"
+                                            BorderThickness="1" CornerRadius="{StaticResource RadiusControl}"
+                                            Padding="10,8">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource BrandYellowSoftBrush}" />
+                                            <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource BrandYellowLineBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0"
+                                     Width="7" Height="7"
+                                     Margin="0,0,8,0"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding Availability, Converter={StaticResource StatusDot}}"
+                                     ToolTip="{Binding AvailabilityText}" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Style="{StaticResource MonoText}" FontSize="10.5"
+                                           Text="{Binding AvailabilityText}" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="12,18,22,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T detail.record}" />
+                <TextBlock x:Name="TitleText" Style="{StaticResource DisplayText}" FontSize="25"
+                           Margin="0,4,0,0" Text="{svc:T detail.none}" />
+                <TextBlock x:Name="GroupText" Style="{StaticResource LabelText}" Margin="0,4,0,0" Text="" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource Card}" Padding="20">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T detail.info}" />
+                            <TextBlock x:Name="InfoText" Style="{StaticResource MonoText}" Margin="0,13,0,0" Text="" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Padding="20" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T detail.streams}" />
+                            <TextBlock x:Name="StreamText" Style="{StaticResource MonoText}" Margin="0,13,0,0" Text="" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Padding="20" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T detail.analytics}" />
+                            <TextBlock x:Name="AnalyticsText" Style="{StaticResource MonoText}" Margin="0,13,0,0" Text="" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0">
+                <Button x:Name="OpenButton" Style="{StaticResource PrimaryButton}" Content="{svc:T detail.open}" />
+                <Button x:Name="MapButton" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Content="{svc:T detail.showOnMap}" />
+                <Button x:Name="BackButton" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Content="{svc:T detail.back}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

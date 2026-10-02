@@ -1,0 +1,17 @@
+<Application x:Class="SurveillanceGateway.Client.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--
+                    Slot 0 is the theme token set and is swapped at runtime by App.ApplyTheme.
+                    Controls.xaml refers to those tokens with DynamicResource, so the swap
+                    repaints everything without rebuilding any view.
+                -->
+                <ResourceDictionary Source="Themes/Tokens.Dark.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

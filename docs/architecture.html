@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Surveillance Gateway Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1520px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.75rem, 2.6vw + 0.75rem, 2.5rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    .scroll { overflow-x: auto; }
+    svg { width: 100%; min-width: 1100px; display: block; }
+    footer {
+      margin-top: 1.25rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(45,49,66,0.12);
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      line-height: 1.7;
+      color: rgba(79,93,117,0.75);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Surveillance Gateway · updated 2026-09-30 · build 5c0b404</p>
+    <h1>Edges collect, regions gather, central serves</h1>
+
+    <div class="scroll">
+    <svg viewBox="0 0 1520 716" role="img" aria-labelledby="gw-architecture-title gw-architecture-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="gw-architecture-title">Surveillance Gateway three-tier architecture</title>
+      <desc id="gw-architecture-desc">Cameras, NVRs and VMS are registered at Edge gateways, which keep camera credentials and issue global IDs; each Edge links up to its Regional gateway, and each Regional links up to the national Central gateway, passing catalog and control on one path and untranscoded video on another. Regional issues API keys to clients inside its region, which keep working if the Central link is cut, while Central issues keys to the web platform, Windows client and external systems.</desc>
+
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+        </marker>
+        <marker id="arrow-ink" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2d3142"/>
+        </marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- ================= zones (drawn first) ================= -->
+      <rect x="24" y="208" width="176" height="144" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="88" y="202" width="48" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="112" y="211" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">FIELD</text>
+
+      <rect x="280" y="208" width="240" height="144" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="304" y="202" width="192" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="400" y="211" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">EDGE · 101 WIN · 102 UBUNTU</text>
+
+      <rect x="608" y="208" width="240" height="144" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="632" y="202" width="192" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="728" y="211" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">REGIONAL · NODE 100 · :5273</text>
+
+      <rect x="936" y="208" width="240" height="144" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="960" y="202" width="192" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="1056" y="211" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CENTRAL · NODE 000 · :5173</text>
+
+      <rect x="608" y="440" width="240" height="136" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="656" y="434" width="144" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="728" y="443" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">IN-REGION OPERATORS</text>
+
+      <rect x="1280" y="96" width="200" height="352" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="1312" y="90" width="136" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="1380" y="99" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">NATIONAL OPERATORS</text>
+
+      <!-- ================= arrows (before boxes) ================= -->
+
+      <!-- cameras -> edge : the picture -->
+      <line x1="184" y1="296" x2="296" y2="296" stroke="#2d3142" stroke-width="1.6" marker-end="url(#arrow-ink)"/>
+      <rect x="222" y="302" width="44" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="244" y="314" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RTSP</text>
+
+      <!-- edge -> cameras : ONVIF scan and status check (dashed, 32 px above the video line) -->
+      <line x1="296" y1="264" x2="184" y2="264" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="218" y="242" width="52" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="244" y="254" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ONVIF</text>
+
+      <!-- edge -> regional : catalog, state, PTZ, updates (control) and video (_raw copy) -->
+      <line x1="504" y1="264" x2="624" y2="264" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="520" y="242" width="88" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="564" y="254" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PULL·LINK</text>
+      <line x1="504" y1="296" x2="624" y2="296" stroke="#2d3142" stroke-width="1.6" marker-end="url(#arrow-ink)"/>
+      <rect x="538" y="302" width="52" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="564" y="314" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">_RAW</text>
+
+      <!-- regional -> central : same two paths -->
+      <line x1="832" y1="264" x2="952" y2="264" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="848" y="242" width="88" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="892" y="254" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PULL·LINK</text>
+      <line x1="832" y1="296" x2="952" y2="296" stroke="#2d3142" stroke-width="1.6" marker-end="url(#arrow-ink)"/>
+      <rect x="866" y="302" width="52" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="892" y="314" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">_RAW</text>
+
+      <!-- regional -> in-region clients : own API key, works without Central -->
+      <line x1="728" y1="328" x2="728" y2="464" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="736" y="384" width="72" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="772" y="396" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">API KEY</text>
+
+      <!-- central -> web platform : leaves the right edge, turns up -->
+      <path d="M 1160,248 H 1196 Q 1204,248 1204,240 V 168 Q 1204,160 1212,160 H 1296" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="1216" y="138" width="72" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="1252" y="150" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SESSION</text>
+
+      <!-- central -> windows client : api, video, events -->
+      <line x1="1160" y1="280" x2="1296" y2="280" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="1180" y="258" width="96" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="1228" y="270" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">API·VIDEO</text>
+
+      <!-- central -> external systems : leaves the right edge, turns down -->
+      <path d="M 1160,312 H 1196 Q 1204,312 1204,320 V 376 Q 1204,384 1212,384 H 1296" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="1224" y="362" width="56" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="1252" y="374" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">KEY</text>
+
+      <!-- ================= nodes ================= -->
+
+      <!-- cameras, NVRs and VMS -->
+      <rect x="40" y="232" width="144" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="232" width="144" height="96" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="48" y="240" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="68" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">FIELD</text>
+      <text x="112" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cameras</text>
+      <text x="112" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">NVR · VMS</text>
+      <text x="112" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">main + sub</text>
+
+      <!-- edge gateway -->
+      <rect x="296" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="296" y="232" width="208" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="304" y="240" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="324" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
+      <text x="400" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Edge gateway</text>
+      <text x="400" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">camera creds · global id</text>
+      <text x="400" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">go2rtc _raw · no gpu</text>
+
+      <!-- regional gateway (focal) -->
+      <rect x="624" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="624" y="232" width="208" height="96" rx="6" fill="rgba(235,108,54,0.10)" stroke="#eb6c36" stroke-width="1"/>
+      <rect x="632" y="240" width="40" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
+      <text x="652" y="249" fill="rgba(235,108,54,0.90)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
+      <text x="728" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Regional gateway</text>
+      <text x="728" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">adds Edge · region keys</text>
+      <text x="728" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">catalog · go2rtc relay</text>
+
+      <!-- central gateway -->
+      <rect x="952" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="952" y="232" width="208" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="960" y="240" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="980" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
+      <text x="1056" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Central gateway</text>
+      <text x="1056" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">adds Regional · scope</text>
+      <text x="1056" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">h.264 for web only</text>
+
+      <!-- in-region clients -->
+      <rect x="624" y="464" width="208" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="624" y="464" width="208" height="88" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="632" y="472" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="646" y="481" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WPF</text>
+      <text x="728" y="504" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Regional clients</text>
+      <text x="728" y="524" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">live · playback · ptz</text>
+      <text x="728" y="540" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">works if Central is cut</text>
+
+      <!-- web browser -->
+      <rect x="1296" y="120" width="168" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="1296" y="120" width="168" height="80" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="1304" y="128" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="1318" y="137" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WEB</text>
+      <text x="1380" y="160" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Web platform</text>
+      <text x="1380" y="182" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">live · map · admin</text>
+
+      <!-- windows client -->
+      <rect x="1296" y="224" width="168" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="1296" y="224" width="168" height="96" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="1304" y="232" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="1318" y="241" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WPF</text>
+      <text x="1380" y="268" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Windows client</text>
+      <text x="1380" y="288" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">h.265 on own gpu</text>
+      <text x="1380" y="306" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">wall · map · ptz</text>
+
+      <!-- external systems -->
+      <rect x="1296" y="344" width="168" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="1296" y="344" width="168" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="1304" y="352" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="1318" y="361" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+      <text x="1380" y="384" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">External systems</text>
+      <text x="1380" y="406" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">/api/v1 · bearer key</text>
+
+      <!-- ================= legend ================= -->
+      <line x1="40" y1="608" x2="1480" y2="608" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+      <rect x="132" y="618" width="14" height="12" rx="3" fill="rgba(235,108,54,0.10)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="156" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FOCAL · NEW TIER</text>
+
+      <rect x="292" y="618" width="14" height="12" rx="3" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="316" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">SERVICE</text>
+
+      <rect x="404" y="618" width="14" height="12" rx="3" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="428" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">OPERATOR</text>
+
+      <rect x="524" y="618" width="14" height="12" rx="3" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="548" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FIELD · EXTERNAL</text>
+
+      <line x1="132" y1="668" x2="164" y2="668" stroke="#2d3142" stroke-width="1.6"/>
+      <text x="176" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">VIDEO, NOT TRANSCODED</text>
+
+      <line x1="380" y1="668" x2="412" y2="668" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="424" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">CATALOG · STATE · PTZ · UPDATES</text>
+
+      <line x1="700" y1="668" x2="732" y2="668" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="744" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">SCAN · CONFIG</text>
+
+      <line x1="900" y1="668" x2="932" y2="668" stroke="#2e5aa8" stroke-width="1.2"/>
+      <text x="944" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">SERVED TO OPERATORS</text>
+    </svg>
+    </div>
+
+    <footer>Central adds Regional only · Regional adds Edge only · Edge adds cameras (province + district required) · child ↔ parent: pull (parent reads child /api/v1 with a key) or link (child dials ws://parent/api/edge-link, ffmpeg -c copy) · global id issued once at the Edge · updates signed ed25519 (sig + sig2), mirrored down the chain · AI parked · no TLS: LAN / Tailscale only</footer>
+  </div>
+</body>
+</html>

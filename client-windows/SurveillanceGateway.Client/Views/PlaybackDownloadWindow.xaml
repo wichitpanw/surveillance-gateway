@@ -1,0 +1,31 @@
+<Window x:Class="SurveillanceGateway.Client.Views.PlaybackDownloadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services"
+        Title="{svc:T playback.download}" Width="510" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource ForegroundBrush}"
+        FontFamily="{StaticResource UiFont}" Closing="OnClosing">
+    <StackPanel Margin="24">
+        <TextBlock x:Name="CameraText" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBlock x:Name="DayText" Margin="0,6,0,12" />
+        <TextBlock Text="{svc:T playback.downloadHint}" TextWrapping="Wrap" Margin="0,0,0,16" />
+        <Grid x:Name="TimeFields">
+            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="16" /><ColumnDefinition /></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="{svc:T playback.downloadStart}" Margin="0,0,0,6" />
+                <TextBox x:Name="StartBox" FontFamily="{StaticResource MonoFont}" Padding="8" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="{svc:T playback.downloadEnd}" Margin="0,0,0,6" />
+                <TextBox x:Name="EndBox" FontFamily="{StaticResource MonoFont}" Padding="8" />
+            </StackPanel>
+        </Grid>
+        <ProgressBar x:Name="DownloadProgress" Height="6" Margin="0,20,0,8" Visibility="Collapsed" IsIndeterminate="True" />
+        <TextBlock x:Name="DownloadStatus" Margin="0,12,0,16" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="DownloadButton" Content="{svc:T playback.download}" Click="OnDownload" Padding="16,8" Margin="0,0,8,0" />
+            <Button x:Name="CancelButton" Content="{svc:T playback.downloadClose}" Click="OnCancel" Padding="16,8" />
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -1,0 +1,36 @@
+<UserControl x:Class="SurveillanceGateway.Client.Views.MapView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}" Margin="12,12,12,10" Padding="17,13">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T map.workspace}" />
+                    <TextBlock Style="{StaticResource HeadingText}" Margin="0,3,0,0"
+                               Text="{svc:T shell.navMap}" />
+                    <TextBlock x:Name="StatusText" Style="{StaticResource MonoText}"
+                               Margin="0,5,10,0" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Button x:Name="ReloadButton" Grid.Column="1" Style="{StaticResource GhostButton}"
+                        VerticalAlignment="Center" Content="{svc:T map.reload}" />
+            </Grid>
+        </Border>
+
+        <!--
+            WebView2 กินทั้งช่องและไม่มีอะไรของ WPF วางทับ — ทั้งคู่เป็น HWND เหมือน VideoView
+            การคลิกหมุดจึงเปิดกล้องที่หน้ารายละเอียดแบบ native แทนที่จะซ้อนวิดีโอบนแผนที่
+        -->
+        <wv2:WebView2 x:Name="Web" Grid.Row="1" Margin="12,0,12,12" />
+    </Grid>
+</UserControl>

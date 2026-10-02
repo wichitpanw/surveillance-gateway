@@ -1,0 +1,307 @@
+<UserControl x:Class="SurveillanceGateway.Client.Views.PlaybackView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services"
+             xmlns:views="clr-namespace:SurveillanceGateway.Client.Views"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF">
+    <UserControl.Resources>
+        <views:StatusDotConverter x:Key="StatusDot" />
+        <!-- ไอคอนแบบเติมสี (เล่น/พัก/หยุด/ข้าม) ใช้สีตามปุ่มที่ครอบอยู่ -->
+        <Style x:Key="FillIcon" TargetType="Path">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}" />
+        </Style>
+        <Style x:Key="TransportButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+        </Style>
+        <!-- ปุ่มเล่นหลัก: วงกลมสีเหลืองของแบรนด์ -->
+        <Style x:Key="PlayButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Foreground" Value="{DynamicResource BrandYellowInkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource BrandYellowBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="23">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.88" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource MutedBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource FaintForegroundBrush}" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CameraTreeItem" TargetType="TreeViewItem">
+            <!-- กลุ่มเริ่มแบบหุบ (กล้องหลายร้อยตัว) · ขณะค้นหาเปิดให้เห็นผล -->
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=OneTime}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+            <Setter Property="Padding" Value="6,5" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <StackPanel>
+                            <Border x:Name="Row" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                                    CornerRadius="{StaticResource RadiusControl}" Padding="{TemplateBinding Padding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="18" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ToggleButton x:Name="Expander" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Focusable="False" Cursor="Hand" VerticalAlignment="Center">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="Transparent" Width="16" Height="16">
+                                                    <Path x:Name="Chevron" Width="8" Height="8" Stretch="Uniform"
+                                                          Stroke="{DynamicResource FaintForegroundBrush}" StrokeThickness="1.8"
+                                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M9 5 L16 12 L9 19"
+                                                          RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform>
+                                                            <RotateTransform Angle="0" />
+                                                        </Path.RenderTransform>
+                                                    </Path>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="Chevron" Property="RenderTransform">
+                                                            <Setter.Value>
+                                                                <RotateTransform Angle="90" />
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                    <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ItemsPresenter x:Name="Children" Margin="12,0,0,4" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsExpanded" Value="False">
+                                <Setter TargetName="Children" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource BrandYellowSoftBrush}" />
+                                <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource BrandYellowLineBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280" MinWidth="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- รายชื่อกล้อง -->
+        <Border Margin="16,16,8,16" Style="{StaticResource Card}" Padding="12">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource EyebrowText}" Margin="4,0,0,10"
+                           Text="{svc:T playback.cameras}" />
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <TextBox x:Name="SearchBox" Style="{StaticResource FieldInput}" Padding="32,8,11,8"
+                             TextChanged="OnSearchChanged" />
+                    <Path Style="{StaticResource GlyphIcon}" Width="14" Height="14" HorizontalAlignment="Left" Margin="11,0,0,0"
+                          Stroke="{DynamicResource FaintForegroundBrush}" IsHitTestVisible="False"
+                          Data="M10.5 17 A6.5 6.5 0 1 1 10.5 4 A6.5 6.5 0 1 1 10.5 17 M15.5 15.5 L20 20" />
+                    <TextBlock x:Name="SearchPlaceholder" Text="{svc:T playback.search}" Margin="33,0,0,0"
+                               VerticalAlignment="Center" IsHitTestVisible="False"
+                               Style="{StaticResource LabelText}" Foreground="{DynamicResource FaintForegroundBrush}" />
+                </Grid>
+                <TreeView x:Name="CameraTree" Background="Transparent" BorderThickness="0"
+                          ItemContainerStyle="{StaticResource CameraTreeItem}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          SelectedItemChanged="OnCameraSelected">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type views:PlaybackCameraGroup}" ItemsSource="{Binding Cameras}"
+                                                  ItemContainerStyle="{StaticResource CameraTreeItem}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Style="{StaticResource MonoText}"
+                                           Foreground="{DynamicResource FaintForegroundBrush}" Margin="6,0,2,0" />
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
+                                           FontFamily="{StaticResource DisplayFont}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                        </HierarchicalDataTemplate>
+                        <DataTemplate DataType="{x:Type views:PlaybackCameraItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Width="7" Height="7" Margin="0,0,9,0" VerticalAlignment="Center"
+                                         Fill="{Binding Camera.Availability, Converter={StaticResource StatusDot}}"
+                                         ToolTip="{Binding Camera.AvailabilityText}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" Style="{StaticResource BodyText}" FontSize="12.5"
+                                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </TreeView.Resources>
+                </TreeView>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="8,16,16,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- หัว: ชื่อกล้อง + เลือกวัน -->
+            <Grid Margin="2,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="CameraTitle" Style="{StaticResource HeadingText}" FontSize="20"
+                               TextTrimming="CharacterEllipsis" Text="{svc:T playback.selectCamera}" />
+                    <TextBlock x:Name="CameraSubtitle" Style="{StaticResource LabelText}" Margin="0,3,0,0"
+                               Text="{svc:T playback.hint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource IconButton}" Click="OnPreviousDay" ToolTip="{svc:T playback.prevDay}">
+                        <Path Style="{StaticResource GlyphIcon}" Width="12" Height="12" Data="M15 5 L8 12 L15 19" />
+                    </Button>
+                    <Button x:Name="DateButton" Style="{StaticResource GhostButton}" Margin="4,0" Padding="12,8" Click="OnOpenCalendar">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource GlyphIcon}" Width="14" Height="14" Margin="0,0,8,0"
+                                  Data="M4 6 H20 V20 H4 Z M4 10 H20 M8 3 V7 M16 3 V7" />
+                            <TextBlock x:Name="DateText" MinWidth="120" TextAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource IconButton}" Click="OnNextDay" ToolTip="{svc:T playback.nextDay}">
+                        <Path Style="{StaticResource GlyphIcon}" Width="12" Height="12" Data="M9 5 L16 12 L9 19" />
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="12,8" Click="OnToday"
+                            Content="{svc:T playback.today}" />
+                    <Button Style="{StaticResource IconButton}" Margin="6,0,0,0" Click="OnRefresh" ToolTip="{svc:T playback.refresh}">
+                        <Path Style="{StaticResource GlyphIcon}" Data="M20 11 A8 8 0 1 0 17.7 17 M20 5 V11 H14" />
+                    </Button>
+                </StackPanel>
+                <Popup x:Name="CalendarPopup" PlacementTarget="{Binding ElementName=DateButton}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True" VerticalOffset="6">
+                    <Border Style="{StaticResource Card}" Padding="6">
+                        <Calendar x:Name="DayCalendar" SelectedDatesChanged="OnCalendarPicked" />
+                    </Border>
+                </Popup>
+            </Grid>
+
+            <!-- ภาพ (HWND ของ libVLC — วาด WPF ทับไม่ได้) -->
+            <Border Grid.Row="1" Background="{DynamicResource VideoGroundBrush}" CornerRadius="{StaticResource RadiusPanel}"
+                    Padding="0" ClipToBounds="True">
+                <vlc:VideoView x:Name="Video" />
+            </Border>
+
+            <!-- แถบควบคุม + เส้นเวลา -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16,12,16,14">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- เวลาที่กำลังเล่น + สถานะ -->
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="ClockText" Text="--:--:--" FontFamily="{StaticResource MonoFont}" FontSize="22"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <Ellipse x:Name="StateDot" Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center"
+                                         Fill="{DynamicResource FaintForegroundBrush}" />
+                                <TextBlock x:Name="StatusText" Style="{StaticResource LabelText}" TextWrapping="NoWrap"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="340" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- ปุ่มเล่น -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource TransportButton}" Click="OnPreviousRecording" ToolTip="{svc:T playback.prevRecording}">
+                                <Path Style="{StaticResource FillIcon}" Width="12" Height="12" Data="M5 4 H8 V20 H5 Z M20 4 L9 12 L20 20 Z" />
+                            </Button>
+                            <Button Style="{StaticResource TransportButton}" Margin="4,0" Click="OnBack" ToolTip="{svc:T playback.back30}">
+                                <Path Style="{StaticResource FillIcon}" Data="M11 6 L4 12 L11 18 Z M20 6 L13 12 L20 18 Z" />
+                            </Button>
+                            <Button x:Name="PlayButton" Style="{StaticResource PlayButtonStyle}" Margin="6,0" Click="OnPlayPause"
+                                    ToolTip="{svc:T playback.playPause}">
+                                <Grid>
+                                    <Path x:Name="PlayIcon" Style="{StaticResource FillIcon}" Width="16" Height="16" Margin="3,0,0,0"
+                                          Data="M7 4 L20 12 L7 20 Z" />
+                                    <Path x:Name="PauseIcon" Style="{StaticResource FillIcon}" Width="15" Height="15" Visibility="Collapsed"
+                                          Data="M6 4 H10 V20 H6 Z M14 4 H18 V20 H14 Z" />
+                                </Grid>
+                            </Button>
+                            <Button Style="{StaticResource TransportButton}" Margin="4,0" Click="OnForward" ToolTip="{svc:T playback.forward30}">
+                                <Path Style="{StaticResource FillIcon}" Data="M4 6 L11 12 L4 18 Z M13 6 L20 12 L13 18 Z" />
+                            </Button>
+                            <Button Style="{StaticResource TransportButton}" Click="OnNextRecording" ToolTip="{svc:T playback.nextRecording}">
+                                <Path Style="{StaticResource FillIcon}" Width="12" Height="12" Data="M16 4 H19 V20 H16 Z M4 4 L15 12 L4 20 Z" />
+                            </Button>
+                            <Button Style="{StaticResource TransportButton}" Margin="10,0,0,0" Click="OnStop" ToolTip="{svc:T playback.stop}">
+                                <Path Style="{StaticResource FillIcon}" Width="11" Height="11" Data="M6 6 H18 V18 H6 Z" />
+                            </Button>
+                            <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="10,7" Click="OnDownload"
+                                    Content="{svc:T playback.download}" ToolTip="{svc:T playback.downloadHint}" />
+                        </StackPanel>
+
+                        <!-- ไปที่เวลา + ซูม -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBox x:Name="TimeBox" Style="{StaticResource FieldInput}" Width="106" Padding="10,7"
+                                     FontFamily="{StaticResource MonoFont}" Text="00:00:00" KeyDown="OnTimeBoxKey"
+                                     ToolTip="{svc:T playback.goToHint}" />
+                            <Button Style="{StaticResource GhostButton}" Margin="6,0,14,0" Padding="12,7" Click="OnGoTo"
+                                    Content="{svc:T playback.goTo}" />
+                            <Button Style="{StaticResource IconButton}" Click="OnZoomOut" ToolTip="{svc:T playback.zoomOut}">
+                                <Path Style="{StaticResource GlyphIcon}" Width="12" Height="12" Data="M5 12 H19" />
+                            </Button>
+                            <Button Style="{StaticResource IconButton}" Click="OnZoomIn" ToolTip="{svc:T playback.zoomIn}">
+                                <Path Style="{StaticResource GlyphIcon}" Width="12" Height="12" Data="M5 12 H19 M12 5 V19" />
+                            </Button>
+                            <Button Style="{StaticResource IconButton}" Click="OnZoomFit" ToolTip="{svc:T playback.zoomFit}">
+                                <Path Style="{StaticResource GlyphIcon}" Width="13" Height="13"
+                                      Data="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <views:PlaybackTimeline x:Name="Timeline" Margin="0,14,0,0" />
+                    <DockPanel Margin="0,6,0,0">
+                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                            <Border Width="10" Height="10" CornerRadius="2" Background="{DynamicResource DataBrush}" VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource LabelText}" Margin="6,0,0,0" Text="{svc:T playback.legendRecorded}" />
+                        </StackPanel>
+                        <TextBlock x:Name="RangeSummary" Style="{StaticResource LabelText}" HorizontalAlignment="Right"
+                                   TextWrapping="NoWrap" Foreground="{DynamicResource FaintForegroundBrush}" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

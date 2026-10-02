@@ -1,0 +1,69 @@
+<UserControl x:Class="SurveillanceGateway.Client.Views.EventsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
+    <!--
+        AI events relayed by central from the edges: rule hits (line crossed, zone entered, loitering)
+        จากกล้อง/NVR/VMS/API ภายนอก โดยไม่รัน inference ใน gateway
+        The last 24 hours load when the page opens; new events arrive over the event stream.
+        Clicking a row opens EventDetailWindow with the full snapshot.
+    -->
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="26,23,26,12">
+            <StackPanel>
+                <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T events.eyebrow}" />
+                <TextBlock Style="{StaticResource HeadingText}" FontSize="22" Margin="0,5,0,0" Text="{svc:T shell.navEvents}" />
+                <TextBlock x:Name="SubText" Style="{StaticResource LabelText}" Margin="0,5,0,0" TextWrapping="Wrap" />
+                <WrapPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource LabelText}" Text="{svc:T events.filter.edge}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox x:Name="EdgeFilter" Style="{StaticResource FieldCombo}" Width="150" Margin="0,0,16,0" DisplayMemberPath="Text" SelectedValuePath="Value"
+                              AutomationProperties.Name="{svc:T events.filter.edge}" />
+                    <TextBlock Style="{StaticResource LabelText}" Text="{svc:T events.filter.group}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox x:Name="GroupFilter" Style="{StaticResource FieldCombo}" Width="180" Margin="0,0,16,0" DisplayMemberPath="Text" SelectedValuePath="Value"
+                              AutomationProperties.Name="{svc:T events.filter.group}" />
+                    <TextBlock Style="{StaticResource LabelText}" Text="{svc:T events.filter.origin}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox x:Name="OriginFilter" Style="{StaticResource FieldCombo}" Width="170" DisplayMemberPath="Text" SelectedValuePath="Value"
+                              AutomationProperties.Name="{svc:T events.filter.origin}" />
+                </WrapPanel>
+            </StackPanel>
+            <Button x:Name="RefreshButton" Style="{StaticResource GhostButton}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Content="{svc:T events.refresh}" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="26,0,26,24">
+                <ItemsControl x:Name="EventList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8" Padding="10" CornerRadius="{StaticResource RadiusControl}" BorderThickness="1"
+                                    BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource SurfaceBrush}"
+                                    Cursor="Hand" MouseLeftButtonUp="OnRowClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="128" Height="72" CornerRadius="4" Background="{DynamicResource BackgroundBrush}" ClipToBounds="True">
+                                        <Image Source="{Binding Thumb}" Stretch="UniformToFill" />
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center" Style="{StaticResource MonoText}"
+                                               FontSize="13" Text="{Binding Time}" />
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource BodyText}" FontSize="13.5" FontWeight="SemiBold" Text="{Binding Title}" />
+                                        <TextBlock Style="{StaticResource LabelText}" FontSize="11.5" Margin="0,3,0,0" TextWrapping="Wrap" Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="EmptyText" Style="{StaticResource LabelText}" Margin="0,20,0,0" TextWrapping="Wrap"
+                           Text="{svc:T events.empty}" Visibility="Collapsed" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

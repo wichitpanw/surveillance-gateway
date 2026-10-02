@@ -1,0 +1,1321 @@
+<title>Camera onboarding backend</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Noto+Serif+Thai:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f5f5;
+    --paper-2: #ececec;
+    --card: #ffffff;
+    --ink: #2d3142;
+    --muted: #4f5d75;
+    --soft: #7a8399;
+    --rule: rgba(45,49,66,0.12);
+    --rule-solid: #bfc0c0;
+    --accent: #eb6c36;
+    --accent-tint: rgba(235,108,54,0.08);
+    --link: #2e5aa8;
+    --ink-05: rgba(45,49,66,0.05);
+    --ink-03: rgba(45,49,66,0.03);
+    --ink-30: rgba(45,49,66,0.30);
+    --muted-10: rgba(79,93,117,0.10);
+    --sans: 'Geist', 'IBM Plex Sans Thai', system-ui, sans-serif;
+    --serif: 'Instrument Serif', 'Noto Serif Thai', Georgia, serif;
+    --mono: 'Geist Mono', 'IBM Plex Sans Thai', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #2d3142; --paper-2: #393e53; --card: #343950;
+      --ink: #f5f5f5; --muted: #bfc0c0; --soft: #8e98ac;
+      --rule: rgba(245,245,245,0.12); --rule-solid: rgba(191,192,192,0.25);
+      --accent: #f08a59; --accent-tint: rgba(240,138,89,0.10); --link: #6a95d8;
+      --ink-05: rgba(245,245,245,0.05); --ink-03: rgba(245,245,245,0.03);
+      --ink-30: rgba(245,245,245,0.30); --muted-10: rgba(191,192,192,0.10);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #2d3142; --paper-2: #393e53; --card: #343950;
+    --ink: #f5f5f5; --muted: #bfc0c0; --soft: #8e98ac;
+    --rule: rgba(245,245,245,0.12); --rule-solid: rgba(191,192,192,0.25);
+    --accent: #f08a59; --accent-tint: rgba(240,138,89,0.10); --link: #6a95d8;
+    --ink-05: rgba(245,245,245,0.05); --ink-03: rgba(245,245,245,0.03);
+    --ink-30: rgba(245,245,245,0.30); --muted-10: rgba(191,192,192,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.65;
+    padding-inline: 16px;
+    padding-block: 48px 64px;
+  }
+  .frame { max-width: 1120px; margin: 0 auto; display: grid; gap: 56px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 400; font-size: clamp(2rem, 3.4vw + 1rem, 3rem);
+    line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance;
+  }
+  h2 {
+    font-family: var(--serif); font-weight: 400; font-size: 1.75rem; line-height: 1.2;
+    margin: 0 0 8px; text-wrap: balance;
+  }
+  h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  p { margin: 0; max-width: 68ch; }
+  .lede { color: var(--muted); font-size: 16px; }
+  section { display: grid; gap: 20px; }
+  .sec-head { display: grid; gap: 4px; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  code { background: var(--ink-05); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+
+  .principles { display: grid; grid-template-columns: 1.15fr 1fr 0.95fr; gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 20px;
+    display: grid; gap: 8px; align-content: start;
+  }
+  .card-head { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); flex: none; }
+  .dot.accent { background: var(--accent); }
+  .dot.link { background: var(--link); }
+  .dot.muted { background: var(--soft); }
+  .card p { font-size: 14px; color: var(--muted); }
+
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .d-wide svg { min-width: 980px; }
+  .d-mid svg { min-width: 760px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 860px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+  th {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--rule-solid);
+  }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  td .mono { color: var(--muted); }
+  .tag {
+    display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
+    border: 1px solid var(--rule-solid); border-radius: 2px; padding: 0 5px; color: var(--muted);
+    white-space: nowrap;
+  }
+  .tag.accent { border-color: var(--accent); color: var(--accent); }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; padding-top: 12px; border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .sw { width: 18px; height: 12px; border-radius: 2px; border: 1px solid var(--ink); background: var(--card); }
+  .sw.store { background: var(--ink-05); border-color: var(--muted); }
+  .sw.input { background: var(--muted-10); border-color: var(--soft); }
+  .sw.focal { background: var(--accent-tint); border-color: var(--accent); }
+  .sw.ext { background: var(--ink-03); border-color: var(--ink-30); }
+  .sw.opt { background: var(--ink-03); border: 1px dashed var(--ink-30); }
+  .sw.oval { border-radius: 8px; }
+  .sw.diamond { width: 11px; height: 11px; transform: rotate(45deg); margin-inline: 3px; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 32px; }
+  .notes > div { display: grid; gap: 4px; }
+  .notes p { font-size: 14px; color: var(--muted); }
+  ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--muted); max-width: 72ch; }
+  ul.plain strong { color: var(--ink); font-weight: 600; }
+
+  .type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .tcard { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; display: grid; gap: 12px; align-content: start; }
+  .tcard.focal { border-color: var(--accent); }
+  .tcard header { display: grid; gap: 4px; }
+  .tcard h3 { font-size: 17px; margin: 0; }
+  .tcard .who { font-size: 13px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 88px 1fr; gap: 6px 12px; margin: 0; font-size: 13.5px; }
+  .kv dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); padding-top: 3px; }
+  .kv dd { margin: 0; color: var(--ink); }
+  ol.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; color: var(--ink); }
+  ol.steps li::marker { font-family: var(--mono); color: var(--soft); font-size: 12px; }
+  ol.steps .mono, .kv .mono { color: var(--muted); overflow-wrap: anywhere; }
+  .url {
+    font-family: var(--mono); font-size: 12px; background: var(--ink-05); border-radius: 4px;
+    padding: 8px 10px; color: var(--ink); overflow-wrap: anywhere; line-height: 1.5;
+  }
+  .url b { color: var(--accent); font-weight: 500; }
+  .brand-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+  @media (max-width: 480px) {
+    .brand-grid, .type-grid { grid-template-columns: 1fr; }
+    .kv { grid-template-columns: 1fr; gap: 2px; }
+    .kv dd { margin-bottom: 6px; }
+  }
+
+  footer {
+    border-top: 1px solid var(--rule); padding-top: 16px; font-family: var(--mono);
+    font-size: 11px; color: var(--soft); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
+  }
+
+  /* SVG */
+  .bg { fill: var(--paper); }
+  .n-step { fill: var(--card); stroke: var(--ink); stroke-width: 1; }
+  .n-store { fill: var(--ink-05); stroke: var(--muted); stroke-width: 1; }
+  .n-input { fill: var(--muted-10); stroke: var(--soft); stroke-width: 1; }
+  .n-focal { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.2; }
+  .n-ext { fill: var(--ink-03); stroke: var(--ink-30); stroke-width: 1; }
+  .n-opt { fill: var(--ink-03); stroke: var(--ink-30); stroke-width: 1; stroke-dasharray: 4 3; }
+  .tagbox { fill: none; stroke: var(--soft); stroke-width: 0.8; opacity: 0.7; }
+  .t-tag { fill: var(--muted); font-family: var(--mono); font-size: 7px; letter-spacing: 0.08em; text-anchor: middle; }
+  .t-name { fill: var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .t-sub { fill: var(--muted); font-family: var(--mono); font-size: 9.5px; text-anchor: middle; }
+  .t-th { fill: var(--muted); font-family: var(--sans); font-size: 12px; text-anchor: middle; }
+  .t-lane { fill: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; }
+  .t-lbl { fill: var(--soft); font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em; text-anchor: middle; }
+  .t-lbl-th { fill: var(--soft); font-family: var(--sans); font-size: 12px; text-anchor: middle; }
+  .t-aside { fill: var(--muted); font-family: var(--serif); font-style: italic; font-size: 15px; }
+  .lblmask { fill: var(--paper); }
+  .a { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+  .a-accent { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+  .a-link { fill: none; stroke: var(--link); stroke-width: 1.2; }
+  .a-dash { stroke-dasharray: 5 4; }
+  .mk { fill: var(--muted); }
+  .mk-accent { fill: var(--accent); }
+  .mk-link { fill: var(--link); }
+  .merge { fill: var(--ink); }
+  .hair { stroke: var(--rule); stroke-width: 1; }
+
+  @media (max-width: 760px) {
+    .principles { grid-template-columns: 1fr; }
+    body { padding-block: 32px 48px; }
+  }
+</style>
+
+<div class="frame">
+
+<header>
+  <p class="eyebrow">Surveillance Gateway Edge · Camera onboarding · behind the scenes</p>
+  <h1>Camera onboarding backend</h1>
+  <p class="lede">What the system does after you press Add Camera, by connection type and brand, and where playback for those cameras comes from. Based on the code running at the current build (<code>server/server.js</code>, <code>server/vms/*</code>, <code>server/gateway/go2rtc-sync.js</code>, <code>server/gateway/playback.js</code>)</p>
+</header>
+
+<section>
+  <div class="principles">
+    <div class="card">
+      <div class="card-head"><span class="dot accent"></span><h3>Edge adds cameras · Regional adds Edge · Central adds Regional</h3></div>
+      <p>Every route that adds cameras carries <code>edgeOnly</code> and requires the <code>device.manage</code> permission. Upper tiers see cameras only by importing the whole child node (rows of type <code>edge_relay</code>) · every path must state a matching province and district</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="dot"></span><h3>RTSP comes from the device, never guessed</h3></div>
+      <p>Video URLs come from ONVIF, LAPI or a VMS that actually answered. Brand URL templates are used only for single cameras where ONVIF fails</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="dot link"></span><h3>Every path ends at one point</h3></div>
+      <p>INSERT into the <code>cameras</code> table, then call <code>syncCamerasToStreamCore</code>, which issues the Global ID and creates the stream in go2rtc</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 1. OVERVIEW ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Overview</p>
+    <h2>3 routes, one destination</h2>
+    <p>One form (<code>CameraModal.jsx</code>) offers 5 Connection Types: Manual RTSP, ONVIF Camera, ONVIF NVR, API (Uniview LAPI, AXIS S30), VMS (Milestone Bridge, Digifort, Dahua DSS Pro at the Edge · Edge Gateway at the Regional). Every type requires a province and district before saving. Each type hits a different route, and all converge on the <code>cameras</code> table</p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1300 380" role="img" aria-labelledby="onb-overview-title onb-overview-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-overview-title">All camera onboarding paths</title>
+      <desc id="onb-overview-desc">The Add Camera form sends to three routes: add one at a time, scan channels and add as a batch (ONVIF NVR, Uniview, AXIS S30, Milestone), and import from a VMS (Digifort, Dahua DSS Pro at the Edge, Edge at the Regional). Every route validates province and district before writing. All three write to the cameras table, then the sync function issues the Global ID and creates the stream in go2rtc</desc>
+      <defs>
+        <marker id="ov-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="ov-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-accent" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1300" height="380"/>
+
+      <text class="t-lane" x="240" y="24">EDGEONLY · REQUIREPERM('DEVICE.MANAGE') · PROVINCE + DISTRICT REQUIRED</text>
+
+      <!-- arrows first -->
+      <path class="a" d="M200,180 H212 A8,8 0 0 0 220,172 V88 A8,8 0 0 1 228,80 H240" marker-end="url(#ov-arrow)"/>
+      <path class="a" d="M200,200 H240" marker-end="url(#ov-arrow)"/>
+      <path class="a" d="M200,220 H212 A8,8 0 0 1 220,228 V312 A8,8 0 0 0 228,320 H240" marker-end="url(#ov-arrow)"/>
+
+      <path class="a" d="M480,80 H500 A8,8 0 0 1 508,88 V172 A8,8 0 0 0 516,180 H540" marker-end="url(#ov-arrow)"/>
+      <path class="a" d="M480,200 H540" marker-end="url(#ov-arrow)"/>
+      <path class="a" d="M480,320 H500 A8,8 0 0 0 508,312 V228 A8,8 0 0 1 516,220 H540" marker-end="url(#ov-arrow)"/>
+
+      <path class="a-accent" d="M720,200 H800" marker-end="url(#ov-arrow-accent)"/>
+      <rect class="lblmask" x="736" y="180" width="48" height="12" rx="2"/>
+      <text class="t-lbl" x="760" y="189">SYNC +2S</text>
+
+      <path class="a" d="M1000,184 H1020 A8,8 0 0 0 1028,176 V108 A8,8 0 0 1 1036,100 H1060" marker-end="url(#ov-arrow)"/>
+      <path class="a" d="M1000,216 H1020 A8,8 0 0 1 1028,224 V292 A8,8 0 0 0 1036,300 H1060" marker-end="url(#ov-arrow)"/>
+
+      <!-- form -->
+      <rect class="bg" x="40" y="160" width="160" height="80" rx="6"/>
+      <rect class="n-input" x="40" y="160" width="160" height="80" rx="6"/>
+      <rect class="tagbox" x="48" y="166" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="175">UI</text>
+      <text class="t-name" x="120" y="204">Add Camera form</text>
+      <text class="t-sub" x="120" y="222">CameraModal.jsx</text>
+
+      <!-- endpoint A -->
+      <rect class="n-step" x="240" y="40" width="240" height="80" rx="6"/>
+      <rect class="tagbox" x="248" y="46" width="28" height="12" rx="2"/><text class="t-tag" x="262" y="55">API</text>
+      <text class="t-name" x="360" y="72">Add one at a time</text>
+      <text class="t-sub" x="360" y="90">POST /api/cameras</text>
+      <text class="t-th" x="360" y="108">Manual RTSP · ONVIF Camera</text>
+
+      <!-- endpoint B -->
+      <rect class="n-step" x="240" y="160" width="240" height="80" rx="6"/>
+      <rect class="tagbox" x="248" y="166" width="28" height="12" rx="2"/><text class="t-tag" x="262" y="175">API</text>
+      <text class="t-name" x="360" y="192">Scan channels, add batch</text>
+      <text class="t-sub" x="360" y="210">/api/nvr/* → /api/cameras/bulk-add</text>
+      <text class="t-th" x="360" y="228">NVR · Uniview · S30 · Milestone</text>
+
+      <!-- endpoint C -->
+      <rect class="n-step" x="240" y="280" width="240" height="80" rx="6"/>
+      <rect class="tagbox" x="248" y="286" width="28" height="12" rx="2"/><text class="t-tag" x="262" y="295">API</text>
+      <text class="t-name" x="360" y="312">Import from VMS</text>
+      <text class="t-sub" x="360" y="330">/api/vms/probe → /api/vms/import</text>
+      <text class="t-th" x="360" y="348">Digifort · DSS Pro · Edge</text>
+
+      <!-- cameras table -->
+      <rect class="bg" x="540" y="160" width="180" height="80" rx="6"/>
+      <rect class="n-store" x="540" y="160" width="180" height="80" rx="6"/>
+      <rect class="tagbox" x="548" y="166" width="24" height="12" rx="2"/><text class="t-tag" x="560" y="175">DB</text>
+      <text class="t-name" x="630" y="192">cameras table</text>
+      <text class="t-sub" x="630" y="210">stateFile('vms.db')</text>
+      <text class="t-th" x="630" y="228">rtsp has password embedded</text>
+
+      <!-- sync (focal) -->
+      <rect class="bg" x="800" y="160" width="200" height="80" rx="6"/>
+      <rect class="n-focal" x="800" y="160" width="200" height="80" rx="6"/>
+      <rect class="tagbox" x="808" y="166" width="32" height="12" rx="2"/><text class="t-tag" x="824" y="175">CORE</text>
+      <text class="t-name" x="900" y="194">syncCamerasToStreamCore</text>
+      <text class="t-sub" x="900" y="212">+ notifyCatalogChanged()</text>
+      <text class="t-th" x="900" y="230">All paths pass here</text>
+
+      <!-- global id -->
+      <rect class="n-step" x="1060" y="60" width="200" height="80" rx="6"/>
+      <rect class="tagbox" x="1068" y="66" width="24" height="12" rx="2"/><text class="t-tag" x="1080" y="75">ID</text>
+      <text class="t-name" x="1160" y="92">Issue Global ID</text>
+      <text class="t-sub" x="1160" y="110">TH-PV-NODE-SEQ</text>
+      <text class="t-th" x="1160" y="128">Edge issues once, never changes</text>
+
+      <!-- go2rtc -->
+      <rect class="n-step" x="1060" y="260" width="200" height="80" rx="6"/>
+      <rect class="tagbox" x="1068" y="266" width="36" height="12" rx="2"/><text class="t-tag" x="1086" y="275">STREAM</text>
+      <text class="t-name" x="1160" y="292">Create stream in go2rtc</text>
+      <text class="t-sub" x="1160" y="310">&lt;id&gt; · &lt;id&gt;_sub · &lt;id&gt;_raw</text>
+      <text class="t-sub" x="1160" y="326">ffmpeg:…#video=h264#hardware</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw input"></i>User screen</span>
+    <span><i class="sw"></i>route / step</span>
+    <span><i class="sw store"></i>Data store</span>
+    <span><i class="sw focal"></i>Point every path must pass</span>
+  </div>
+</section>
+
+<!-- ============ MEDIA SOURCES ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Where the picture comes from</p>
+    <h2>5 kinds of video source</h2>
+    <p>The edge does not always connect to every camera head directly. In some cases video comes from an NVR or VMS that already holds the camera. What the edge stores is the RTSP URL of that source, and the edge go2rtc opens a line to pull the video</p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1120 600" role="img" aria-labelledby="onb-src-title onb-src-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-src-title">Video source for each camera type</title>
+      <desc id="onb-src-desc">Directly connected IP cameras, NVRs (including AXIS S30), Milestone Bridge, Digifort and Dahua DSS Pro send RTSP into the edge go2rtc, which forwards to the Regional by pull or link. The Regional forwards to Central and to Clients in the region, and Central serves the web and Windows clients nationwide</desc>
+      <defs>
+        <marker id="sr-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="sr-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-link" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1120" height="600"/>
+
+      <path class="a-link" d="M320,76 H480" marker-end="url(#sr-arrow-link)"/>
+      <path class="a-link" d="M320,188 H480" marker-end="url(#sr-arrow-link)"/>
+      <path class="a-link" d="M320,300 H480" marker-end="url(#sr-arrow-link)"/>
+      <path class="a-link" d="M320,412 H480" marker-end="url(#sr-arrow-link)"/>
+      <path class="a-link" d="M320,524 H480" marker-end="url(#sr-arrow-link)"/>
+      <rect class="lblmask" x="352" y="52" width="96" height="16" rx="2"/><text class="t-lbl-th" x="400" y="64">camera RTSP</text>
+      <rect class="lblmask" x="352" y="164" width="96" height="16" rx="2"/><text class="t-lbl-th" x="400" y="176">NVR RTSP</text>
+      <rect class="lblmask" x="352" y="276" width="96" height="16" rx="2"/><text class="t-lbl-th" x="400" y="288">RTSP over TCP</text>
+      <rect class="lblmask" x="352" y="388" width="96" height="16" rx="2"/><text class="t-lbl-th" x="400" y="400">RTSP relay</text>
+      <rect class="lblmask" x="344" y="500" width="112" height="16" rx="2"/><text class="t-lbl-th" x="400" y="512">RTSP via relay</text>
+
+      <path class="a-link" d="M720,144 H840" marker-end="url(#sr-arrow-link)"/>
+      <rect class="lblmask" x="748" y="120" width="64" height="16" rx="2"/><text class="t-lbl" x="780" y="131">PULL / LINK</text>
+      <path class="a-link" d="M960,188 V260" marker-end="url(#sr-arrow-link)"/>
+      <rect class="lblmask" x="972" y="216" width="96" height="16" rx="2"/><text class="t-lbl" x="1020" y="228">PULL / LINK</text>
+      <path class="a-link" d="M960,348 V420" marker-end="url(#sr-arrow-link)"/>
+      <rect class="lblmask" x="972" y="376" width="96" height="16" rx="2"/><text class="t-lbl-th" x="1020" y="388">_raw or MSE</text>
+
+      <rect class="bg" x="40" y="32" width="280" height="88" rx="6"/>
+      <rect class="n-ext" x="40" y="32" width="280" height="88" rx="6"/>
+      <rect class="tagbox" x="48" y="38" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="47">IPC</text>
+      <text class="t-name" x="180" y="66">Directly connected IP camera</text>
+      <text class="t-sub" x="180" y="84">Manual RTSP · ONVIF Camera</text>
+      <text class="t-th" x="180" y="104">URL: typed, or asked from camera ONVIF</text>
+
+      <rect class="bg" x="40" y="144" width="280" height="88" rx="6"/>
+      <rect class="n-ext" x="40" y="144" width="280" height="88" rx="6"/>
+      <rect class="tagbox" x="48" y="150" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="159">NVR</text>
+      <text class="t-name" x="180" y="178">NVR (cameras behind the unit)</text>
+      <text class="t-sub" x="180" y="196">ONVIF NVR · Uniview API · AXIS S30</text>
+      <text class="t-th" x="180" y="216">URL: ONVIF per channel (S30 uses device id)</text>
+
+      <rect class="bg" x="40" y="256" width="280" height="88" rx="6"/>
+      <rect class="n-ext" x="40" y="256" width="280" height="88" rx="6"/>
+      <rect class="tagbox" x="48" y="262" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="271">VMS</text>
+      <text class="t-name" x="180" y="290">Milestone Open Network Bridge</text>
+      <text class="t-sub" x="180" y="308">ONVIF :580 · RTSP :554</text>
+      <text class="t-th" x="180" y="328">URL: asked from Bridge ONVIF</text>
+
+      <rect class="bg" x="40" y="368" width="280" height="88" rx="6"/>
+      <rect class="n-ext" x="40" y="368" width="280" height="88" rx="6"/>
+      <rect class="tagbox" x="48" y="374" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="383">VMS</text>
+      <text class="t-name" x="180" y="402">Digifort</text>
+      <text class="t-sub" x="180" y="420">HTTP API :8601 · RTSP :554</text>
+      <text class="t-th" x="180" y="440">URL: built from camera name in Digifort</text>
+
+      <rect class="bg" x="40" y="480" width="280" height="88" rx="6"/>
+      <rect class="n-ext" x="40" y="480" width="280" height="88" rx="6"/>
+      <rect class="tagbox" x="48" y="486" width="24" height="12" rx="2"/><text class="t-tag" x="60" y="495">VMS</text>
+      <text class="t-name" x="180" y="514">Dahua DSS Pro</text>
+      <text class="t-sub" x="180" y="532">HTTPS API :443 · local RTSP relay</text>
+      <text class="t-th" x="180" y="552">One-use URL; relay requests a new one</text>
+
+      <rect class="bg" x="480" y="32" width="240" height="536" rx="6"/>
+      <rect class="n-focal" x="480" y="32" width="240" height="536" rx="6"/>
+      <rect class="tagbox" x="488" y="38" width="32" height="12" rx="2"/><text class="t-tag" x="504" y="47">EDGE</text>
+      <text class="t-name" x="600" y="284">edge go2rtc</text>
+      <text class="t-th" x="600" y="308">Opens line to source on viewer demand</text>
+      <text class="t-sub" x="600" y="332">&lt;id&gt; · &lt;id&gt;_sub → H.264</text>
+      <text class="t-sub" x="600" y="350">&lt;id&gt;_raw → forwarded untranscoded</text>
+      <text class="t-th" x="600" y="378">Edge has no viewing page</text>
+
+      <rect class="bg" x="840" y="100" width="240" height="88" rx="6"/>
+      <rect class="n-step" x="840" y="100" width="240" height="88" rx="6"/>
+      <rect class="tagbox" x="848" y="106" width="52" height="12" rx="2"/><text class="t-tag" x="874" y="115">REGIONAL</text>
+      <text class="t-name" x="960" y="136">Regional go2rtc</text>
+      <text class="t-th" x="960" y="156">Pulls from regional edges or takes push</text>
+      <text class="t-th" x="960" y="176">Regional clients can watch from here</text>
+
+      <rect class="n-step" x="840" y="260" width="240" height="88" rx="6"/>
+      <rect class="tagbox" x="848" y="266" width="44" height="12" rx="2"/><text class="t-tag" x="870" y="275">CENTRAL</text>
+      <text class="t-name" x="960" y="296">central go2rtc</text>
+      <text class="t-th" x="960" y="316">Pulls from each Regional</text>
+      <text class="t-th" x="960" y="336">link: push into &lt;id&gt;_in</text>
+
+      <rect class="bg" x="840" y="420" width="240" height="88" rx="6"/>
+      <rect class="n-input" x="840" y="420" width="240" height="88" rx="6"/>
+      <rect class="tagbox" x="848" y="426" width="28" height="12" rx="2"/><text class="t-tag" x="862" y="435">VIEW</text>
+      <text class="t-name" x="960" y="458">central web · Windows client</text>
+      <text class="t-sub" x="960" y="478">MSE (H.264) · _raw (H.265)</text>
+
+      <text class="t-aside" x="840" y="540">Source URLs always embed a password</text>
+      <text class="t-aside" x="840" y="560">(DSS: local relay requests a fresh token)</text>
+      <text class="t-aside" x="840" y="580">Regional / central never get camera passwords</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw ext"></i>Video source (existing at site)</span>
+    <span><i class="sw focal"></i>Our edge</span>
+    <span><i class="sw"></i>Regional · Central</span>
+    <span><i class="sw input"></i>Viewers</span>
+    <span style="color: var(--link)">── Video line (RTSP)</span>
+  </div>
+</section>
+
+<!-- ============ TYPE TABLE ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Type by type</p>
+    <h2>Where each type gets its video</h2>
+    <p>The <code>type</code> column in the database decides how the system talks to the camera afterwards (PTZ, snapshot, AI probe). Relay rows are never queried over ONVIF</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Type</th><th>route</th><th>RTSP main comes from</th><th>sub stream</th><th>type · brand in DB</th><th>Duplicate guard</th></tr></thead>
+      <tbody>
+        <tr><td>Manual RTSP</td><td><span class="mono">POST /api/cameras</span></td><td>User types the URL; no ONVIF query</td><td>Field filled by the user · empty = use main</td><td><span class="tag">manual</span> · selectable</td><td>None</td></tr>
+        <tr><td>ONVIF Camera</td><td><span class="mono">POST /api/cameras</span></td><td><span class="mono">resolveOnvifStreams</span> asks GetProfiles / GetStreamUri · failure = brand template</td><td>Camera 2nd stream</td><td><span class="tag">onvif_cam</span> · selected brand</td><td>None</td></tr>
+        <tr><td>ONVIF NVR</td><td><span class="mono">/api/nvr/channels</span> → bulk-add</td><td>NVR ONVIF per channel (grouped by VideoSource)</td><td>Channel 2nd stream</td><td><span class="tag">onvif_nvr</span> · selected brand</td><td>RTSP with password stripped (<span class="mono">rtspIdentity</span>)</td></tr>
+        <tr><td>API · Uniview LAPI</td><td><span class="mono">/api/nvr/uniview/channels</span> → bulk-add</td><td>LAPI gives channel number + name, ONVIF gives RTSP matched by channel number</td><td>2nd stream from ONVIF</td><td><span class="tag">onvif_nvr</span> · uniview · <span class="mono">nvr_channel</span></td><td>RTSP or ip:port:channel number</td></tr>
+        <tr><td>API · AXIS S30</td><td><span class="mono">/api/nvr/axis/channels</span> → bulk-add (<span class="mono">importMode=axis_s30</span>)</td><td>VAPIX reports the camera ids bound to the recorder · edge builds the URL from the id via the recorder RTSP port</td><td>None (sub = main)</td><td><span class="tag">onvif_nvr</span> · axis · <span class="mono">onvif_main_token</span> = device id</td><td>RTSP with password stripped · at scan time, ip + device id</td></tr>
+        <tr><td>VMS · Milestone Bridge</td><td><span class="mono">/api/nvr/channels</span> (milestoneBridge) → bulk-add</td><td>Open Network Bridge ONVIF (port 580)</td><td>Next profile if present</td><td><span class="tag">onvif_nvr</span> · milestone</td><td>RTSP with password stripped</td></tr>
+        <tr><td>VMS · Digifort</td><td><span class="mono">/api/vms/probe</span> → <span class="mono">/import</span></td><td>Digifort relay URL referenced by camera name</td><td>None (NULL)</td><td><span class="tag">digifort_relay</span> · digifort</td><td>unique (source_id, source_ref)</td></tr>
+        <tr><td>VMS · Dahua DSS Pro</td><td><span class="mono">/api/vms/probe</span> → <span class="mono">/import</span> kind=dss</td><td>Local RTSP relay <span class="mono">rtsp://127.0.0.1:&lt;port&gt;/dss/&lt;id&gt;/main</span> requests a fresh URL from DSS on every connection</td><td>Same relay, ending in <span class="mono">/sub</span></td><td><span class="tag">dss_relay</span> · dss</td><td>unique (source_id, source_ref)</td></tr>
+        <tr><td>VMS · Edge Gateway</td><td><span class="mono">/api/vms/import</span> kind=edge (at the Regional) · Central imports a Regional with the same kind</td><td>Child node go2rtc (<span class="mono">rtspRaw</span>) or link line</td><td>As sent by the edge</td><td><span class="tag accent">edge_relay</span> · per edge</td><td>unique (source_id, source_ref) + global_id · the Edge ID passes through every tier unchanged</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ PER TYPE ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Type by type · what the edge talks to and what comes back</p>
+    <h2>How the edge imports each kind of camera</h2>
+    <p>In each card, the steps follow the order the edge actually performs after the button press. Example URLs hide the password, and orange marks the part that varies by camera or channel</p>
+  </div>
+  <div class="type-grid">
+
+    <article class="tcard">
+      <header><span class="tag">manual</span><h3>Manual RTSP</h3><span class="who">Use when the camera has no ONVIF or ONVIF is broken (e.g. some Dahua models)</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>Main URL, sub URL (optional), brand, name, group, <strong>province + district (required)</strong></dd>
+        <dt>Edge talks to</dt><dd>Does not contact the camera when saving</dd>
+      </dl>
+      <ol class="steps">
+        <li>Accepts the URL as typed; does not check that it opens</li>
+        <li>Empty sub: the system uses the same URL as main (Live Wall will transcode the full-size picture)</li>
+        <li>INSERT <span class="mono">type=manual</span>, then go2rtc tries to open the line when someone watches</li>
+      </ol>
+      <div class="url">rtsp://user:****@<b>&lt;ip&gt;</b>:554/<b>&lt;path the user knows&gt;</b></div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">onvif_cam</span><h3>ONVIF Camera</h3><span class="who">Single camera reachable from the edge directly over LAN / VPN</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>IP, ONVIF port (usually 80), RTSP port (554), user/pass, brand</dd>
+        <dt>Edge talks to</dt><dd>ONVIF (SOAP over HTTP) at the camera <span class="mono">/onvif/device_service</span></dd>
+      </dl>
+      <ol class="steps">
+        <li>Connects over http, then tries https if that fails (some routers forward only HTTPS)</li>
+        <li><span class="mono">GetProfiles</span> + <span class="mono">GetStreamUri</span> per profile. If a camera behind NAT answers an internal address, the system substitutes the host that actually connects</li>
+        <li>Groups profiles by VideoSource; main = highest resolution, sub = next stream, skipping MJPEG</li>
+        <li>Puts user:pass into the URL and keeps the profile token for PTZ and snapshots</li>
+        <li>If ONVIF fails entirely, uses the brand URL template with the RTSP port entered</li>
+      </ol>
+      <div class="url">rtsp://user:****@<b>&lt;ip&gt;</b>:554/<b>&lt;path the camera returns in GetStreamUri&gt;</b></div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">onvif_nvr</span><h3>ONVIF NVR</h3><span class="who">Any NVR brand with ONVIF enabled · adds many channels at once</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>NVR IP, ONVIF port, RTSP port, user/pass, brand, name prefix (optional)</dd>
+        <dt>Edge talks to</dt><dd>NVR ONVIF (retries twice because NVRs over WAN are slow)</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">GetProfiles</span> returns profiles of channels that have video; <span class="mono">GetVideoSources</span> returns the full channel list including channels that are down</li>
+        <li>Groups into channels, reads the channel number from the URL the NVR returns, in NVR order</li>
+        <li>Channels without a profile show OFFLINE with no URL; already-added channels are marked ADDED</li>
+        <li>After selection, bulk-add names them <span class="mono">&lt;prefix&gt; CH n (&lt;channel name&gt;)</span> or uses the name from ONVIF</li>
+      </ol>
+      <div class="url">Hikvision: …/Streaming/Channels/<b>&lt;channel&gt;</b>01 · 02<br>Dahua: …?channel=<b>&lt;channel&gt;</b>&amp;subtype=0 · 1<br>Uniview: …/unicast/c<b>&lt;channel&gt;</b>/s0 · s1/live</div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">onvif_nvr + nvr_channel</span><h3>API · Uniview LAPI</h3><span class="who">Uniview NVR when you want real channel names and to add channels that are down</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>Same as ONVIF NVR + API port (LAPI HTTP)</dd>
+        <dt>Edge talks to</dt><dd>LAPI (HTTP Digest) and ONVIF of the same NVR</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">GET /LAPI/V1.0/Channels/System/ChannelDetailInfos</span> returns ID, Name, Status of every channel (unconfigured channels dropped)</li>
+        <li>Queries ONVIF separately for RTSP; if ONVIF fails, the list from LAPI is still returned</li>
+        <li>Matches the LAPI ID only to the <span class="mono">c&lt;channel&gt;</span> number in the ONVIF URL; never invents URLs</li>
+        <li>Channels that are down can be added, as rows waiting for video that have a channel number but no RTSP</li>
+        <li>The edge re-queries ONVIF 15 seconds after adding and every 2 minutes, then fills the URL into the same row once available</li>
+      </ol>
+      <div class="url">Channel name: from LAPI (name set in the NVR)<br>Video: rtsp://…/unicast/c<b>&lt;ID&gt;</b>/s0/live</div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">onvif_nvr · axis</span><h3>API · AXIS S30</h3><span class="who">AXIS S30 recorder with cameras paired · adds many channels, no camera IP needed</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>S30 IP, API port (default 443), RTSP port, recorder web account · the ONVIF port field is unused</dd>
+        <dt>Edge talks to</dt><dd>Recorder VAPIX over HTTPS (self-signed recorder certificate) with Basic auth</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">GET /axis-cgi/externalipdeviceinfo/list.cgi?schemaversion=2</span> returns Id, Description, Serialnumber of paired cameras (names that AXIS Companion sets automatically are replaced by the serial)</li>
+        <li>The user selects channels; the edge re-queries the list and checks every id exists, otherwise 400 and a rescan is needed</li>
+        <li>Video URLs are built from the ids the recorder reports and go through the recorder RTSP, never directly to the camera</li>
+        <li>INSERT <span class="mono">type=onvif_nvr brand=axis</span>, store the id in <span class="mono">onvif_main_token</span> and the API port in the <span class="mono">onvifPort</span> column; sub = main</li>
+      </ol>
+      <div class="url">rtsp://user:****@<b>&lt;recorder&gt;</b>:&lt;RTSP port&gt;/axis-media/media.amp?device=<b>&lt;id&gt;</b></div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">onvif_nvr · milestone</span><h3>VMS · Milestone Open Network Bridge</h3><span class="who">Pulls cameras held in Milestone XProtect through the Bridge</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>Bridge address, ONVIF 580, RTSP 554, user/pass (all required)</dd>
+        <dt>Edge talks to</dt><dd>Bridge ONVIF, which acts like an NVR holding every VMS camera</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">GetProfiles</span> returns 1 profile per camera (token is a GUID); GetVideoSources is not queried</li>
+        <li>Camera name = the profile name the Bridge sends (the name in Milestone)</li>
+        <li>Accepts profiles not bound to a VideoSource (a normal ONVIF NVR would filter these out)</li>
+        <li>bulk-add <span class="mono">brand=milestone</span>, the <span class="mono">_raw</span> line is forced to <span class="mono">#transport=tcp</span></li>
+      </ol>
+      <div class="url">rtsp://user:****@<b>&lt;bridge&gt;</b>:554/<b>&lt;URI the Bridge returns&gt;</b></div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">digifort_relay</span><h3>VMS · Digifort</h3><span class="who">Site where Digifort holds the cameras and we do not know the camera IPs</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>Digifort host address, API port 8601, RTSP 554, user/pass</dd>
+        <dt>Edge talks to</dt><dd>Digifort HTTP API (<span class="mono">ResponseFormat=JSON</span>)</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">/Interface/Cameras/GetCameras</span>, <span class="mono">GetStatus</span>, <span class="mono">GetGroups</span>, <span class="mono">/Interface/Server/GetInfo</span> called once, no retry</li>
+        <li>The user selects cameras and presses import; the edge re-queries the list to confirm the password before writing the DB</li>
+        <li>Creates a <span class="mono">camera_sources</span> row with the password sealed by the key vault</li>
+        <li>Each camera gets a relay URL built from its name; no sub stream, no ONVIF query</li>
+      </ol>
+      <div class="url">rtsp://user:****@<b>&lt;digifort&gt;</b>:554/Interface/Cameras/Media?Camera=<b>&lt;camera name&gt;</b></div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">dss_relay</span><h3>VMS · Dahua DSS Pro</h3><span class="who">Site that aggregates cameras in DSS Pro · tested with V8.5.0</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>DSS address, port 443 (HTTPS), user/pass · no RTSP port to enter</dd>
+        <dt>Edge talks to</dt><dd>DSS OpenAPI (<span class="mono">/brms/api/v1.0/…</span>), two-step login, then renews the session every 20 seconds</dd>
+      </dl>
+      <ol class="steps">
+        <li><span class="mono">/api/vms/probe</span> logs in and walks the channels of every device (<span class="mono">device/channel/list</span>) for channel name, group, IP and status, then logs out · called once, no retry</li>
+        <li>The list holds hundreds of channels; the form has a filter box and select all / none buttons (applies only to what is visible)</li>
+        <li><span class="mono">/api/vms/import</span> re-confirms the password and list before writing the DB, then stores the password sealed in <span class="mono">camera_sources</span></li>
+        <li>Each camera gets <span class="mono">source_ref</span> = the DSS channelId and a local relay URL; no token or password in the DB</li>
+        <li>Online state comes from the channel status field, polled from DSS every 60 seconds, not TCP</li>
+      </ol>
+      <div class="url">rtsp://127.0.0.1:<b>&lt;gateway port + 26&gt;</b>/dss/<b>&lt;camera id&gt;</b>/&lt;main|sub&gt;</div>
+    </article>
+
+    <article class="tcard focal">
+      <header><span class="tag accent">edge_relay</span><h3>Edge → Regional → Central</h3><span class="who">Regional imports every camera of one Edge · Central imports a whole Regional the same way</span></header>
+      <dl class="kv">
+        <dt>User enters</dt><dd>pull: child node address and API port + API key · link: nothing to enter, the child node connects up itself with a token · at the Regional, pick the province from a dropdown and add a Remark identifying the site (one province can have several Edges)</dd>
+        <dt>Upper tier talks to</dt><dd>The child node <span class="mono">/api/v1</span>, and SSE <span class="mono">/api/v1/events</span> for state</dd>
+      </dl>
+      <ol class="steps">
+        <li>Requests the camera list and stream addresses from the child node (no camera passwords included)</li>
+        <li>INSERT <span class="mono">cam_edge_&lt;node&gt;_&lt;id&gt;</span> using the Global ID issued by the Edge (passed through unchanged at every tier) · the Regional sends its catalog up to Central itself</li>
+        <li>pull: the URL points at the child node go2rtc with a go2rtc account (uses the <span class="mono">_raw</span> line when available)</li>
+        <li>link: whenever someone watches, the upper tier tells the child node to push video into <span class="mono">&lt;id&gt;_in</span>; with no viewer for over 60 seconds it orders a stop, nested in order Central → Regional → Edge</li>
+        <li>Reviews names, coordinates and streams every 10 minutes</li>
+      </ol>
+      <div class="url">pull: rtsp://&lt;go2rtc account&gt;@<b>&lt;child node&gt;</b>:&lt;go2rtc RTSP port&gt;/<b>&lt;id&gt;</b>_raw<br>link: stream <b>&lt;id&gt;</b>_in on the upper tier</div>
+    </article>
+
+    <article class="tcard">
+      <header><span class="tag">GET /api/scan</span><h3>Scan button: find cameras on the network</h3><span class="who">A form-filling helper; it does not add cameras itself</span></header>
+      <dl class="kv">
+        <dt>No range</dt><dd>WS-Discovery multicast, works only on the same LAN segment as the edge</dd>
+        <dt>With a range</dt><dd>Walks .1–.254 on ports 80, 8080, 8000, 8880, 30 hosts at a time</dd>
+      </dl>
+      <ol class="steps">
+        <li>On an open port, sends <span class="mono">GetSystemDateAndTime</span>, which needs no password; a valid reply = ONVIF</li>
+        <li>Queries <span class="mono">/axis-cgi/basicdeviceinfo.cgi</span>; if it is Axis, sets the brand and model</li>
+        <li>Click a scan result and the ONVIF Camera form opens with the IP and port filled in</li>
+      </ol>
+    </article>
+
+  </div>
+</section>
+
+<!-- ============ 2. ONVIF CAMERA ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Single cameras · Manual and ONVIF Camera</p>
+    <h2>Add one at a time: ONVIF first, templates second</h2>
+    <p>Manual RTSP skips ONVIF entirely and writes the URL the user entered straight to the database. ONVIF Camera follows this chart. The Scan button on the Camera Management page (<span class="mono">GET /api/scan</span>) only helps find the ONVIF IP and port to fill in the form</p>
+  </div>
+  <div class="diagram scroll d-mid">
+    <svg viewBox="0 0 880 600" role="img" aria-labelledby="onb-onvif-title onb-onvif-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-onvif-title">Finding RTSP for a single ONVIF camera</title>
+      <desc id="onb-onvif-desc">The system connects ONVIF over http, then tries https. If it gets a profile with RTSP, main is the highest resolution and sub is the second stream. If not, it uses the brand URL template, then saves to the cameras table</desc>
+      <defs>
+        <marker id="on-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="on-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-accent" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="880" height="600"/>
+
+      <path class="a-accent" d="M260,68 V96" marker-end="url(#on-arrow-accent)"/>
+      <path class="a-accent" d="M260,160 V192" marker-end="url(#on-arrow-accent)"/>
+      <path class="a-accent" d="M260,272 V304" marker-end="url(#on-arrow-accent)"/>
+      <rect class="lblmask" x="272" y="280" width="24" height="16" rx="2"/>
+      <text class="t-lbl-th" x="284" y="292">yes</text>
+      <path class="a-accent" d="M260,368 V392" marker-end="url(#on-arrow-accent)"/>
+      <path class="a-accent" d="M260,472 V508"/>
+      <path class="a" d="M360,232 H520" marker-end="url(#on-arrow)"/>
+      <rect class="lblmask" x="416" y="208" width="48" height="16" rx="2"/>
+      <text class="t-lbl-th" x="440" y="220">no</text>
+      <path class="a a-dash" d="M680,264 V504 A8,8 0 0 1 672,512 H264"/>
+      <path class="a-accent" d="M260,516 V540" marker-end="url(#on-arrow-accent)"/>
+
+      <!-- start -->
+      <rect class="n-step" x="120" y="20" width="280" height="48" rx="20"/>
+      <text class="t-name" x="260" y="42">POST /api/cameras</text>
+      <text class="t-sub" x="260" y="58">type = onvif_cam</text>
+
+      <rect class="n-step" x="120" y="96" width="280" height="64" rx="6"/>
+      <text class="t-name" x="260" y="122">Connect ONVIF: http, then https</text>
+      <text class="t-sub" x="260" y="142">initOnvifDeviceWithFallback</text>
+
+      <!-- decision -->
+      <polygon class="n-step" points="260,192 360,232 260,272 160,232"/>
+      <text class="t-name" x="260" y="228">Got a profile</text>
+      <text class="t-name" x="260" y="246">with RTSP?</text>
+
+      <rect class="n-step" x="120" y="304" width="280" height="64" rx="6"/>
+      <text class="t-name" x="260" y="330">Group profiles by VideoSource</text>
+      <text class="t-sub" x="260" y="350">groupOnvifProfiles → first channel with RTSP</text>
+
+      <rect class="bg" x="120" y="392" width="280" height="80" rx="6"/>
+      <rect class="n-focal" x="120" y="392" width="280" height="80" rx="6"/>
+      <text class="t-name" x="260" y="418">main = highest resolution (skip JPEG)</text>
+      <text class="t-name" x="260" y="438">sub = 2nd stream in camera order</text>
+      <text class="t-sub" x="260" y="458">Put user:pass in URL · keep profile token</text>
+
+      <!-- fallback -->
+      <rect class="bg" x="520" y="200" width="320" height="64" rx="6"/>
+      <rect class="n-opt" x="520" y="200" width="320" height="64" rx="6"/>
+      <text class="t-name" x="680" y="226">Use brand URL template</text>
+      <text class="t-sub" x="680" y="246">legacy fallback · brand table below</text>
+
+      <circle class="merge" cx="260" cy="512" r="4"/>
+
+      <rect class="n-step" x="120" y="540" width="280" height="48" rx="20"/>
+      <text class="t-name" x="260" y="562">INSERT cameras</text>
+      <text class="t-sub" x="260" y="578">→ central sync (overview above)</text>
+
+      <text class="t-aside" x="520" y="360">If ONVIF returns only one profile,</text>
+      <text class="t-aside" x="520" y="380">sub will be a copy of main</text>
+      <text class="t-aside" x="520" y="400">If the user gave an RTSP sub, the system uses it</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw oval"></i>Start / end</span>
+    <span><i class="sw"></i>Step</span>
+    <span><i class="sw diamond"></i>Decision</span>
+    <span><i class="sw focal"></i>main/sub selection rule</span>
+    <span><i class="sw opt"></i>Fallback path</span>
+  </div>
+  <div class="notes">
+    <div><h3>Why sub = the 2nd stream, not the smallest</h3><p>On some models the 3rd stream is set small with sparse keyframes (Tiandy MODEL-A: 352×288, keyframe every 20 seconds), making Live Wall wait a long time for a picture. The 2nd stream appears much faster</p></div>
+    <div><h3>After saving</h3><p>Responds to the web UI immediately, then calls <code>discoverCameraAi</code> in the background. Camera-side AI is currently off (<code>AI_ENABLED</code>), so this step does nothing</p></div>
+  </div>
+</section>
+
+<!-- ============ BRAND TABLE ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Brands</p>
+    <h2>How each brand differs</h2>
+    <p>When ONVIF works, every brand takes the same path. The differences are inside: which account to use, how the camera reports profiles, what the URL looks like, and how far snapshots and PTZ work. The cards below include only what has been tested on real devices (full notes in <code>docs/CAMERA-QUIRKS.md</code>)</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Brand</th><th>Auto-discovered</th><th>Account used</th><th>URL when ONVIF fails (main · sub)</th><th>Fallback snapshot</th><th>PTZ</th></tr></thead>
+      <tbody>
+        <tr><td>Hikvision</td><td>Generic ONVIF</td><td>Single account</td><td><span class="mono">/Streaming/Channels/101 · 102</span></td><td>ONVIF</td><td>Standard ONVIF</td></tr>
+        <tr><td>Dahua</td><td>Generic ONVIF</td><td>Single account</td><td><span class="mono">/cam/realmonitor?channel=1&amp;subtype=0 · 1</span></td><td>ONVIF</td><td>Standard ONVIF</td></tr>
+        <tr><td>Uniview</td><td>Generic ONVIF</td><td>Single account (LAPI uses Digest)</td><td><span class="mono">/media/video1 · video2</span></td><td>ONVIF</td><td>varifocal zoom only · no GetPresets</td></tr>
+        <tr><td>Tiandy</td><td>Generic ONVIF</td><td>Single account · beware lockout</td><td><span class="mono">/1/1 · /1/2</span></td><td>ISAPI then ONVIF</td><td>Zoom only via ContinuousMove</td></tr>
+        <tr><td>Axis</td><td>Detects brand + model itself</td><td><strong>Two accounts</strong>: web and ONVIF</td><td><span class="mono">/axis-media/media.amp · ?resolution=640x360</span></td><td>VAPIX (web account)</td><td>Uses the ONVIF account</td></tr>
+        <tr><td>Hi-View (XM)</td><td>Generic ONVIF</td><td>Single account</td><td><span class="mono">/onvif1 · /onvif2</span></td><td>ONVIF</td><td>Standard ONVIF</td></tr>
+        <tr><td>Generic ONVIF</td><td>Generic ONVIF</td><td>Single account</td><td><span class="mono">/onvif1 · /onvif2</span></td><td>ONVIF</td><td>Standard ONVIF</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:14px;color:var(--muted)">For every brand, snapshots first try ffmpeg grabbing a frame from RTSP. The "Fallback snapshot" column is the path used when RTSP does not answer. An ONVIF snapshot is the last resort, because many models return a frozen image 1–2 minutes old</p>
+
+  <div class="brand-grid">
+    <article class="tcard">
+      <header><h3>Hikvision</h3><span class="who">Cameras and NVRs</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd><span class="mono">/Streaming/Channels/&lt;channel&gt;0&lt;stream&gt;</span> e.g. 101 = channel 1 main, 102 = channel 1 sub</dd>
+        <dt>main/sub</dt><dd>Uses the resolution from the profile; if absent, looks at the trailing 01 / 02 in the URL</dd>
+        <dt>NVR channel number</dt><dd>Read from the digits before <span class="mono">0&lt;stream&gt;</span></dd>
+        <dt>Notes</dt><dd>No specific issues recorded yet</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Dahua</h3><span class="who">And OEMs of the same family</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd><span class="mono">/cam/realmonitor?channel=&lt;channel&gt;&amp;subtype=0|1</span></dd>
+        <dt>main/sub</dt><dd>NVRs often omit resolution in the profile; the system uses <span class="mono">subtype=0</span> as main and <span class="mono">subtype=1</span> as sub</dd>
+        <dt>Notes</dt><dd>Some models make <span class="mono">node-onvif</span> crash when reading resolution; not fixed yet, so add them as Manual RTSP · no AI metadata over RTSP</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Uniview</h3><span class="who">Cameras, NVRs and LAPI</span></header>
+      <dl class="kv">
+        <dt>NVR URL</dt><dd><span class="mono">/unicast/c&lt;channel&gt;/s0|s1|s2/live</span> (s0 main, s1 sub, s2 unused)</dd>
+        <dt>Channel name</dt><dd>ONVIF does not expose the name set in the NVR; you see a token such as <span class="mono">00200</span> = channel 2. API (LAPI) mode is required to get real names</dd>
+        <dt>Down channels</dt><dd>Vanish entirely from GetProfiles, but GetVideoSources still reports them (Framerate 0)</dd>
+        <dt>Notes</dt><dd>There is a profile <span class="mono">/unicast/c0</span> that is the NVR own stream, not a camera; the system labels it NVR STREAM and does not select it · varifocal models advertise PTZ but pan/tilt bounds are 0, so only zoom works</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Tiandy</h3><span class="who">Tested with MODEL-A</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd><span class="mono">/1/1</span> main · <span class="mono">/1/2</span> sub</dd>
+        <dt>main/sub</dt><dd>Has 3 streams; the system uses stream 2 as sub because stream 3 is 352×288 at 5 fps with a keyframe every 20 seconds</dd>
+        <dt>Snapshot</dt><dd>Falls back to ISAPI before ONVIF</dd>
+        <dt>Notes</dt><dd><strong>Locks the account after repeated wrong passwords</strong>, so never try passwords in a burst · PTZ: the body cannot rotate; zoom works only via ContinuousMove, and GetStatus always reports zoom 0, so check the picture</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Axis</h3><span class="who">Tested with P1488-LE, AXIS OS 12</span></header>
+      <dl class="kv">
+        <dt>Accounts</dt><dd>ONVIF needs the ONVIF account created in the camera (System → Accounts → ONVIF accounts); the web account (root) gets <span class="mono">Sender not authorized</span> · RTSP works with both accounts · VAPIX snapshots work only with the web account</dd>
+        <dt>Scan</dt><dd>Answers 401 to every ONVIF call except GetSystemDateAndTime · <span class="mono">basicdeviceinfo.cgi</span> reports the model without a password</dd>
+        <dt>main/sub</dt><dd>Has only <span class="mono">profile_1_h264</span> and <span class="mono">profile_1_jpeg</span>, both 4K; the system skips JPEG and builds sub itself with <span class="mono">&amp;resolution=640x360</span></dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Hi-View (XM) and Generic ONVIF</h3><span class="who">All other brands</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd>Uses the URL ONVIF returns; if ONVIF fails, uses <span class="mono">/onvif1</span> · <span class="mono">/onvif2</span></dd>
+        <dt>main/sub</dt><dd>General rule: highest resolution is main, the next profile is sub, a single profile = sub equals main</dd>
+        <dt>Notes</dt><dd>No brand-specific code. If a new symptom appears, check CAMERA-QUIRKS and record it there</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Milestone (via Bridge)</h3><span class="who">Not a camera brand but a VMS</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd>Comes only from the Bridge; there is no template</dd>
+        <dt>Notes</dt><dd>H.265 over UDP stalls waiting for VPS/SPS/PPS, so the <span class="mono">_raw</span> line forces TCP · the Codec setting on the Bridge General page is only what is reported to ONVIF clients and does not convert the real stream; keep <span class="mono">Use configurations from devices</span></dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Digifort</h3><span class="who">Not a camera brand but a VMS</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd><span class="mono">/Interface/Cameras/Media?Camera=&lt;name&gt;</span>; sending <span class="mono">&amp;Stream=1</span> still returns the same line, so there is no sub</dd>
+        <dt>Notes</dt><dd><strong>Blocks the account after 3 wrong passwords</strong> · <span class="mono">/Interface/Configuration/*</span> returns 404, so camera IPs/passwords are unknown · renaming a camera in Digifort = the system sees the old one vanish and a new one appear</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Axis S30 (recorder)</h3><span class="who">Not a camera but an AXIS recorder with paired cameras</span></header>
+      <dl class="kv">
+        <dt>Camera discovery</dt><dd><span class="mono">externalipdeviceinfo/list.cgi</span> with the recorder web account (Basic over HTTPS)</dd>
+        <dt>URL</dt><dd><span class="mono">/axis-media/media.amp?device=&lt;id&gt;</span> on the recorder RTSP port, never to the camera itself, so there is no separate sub</dd>
+        <dt>Notes</dt><dd>Camera names that are <span class="mono">Created by AXIS Companion</span> are replaced with the serial · playback is searched via <span class="mono">/axis-cgi/record/list.cgi</span>, then clips are read over the recorder RTSP</dd>
+      </dl>
+    </article>
+
+    <article class="tcard">
+      <header><h3>Dahua DSS Pro</h3><span class="who">Dahua VMS · tested with V8.5.0</span></header>
+      <dl class="kv">
+        <dt>URL</dt><dd>A local relay, not the DSS URL itself, because a DSS live URL works only once</dd>
+        <dt>main/sub</dt><dd>main = streamType 1 (1920×1080 on the tested unit) · sub = streamType 2 (704×576)</dd>
+        <dt>PTZ</dt><dd>Through the DSS OpenAPI: pan <span class="mono">OperateDirect</span> · zoom <span class="mono">OperateCamera</span>, not ONVIF</dd>
+        <dt>Notes</dt><dd><strong>Stop after a failed login and never retry; DSS locks the account</strong> · login must send <span class="mono">clientType=WEB</span> (WINPC is rejected with 110001) · <span class="mono">device/page</span> does not work, so the device id range is walked · playback uses <span class="mono">QueryRecords</span> + <span class="mono">StartPlaybackByFile</span></dd>
+      </dl>
+    </article>
+  </div>
+</section>
+
+<!-- ============ 3. NVR / API / MILESTONE ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Many channels · ONVIF NVR · Uniview API · AXIS S30 · Milestone Bridge</p>
+    <h2>Scan first, pick channels, then add the batch</h2>
+    <p>These four types share the same two-beat flow: press Scan Channels to get the channel list, select, then press Import Channels. Only the scan method differs</p>
+  </div>
+  <div class="diagram scroll d-mid">
+    <svg viewBox="0 0 1000 580" role="img" aria-labelledby="onb-nvr-title onb-nvr-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-nvr-title">Adding multiple channels</title>
+      <desc id="onb-nvr-desc">ONVIF NVR, Uniview LAPI, AXIS S30 and Milestone Bridge scan channels in different ways and get the same kind of channel list. The user selects channels, bulk-add guards against duplicate rows, then saves as onvif_nvr with no coordinates. Uniview channels that have no RTSP yet are filled in later</desc>
+      <defs>
+        <marker id="nv-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1000" height="580"/>
+
+      <path class="a" d="M150,160 V188 A8,8 0 0 0 158,196 H408 A8,8 0 0 1 416,204 V220" marker-end="url(#nv-arrow)"/>
+      <path class="a" d="M390,160 V172 A8,8 0 0 0 398,180 H464 A8,8 0 0 1 472,188 V220" marker-end="url(#nv-arrow)"/>
+      <path class="a" d="M630,160 V172 A8,8 0 0 1 622,180 H536 A8,8 0 0 0 528,188 V220" marker-end="url(#nv-arrow)"/>
+      <path class="a" d="M870,160 V188 A8,8 0 0 1 862,196 H592 A8,8 0 0 0 584,204 V220" marker-end="url(#nv-arrow)"/>
+      <path class="a" d="M500,284 V340" marker-end="url(#nv-arrow)"/>
+      <rect class="lblmask" x="512" y="304" width="136" height="16" rx="2"/>
+      <text class="t-lbl-th" x="580" y="316">User ticks channels</text>
+      <path class="a" d="M440,420 V440 A8,8 0 0 1 432,448 H328 A8,8 0 0 0 320,456 V480" marker-end="url(#nv-arrow)"/>
+      <path class="a a-dash" d="M560,420 V440 A8,8 0 0 0 568,448 H632 A8,8 0 0 1 640,456 V480" marker-end="url(#nv-arrow)"/>
+
+      <!-- scan boxes -->
+      <rect class="n-step" x="40" y="40" width="220" height="120" rx="6"/>
+      <rect class="tagbox" x="48" y="46" width="36" height="12" rx="2"/><text class="t-tag" x="66" y="55">ONVIF</text>
+      <text class="t-name" x="150" y="76">ONVIF NVR</text>
+      <text class="t-sub" x="150" y="94">POST /api/nvr/channels</text>
+      <text class="t-th" x="150" y="116">GetProfiles + GetVideoSources</text>
+      <text class="t-th" x="150" y="136">No-signal channel = OFFLINE row</text>
+
+      <rect class="n-step" x="280" y="40" width="220" height="120" rx="6"/>
+      <rect class="tagbox" x="288" y="46" width="28" height="12" rx="2"/><text class="t-tag" x="302" y="55">LAPI</text>
+      <text class="t-name" x="390" y="76">Uniview API</text>
+      <text class="t-sub" x="390" y="94">POST /api/nvr/uniview/channels</text>
+      <text class="t-th" x="390" y="116">LAPI gives channel no. + name (digest)</text>
+      <text class="t-th" x="390" y="136">ONVIF gives RTSP matched by channel no.</text>
+
+      <rect class="n-step" x="520" y="40" width="220" height="120" rx="6"/>
+      <rect class="tagbox" x="528" y="46" width="36" height="12" rx="2"/><text class="t-tag" x="546" y="55">VAPIX</text>
+      <text class="t-name" x="630" y="76">AXIS S30</text>
+      <text class="t-sub" x="630" y="94">POST /api/nvr/axis/channels</text>
+      <text class="t-th" x="630" y="116">recorder reports paired camera ids</text>
+      <text class="t-th" x="630" y="136">URL built from id · no ONVIF</text>
+
+      <rect class="n-step" x="760" y="40" width="220" height="120" rx="6"/>
+      <rect class="tagbox" x="768" y="46" width="28" height="12" rx="2"/><text class="t-tag" x="782" y="55">VMS</text>
+      <text class="t-name" x="870" y="76">Milestone Bridge</text>
+      <text class="t-sub" x="870" y="94">/api/nvr/channels · milestoneBridge</text>
+      <text class="t-th" x="870" y="116">Skips GetVideoSources · port 580</text>
+      <text class="t-th" x="870" y="136">Camera name = profile name</text>
+
+      <!-- list -->
+      <rect class="n-step" x="360" y="220" width="280" height="64" rx="6"/>
+      <text class="t-name" x="500" y="246">Channel list main / sub / isOnline</text>
+      <text class="t-th" x="500" y="266">Added channels carry existingId, unselected</text>
+
+      <!-- bulk add -->
+      <rect class="bg" x="360" y="340" width="280" height="80" rx="6"/>
+      <rect class="n-focal" x="360" y="340" width="280" height="80" rx="6"/>
+      <rect class="tagbox" x="368" y="346" width="28" height="12" rx="2"/><text class="t-tag" x="382" y="355">API</text>
+      <text class="t-name" x="500" y="372">POST /api/cameras/bulk-add</text>
+      <text class="t-th" x="500" y="392">Skips channels with duplicate RTSP (ignoring password)</text>
+      <text class="t-th" x="500" y="410">or duplicate ip:port:channel no.</text>
+
+      <!-- outputs -->
+      <rect class="bg" x="200" y="480" width="240" height="80" rx="6"/>
+      <rect class="n-store" x="200" y="480" width="240" height="80" rx="6"/>
+      <text class="t-name" x="320" y="508">INSERT type = onvif_nvr</text>
+      <text class="t-th" x="320" y="528">lat/lng = NULL on every channel</text>
+      <text class="t-th" x="320" y="546">Pin later on the Map Pins page</text>
+
+      <rect class="bg" x="520" y="480" width="240" height="80" rx="6"/>
+      <rect class="n-opt" x="520" y="480" width="240" height="80" rx="6"/>
+      <text class="t-name" x="640" y="508">Fill in RTSP later</text>
+      <text class="t-sub" x="640" y="526">resolvePendingUniviewStreams</text>
+      <text class="t-th" x="640" y="546">Uniview channels added while offline</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw"></i>Step / route</span>
+    <span><i class="sw focal"></i>Duplicate guard point</span>
+    <span><i class="sw store"></i>Saved to DB</span>
+    <span><i class="sw opt"></i>Background job (Uniview API only)</span>
+  </div>
+  <div class="notes">
+    <div><h3>Channels offline at scan time</h3><p>Some NVR models drop channels without video from GetProfiles, but GetVideoSources still reports them (Framerate 0). The system shows them as OFFLINE and does not invent a URL. Rescan when the camera is back; the same channel will not produce a duplicate row</p></div>
+    <div><h3>Uniview API can add while offline</h3><p>The row enters the DB with a channel number (<code>nvr_channel</code>) but no RTSP yet. The system re-queries ONVIF after 15 seconds and periodically, then fills the URL into the same row, so id, Global ID, pin and permissions are not lost</p></div>
+    <div><h3>Rescan = sub update</h3><p>For channels already added whose main matches, the system rewrites sub to what the NVR reports now (<code>refreshExistingNvrSubs</code>); main is not touched</p></div>
+    <div><h3>AXIS S30 differs from the other three</h3><p>No ONVIF at all. On import the edge re-queries the recorder and builds URLs only from confirmed ids (an id not in the list = 400). Video goes through the one recorder RTSP port for every channel, so sub equals main</p></div>
+  </div>
+</section>
+
+<!-- ============ 4. RELAY ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Via a relay · Digifort and child nodes</p>
+    <h2>Cameras that do not talk to the camera head directly</h2>
+    <p>These two types tie a camera to a row in the <code>camera_sources</code> table. The source is a VMS machine or an Edge / Regional machine, not the camera. The key of each camera is <code>source_ref</code></p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1120 360" role="img" aria-labelledby="onb-relay-title onb-relay-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-relay-title">Importing cameras from Digifort and from child nodes</title>
+      <desc id="onb-relay-desc">Digifort is probed once, then imported as digifort_relay rows. A Regional connects to Edges (and Central to Regionals) by pull or link, then imports them as edge_relay rows and reviews them every 10 minutes. Neither type deletes cameras on its own when the source disappears</desc>
+      <defs>
+        <marker id="rl-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="rl-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-link" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1120" height="360"/>
+
+      <text class="t-lane" x="40" y="40">DIGIFORT · DONE AT THE EDGE</text>
+      <text class="t-lane" x="40" y="216">EDGE → REGIONAL → CENTRAL · DONE BY THE UPPER TIER OF EACH PAIR</text>
+      <line class="hair" x1="40" y1="188" x2="1088" y2="188"/>
+
+      <path class="a-link" d="M260,108 H316" marker-end="url(#rl-arrow-link)"/>
+      <path class="a" d="M536,108 H592" marker-end="url(#rl-arrow)"/>
+      <path class="a" d="M812,108 H868" marker-end="url(#rl-arrow)"/>
+      <path class="a-link" d="M260,284 H316" marker-end="url(#rl-arrow-link)"/>
+      <path class="a" d="M536,284 H592" marker-end="url(#rl-arrow)"/>
+      <path class="a" d="M812,284 H868" marker-end="url(#rl-arrow)"/>
+
+      <!-- lane 1 -->
+      <rect class="bg" x="40" y="60" width="220" height="96" rx="6"/>
+      <rect class="n-ext" x="40" y="60" width="220" height="96" rx="6"/>
+      <text class="t-name" x="150" y="92">Digifort server</text>
+      <text class="t-sub" x="150" y="110">HTTP API :8601 · RTSP :554</text>
+      <text class="t-th" x="150" y="132">Does not expose camera IP / password</text>
+
+      <rect class="n-step" x="316" y="60" width="220" height="96" rx="6"/>
+      <text class="t-name" x="426" y="92">probe camera list</text>
+      <text class="t-sub" x="426" y="110">POST /api/vms/probe</text>
+      <text class="t-th" x="426" y="132">Called once, no retry</text>
+
+      <rect class="n-step" x="592" y="60" width="220" height="96" rx="6"/>
+      <text class="t-name" x="702" y="92">import selection</text>
+      <text class="t-sub" x="702" y="110">POST /api/vms/import</text>
+      <text class="t-th" x="702" y="132">Confirms password before DB write</text>
+
+      <rect class="bg" x="868" y="60" width="220" height="96" rx="6"/>
+      <rect class="n-store" x="868" y="60" width="220" height="96" rx="6"/>
+      <text class="t-name" x="978" y="88">digifort_relay</text>
+      <text class="t-th" x="978" y="108">Password sealed by key-vault</text>
+      <text class="t-th" x="978" y="126">rtsp_sub = NULL · main</text>
+      <text class="t-th" x="978" y="144">Re-sync rewrites URL, no delete</text>
+
+      <!-- lane 2 -->
+      <rect class="bg" x="40" y="236" width="220" height="96" rx="6"/>
+      <rect class="n-ext" x="40" y="236" width="220" height="96" rx="6"/>
+      <text class="t-name" x="150" y="268">Edge / Regional</text>
+      <text class="t-sub" x="150" y="286">Node cameras + go2rtc</text>
+      <text class="t-th" x="150" y="308">Owns name, coordinates, Global ID</text>
+
+      <rect class="bg" x="316" y="236" width="220" height="96" rx="6"/>
+      <rect class="n-focal" x="316" y="236" width="220" height="96" rx="6"/>
+      <text class="t-name" x="426" y="264">2 ways to connect</text>
+      <text class="t-th" x="426" y="286">pull: upper tier connects with API key</text>
+      <text class="t-th" x="426" y="306">link: child opens a WebSocket upward</text>
+
+      <rect class="n-step" x="592" y="236" width="220" height="96" rx="6"/>
+      <text class="t-name" x="702" y="268">import child cameras</text>
+      <text class="t-sub" x="702" y="286">/api/vms/import kind=edge</text>
+      <text class="t-th" x="702" y="308">Never gets camera passwords</text>
+
+      <rect class="bg" x="868" y="236" width="220" height="96" rx="6"/>
+      <rect class="n-store" x="868" y="236" width="220" height="96" rx="6"/>
+      <text class="t-name" x="978" y="264">edge_relay</text>
+      <text class="t-sub" x="978" y="282">cam_edge_&lt;node&gt;_&lt;id&gt;</text>
+      <text class="t-th" x="978" y="302">resync 10 min + immediate notice</text>
+      <text class="t-th" x="978" y="320">Gone from edge = marked, not deleted</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw ext"></i>External system</span>
+    <span><i class="sw"></i>route</span>
+    <span><i class="sw focal"></i>Child node link</span>
+    <span><i class="sw store"></i>Row in cameras</span>
+  </div>
+  <div class="notes">
+    <div><h3>Who owns the data</h3><p>The Edge owns name, brand, coordinates, province, district, Global ID and stream address; resync overwrites them every round. Central owns the display groups, wall layouts and per-region/province permissions. Pinning at Central or a Regional therefore gets 403 · if a camera has no province, the Dashboard shows the source Regional region instead</p></div>
+    <div><h3>How video travels</h3><p>pull: the upper tier pulls RTSP straight from the child go2rtc · link: the child uses ffmpeg to push video into the <code>&lt;id&gt;_in</code> stream that the upper tier created in advance (go2rtc 1.9.14 cannot push out as rtsp:// itself) · one camera crosses a link between tiers only once, however many people watch</p></div>
+    <div><h3>Why it never deletes cameras itself</h3><p>A source that answers incompletely for a moment would turn into a mass delete with pins and permissions, which a new import cannot restore. So the system reports which ones are missing and lets a person decide</p></div>
+  </div>
+</section>
+
+<!-- ============ 4b. DSS ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Via a relay · Dahua DSS Pro</p>
+    <h2>A DSS live URL works only once</h2>
+    <p>Unlike Digifort, DSS hands out a URL with a token that opens only once (reuse or concurrent connection returns 401), but go2rtc needs a fixed URL it can reconnect to repeatedly. So the edge sets up a local RTSP relay for go2rtc to connect to, and the relay asks DSS for a fresh URL on every connection</p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1120 360" role="img" aria-labelledby="onb-dss-title onb-dss-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-dss-title">Live video from Dahua DSS Pro through the RTSP relay</title>
+      <desc id="onb-dss-desc">The edge go2rtc connects to the local RTSP relay with a fixed URL. The relay asks the DSS session, which logs in and renews itself, for a fresh one-use URL, then connects to DSS and sends the video back the same way</desc>
+      <defs>
+        <marker id="ds-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="ds-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-link" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1120" height="360"/>
+
+      <path class="a" d="M280,108 H400" marker-end="url(#ds-arrow)"/>
+      <rect class="lblmask" x="292" y="84" width="96" height="16" rx="2"/><text class="t-lbl-th" x="340" y="96">fixed URL</text>
+      <path class="a-link" d="M680,108 H800" marker-end="url(#ds-arrow-link)"/>
+      <rect class="lblmask" x="692" y="84" width="96" height="16" rx="2"/><text class="t-lbl-th" x="740" y="96">one-use URL</text>
+      <path class="a" d="M540,156 V236" marker-end="url(#ds-arrow)"/>
+      <rect class="lblmask" x="552" y="188" width="128" height="16" rx="2"/><text class="t-lbl-th" x="616" y="200">fresh URL each time</text>
+      <path class="a-link" d="M680,284 H932 A8,8 0 0 0 940,276 V156" marker-end="url(#ds-arrow-link)"/>
+      <rect class="lblmask" x="748" y="260" width="152" height="16" rx="2"/><text class="t-lbl-th" x="824" y="272">login · renew every 20 s</text>
+
+      <rect class="n-step" x="40" y="60" width="240" height="96" rx="6"/>
+      <rect class="tagbox" x="48" y="66" width="36" height="12" rx="2"/><text class="t-tag" x="66" y="75">STREAM</text>
+      <text class="t-name" x="160" y="92">edge go2rtc</text>
+      <text class="t-sub" x="160" y="110">rtsp://127.0.0.1:&lt;port&gt;/dss/&lt;id&gt;/main</text>
+      <text class="t-th" x="160" y="132">Reconnects when someone watches</text>
+
+      <rect class="bg" x="400" y="60" width="280" height="96" rx="6"/>
+      <rect class="n-focal" x="400" y="60" width="280" height="96" rx="6"/>
+      <rect class="tagbox" x="408" y="66" width="36" height="12" rx="2"/><text class="t-tag" x="426" y="75">RELAY</text>
+      <text class="t-name" x="540" y="92">Local RTSP relay</text>
+      <text class="t-sub" x="540" y="110">dss-rtsp-relay.js · listens on 127.0.0.1 only</text>
+      <text class="t-th" x="540" y="132">Rewrites URIs between go2rtc and DSS</text>
+
+      <rect class="n-step" x="400" y="236" width="280" height="96" rx="6"/>
+      <rect class="tagbox" x="408" y="242" width="32" height="12" rx="2"/><text class="t-tag" x="424" y="251">AUTH</text>
+      <text class="t-name" x="540" y="268">DSS session</text>
+      <text class="t-sub" x="540" y="286">dss-sessions.js · dss.js</text>
+      <text class="t-th" x="540" y="306">One login per source, self-renewing</text>
+      <text class="t-th" x="540" y="324">Wrong password = stop, no retry</text>
+
+      <rect class="bg" x="800" y="60" width="280" height="96" rx="6"/>
+      <rect class="n-ext" x="800" y="60" width="280" height="96" rx="6"/>
+      <text class="t-name" x="940" y="92">Dahua DSS Pro</text>
+      <text class="t-sub" x="940" y="110">OpenAPI :443 (HTTPS)</text>
+      <text class="t-th" x="940" y="132">Live URL works only once</text>
+      <text class="t-th" x="940" y="150">session token lives ~30 s</text>
+
+      <text class="t-aside" x="40" y="300">The DSS token is not in go2rtc.yaml or the DB</text>
+      <text class="t-aside" x="40" y="324">The cameras row stores only the relay URL</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw ext"></i>External system</span>
+    <span><i class="sw"></i>Edge component</span>
+    <span><i class="sw focal"></i>Relay that requests fresh URLs</span>
+    <span style="color: var(--link)">── Line carrying a DSS token</span>
+  </div>
+  <div class="notes">
+    <div><h3>What the relay rewrites on the way</h3><p>Outbound, a URI starting with the local address is replaced by the real DSS URL. On the way back, <code>Content-Base</code> is changed back to the local address, so go2rtc sees a single URL throughout. Video data passes straight through with backpressure. If a URL cannot be obtained from DSS, the relay closes the connection and go2rtc reconnects by itself</p></div>
+    <div><h3>Accounts can be locked</h3><p>DSS locks an account after several wrong passwords, so the edge stops the moment a login fails because of the password and remembers that state until a person enters a new password (re-sync with a password). It never retries by itself</p></div>
+    <div><h3>Camera state comes from DSS</h3><p>Our TCP reaches only the local relay, which always answers. So the edge asks DSS every 60 seconds and writes <code>reachable</code> itself, the same as for cameras from an edge · re-sync does not delete cameras that vanish from DSS but reports them for a person to decide</p></div>
+  </div>
+</section>
+
+<!-- ============ 5. PLAYBACK ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Playback · pulled from the device</p>
+    <h2>Where playback comes from</h2>
+    <p>The system does not record video itself (the edge recorder was removed on 2026-09-28). When someone asks, the edge queries the recorded ranges and pulls video from the device or VMS that holds it. The path is decided by the type and brand of the camera as added (<code>server/vms/device-playback.js</code>)</p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1120 580" role="img" aria-labelledby="onb-pb-title onb-pb-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-pb-title">The edge picks the playback source for a camera</title>
+      <desc id="onb-pb-desc">The sourceKindOf function looks at the type and brand of the camera row and picks one of seven paths. Dahua DSS Pro, AXIS S30 and Uniview have been tested on real devices. Hikvision, Dahua and ONVIF Profile G are written and await test devices. Digifort and Manual RTSP answer 501</desc>
+      <defs>
+        <marker id="pb-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="pb-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-accent" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1120" height="580"/>
+
+      <path class="a-accent" d="M240,288 H340" marker-end="url(#pb-arrow-accent)"/>
+      <path class="a" d="M580,240 H604 A8,8 0 0 0 612,232 V80 A8,8 0 0 1 620,72 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a" d="M580,256 H628 A8,8 0 0 0 636,248 V152 A8,8 0 0 1 644,144 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a" d="M580,272 H652 A8,8 0 0 0 660,264 V224 A8,8 0 0 1 668,216 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a" d="M580,288 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a" d="M580,304 H652 A8,8 0 0 1 660,312 V352 A8,8 0 0 0 668,360 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a" d="M580,320 H628 A8,8 0 0 1 636,328 V424 A8,8 0 0 0 644,432 H720" marker-end="url(#pb-arrow)"/>
+      <path class="a a-dash" d="M580,336 H604 A8,8 0 0 1 612,344 V496 A8,8 0 0 0 620,504 H720" marker-end="url(#pb-arrow)"/>
+
+      <!-- start -->
+      <rect class="bg" x="40" y="252" width="200" height="72" rx="6"/>
+      <rect class="n-store" x="40" y="252" width="200" height="72" rx="6"/>
+      <text class="t-name" x="140" y="280">Camera row in cameras</text>
+      <text class="t-sub" x="140" y="298">type · brand · channel token</text>
+
+      <!-- selector (focal) -->
+      <rect class="bg" x="340" y="224" width="240" height="128" rx="6"/>
+      <rect class="n-focal" x="340" y="224" width="240" height="128" rx="6"/>
+      <rect class="tagbox" x="348" y="230" width="32" height="12" rx="2"/><text class="t-tag" x="364" y="239">CORE</text>
+      <text class="t-name" x="460" y="272">sourceKindOf(camera)</text>
+      <text class="t-sub" x="460" y="292">device-playback.js</text>
+      <text class="t-th" x="460" y="316">Picks a path by type and brand</text>
+      <text class="t-th" x="460" y="336">No condition matches = 501</text>
+
+      <!-- outputs: tested -->
+      <rect class="n-step" x="720" y="40" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="64">Dahua DSS Pro</text>
+      <text class="t-sub" x="900" y="80">type = dss_relay</text>
+      <text class="t-th" x="900" y="96">QueryRecords → StartPlaybackByFile</text>
+
+      <rect class="n-step" x="720" y="112" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="136">AXIS S30</text>
+      <text class="t-sub" x="900" y="152">brand = axis · onvif_nvr · has device id</text>
+      <text class="t-th" x="900" y="168">VAPIX record/list → RTSP from recorder</text>
+
+      <rect class="n-step" x="720" y="184" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="208">Uniview NVR</text>
+      <text class="t-sub" x="900" y="224">brand = uniview · onvif_nvr · channel no. known</text>
+      <text class="t-th" x="900" y="240">LAPI gives recorded ranges → RTSP replay</text>
+
+      <!-- outputs: untested -->
+      <rect class="n-opt" x="720" y="256" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="280">Hikvision</text>
+      <text class="t-sub" x="900" y="296">brand = hikvision</text>
+      <text class="t-th" x="900" y="312">ISAPI search → RTSP /Streaming/tracks</text>
+
+      <rect class="n-opt" x="720" y="328" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="352">Dahua</text>
+      <text class="t-sub" x="900" y="368">brand = dahua</text>
+      <text class="t-th" x="900" y="384">mediaFileFind → RTSP /cam/playback</text>
+
+      <rect class="n-opt" x="720" y="400" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="424">ONVIF Profile G</text>
+      <text class="t-sub" x="900" y="440">remaining onvif_cam / onvif_nvr</text>
+      <text class="t-th" x="900" y="456">GetReplayUri via relay adding Range: clock</text>
+
+      <!-- 501 -->
+      <rect class="n-ext" x="720" y="472" width="360" height="64" rx="6"/>
+      <text class="t-name" x="900" y="496">Answer 501</text>
+      <text class="t-sub" x="900" y="512">Digifort · Manual RTSP</text>
+      <text class="t-th" x="900" y="528">No way yet to query that source recordings</text>
+
+      <text class="t-aside" x="40" y="440">Tiandy · Hi-View · generic</text>
+      <text class="t-aside" x="40" y="460">Milestone Bridge · SD-card cameras</text>
+      <text class="t-aside" x="40" y="480">all fall through to Profile G</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw store"></i>Camera row</span>
+    <span><i class="sw focal"></i>Path selector</span>
+    <span><i class="sw"></i>Tested on real devices</span>
+    <span><i class="sw opt"></i>Written, awaiting test device</span>
+    <span><i class="sw ext"></i>Answers 501</span>
+  </div>
+  <div class="notes">
+    <div><h3>Tested on real devices</h3><p>AXIS S30, Uniview NVR and Dahua DSS Pro V8.5.0 (2026-09-29). DSS delivers the first frame in ~0.6–0.8 seconds and can start mid-file. <code>StartPlaybackByTime</code> answers 2060 on this unit, so the system searches files and plays them one by one</p></div>
+    <div><h3>Still awaiting real devices</h3><p>Hikvision, Dahua and ONVIF Profile G were written from documentation (2026-09-28). Points to confirm: Hikvision times ending in Z are treated as the device local time (set <code>HIKVISION_TIME_UTC=1</code> if the device really uses UTC) · Dahua channel numbers start at 1 · Profile G uses UTC per the spec</p></div>
+    <div><h3>ONVIF Profile G matches cameras carefully</h3><p>It finds the camera recording by the VideoSource token first, then by name. If no match is found it opens no video, which is better than opening another camera video · the relay itself adds <code>Require: onvif-replay</code>, <code>Range: clock=</code> and Authorization, because ffmpeg cannot send them, so the password is not on the command line</p></div>
+    <div><h3>Known limitation</h3><p>AXIS S30, Uniview, Hikvision and Dahua pass URLs containing the password to ffmpeg via argv; a user who can list processes on the edge machine will see them (ffmpeg stderr is discarded so the password does not leak into logs) · Digifort is waiting for playback API documentation</p></div>
+  </div>
+
+  <div class="sec-head" style="margin-top: 16px">
+    <p class="eyebrow">From viewer to device</p>
+    <h2>How a request travels</h2>
+    <p>The edge holds the camera passwords and can reach devices on the LAN, so playback is always read at the edge. Central and Regional are only a pass-through for <code>edge_relay</code> cameras (nested requests Central → Regional → Edge). With a pull edge the upper tier connects in. A link edge is behind NAT and the upper tier cannot connect in, so the direction reverses: the edge uploads the video upward · Clients in the region can point at the Regional directly without passing through Central</p>
+  </div>
+  <div class="diagram scroll d-wide">
+    <svg viewBox="0 0 1120 408" role="img" aria-labelledby="onb-pl-title onb-pl-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="onb-pl-title">Playback request path from the upper tier to the device</title>
+      <desc id="onb-pl-desc">A viewer requests playback from Central or a Regional. With a pull edge, the upper tier forwards the request to the edge /api/v1. With a link edge, the upper tier commands it over the link, then the edge uploads fMP4 upward via HTTP POST and the upper tier pipes it to the viewer. In both cases the edge reads video from the device at the site</desc>
+      <defs>
+        <marker id="pl-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+        <marker id="pl-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-accent" points="0 0, 8 3, 0 6"/></marker>
+      </defs>
+      <rect class="bg" width="1120" height="408"/>
+
+      <path class="a" d="M240,200 H320" marker-end="url(#pl-arrow)"/>
+      <rect class="lblmask" x="248" y="172" width="64" height="12" rx="2"/><text class="t-lbl" x="280" y="182">GET /v1</text>
+      <path class="a" d="M520,176 H552 A8,8 0 0 0 560,168 V96 A8,8 0 0 1 568,88 H640" marker-end="url(#pl-arrow)"/>
+      <rect class="lblmask" x="576" y="64" width="56" height="12" rx="2"/><text class="t-lbl" x="604" y="74">PROXY</text>
+      <path class="a a-dash" d="M520,224 H552 A8,8 0 0 1 560,232 V304 A8,8 0 0 0 568,312 H640" marker-end="url(#pl-arrow)"/>
+      <rect class="lblmask" x="580" y="288" width="48" height="12" rx="2"/><text class="t-lbl" x="604" y="298">RPC</text>
+      <path class="a-accent" d="M740,360 V376 A8,8 0 0 1 732,384 H428 A8,8 0 0 1 420,376 V248" marker-end="url(#pl-arrow-accent)"/>
+      <rect class="lblmask" x="530" y="362" width="100" height="12" rx="2"/><text class="t-lbl" x="580" y="372">HTTP POST fMP4</text>
+      <path class="a" d="M840,88 H892 A8,8 0 0 1 900,96 V168 A8,8 0 0 0 908,176 H920" marker-end="url(#pl-arrow)"/>
+      <path class="a" d="M840,312 H892 A8,8 0 0 0 900,304 V232 A8,8 0 0 1 908,224 H920" marker-end="url(#pl-arrow)"/>
+
+      <!-- viewer -->
+      <rect class="bg" x="40" y="152" width="200" height="96" rx="6"/>
+      <rect class="n-input" x="40" y="152" width="200" height="96" rx="6"/>
+      <rect class="tagbox" x="48" y="158" width="28" height="12" rx="2"/><text class="t-tag" x="62" y="167">VIEW</text>
+      <text class="t-name" x="140" y="192">Viewer</text>
+      <text class="t-sub" x="140" y="210">web · client · API key</text>
+      <text class="t-th" x="140" y="232">Needs allow_playback</text>
+
+      <!-- central -->
+      <rect class="n-step" x="320" y="152" width="200" height="96" rx="6"/>
+      <rect class="tagbox" x="328" y="158" width="44" height="12" rx="2"/><text class="t-tag" x="350" y="167">CENTRAL</text>
+      <text class="t-name" x="420" y="192">Central / Regional</text>
+      <text class="t-sub" x="420" y="212">recordings · frame.jpg</text>
+      <text class="t-sub" x="420" y="228">playback.mp4 · playback-token</text>
+
+      <!-- pull edge -->
+      <rect class="n-step" x="640" y="40" width="200" height="96" rx="6"/>
+      <rect class="tagbox" x="648" y="46" width="32" height="12" rx="2"/><text class="t-tag" x="664" y="55">EDGE</text>
+      <text class="t-name" x="740" y="84">pull edge</text>
+      <text class="t-sub" x="740" y="102">/cameras/:id/playback.mp4</text>
+      <text class="t-th" x="740" y="124">central connects in with an API key</text>
+
+      <!-- link edge (focal) -->
+      <rect class="bg" x="640" y="264" width="200" height="96" rx="6"/>
+      <rect class="n-focal" x="640" y="264" width="200" height="96" rx="6"/>
+      <rect class="tagbox" x="648" y="270" width="32" height="12" rx="2"/><text class="t-tag" x="664" y="279">EDGE</text>
+      <text class="t-name" x="740" y="308">link edge</text>
+      <text class="t-th" x="740" y="328">Ranges · snapshots travel on the link</text>
+      <text class="t-th" x="740" y="346">Video is uploaded upward by the edge</text>
+
+      <!-- device -->
+      <rect class="bg" x="920" y="152" width="160" height="96" rx="6"/>
+      <rect class="n-ext" x="920" y="152" width="160" height="96" rx="6"/>
+      <text class="t-name" x="1000" y="192">Device at the site</text>
+      <text class="t-sub" x="1000" y="210">NVR · SD card · VMS</text>
+      <text class="t-th" x="1000" y="232">Video source per the chart above</text>
+
+      <text class="t-aside" x="40" y="296">Viewer closes the window = upload cut</text>
+      <text class="t-aside" x="40" y="316">The edge ffmpeg stops with it</text>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><i class="sw input"></i>Viewer</span>
+    <span><i class="sw"></i>Central / Regional · pull edge</span>
+    <span><i class="sw focal"></i>link edge</span>
+    <span><i class="sw ext"></i>Customer site</span>
+    <span style="color: var(--accent)">── Reversed path (edge uploads upward)</span>
+  </div>
+  <div class="notes">
+    <div><h3>Permission separate from live view</h3><p>The <code>recordings</code>, <code>playback.mp4</code> and <code>frame.jpg</code> routes require <code>allow_playback</code> on the API key, because playback is evidence · <code>playback-token</code> issues a token that lets a native client open an MP4 only for cameras within the key scope</p></div>
+    <div><h3>What a request looks like</h3><p><code>recordings</code> requires <code>from</code> and <code>to</code> (ISO-8601, to &gt; from) · <code>playback.mp4</code> requires <code>start</code> and a <code>duration</code> of 1–3600 seconds · <code>video=h264</code> transcodes for browsers; omitted = the camera original codec · the real time of the first frame is in the <code>X-Playback-Start</code> header</p></div>
+    <div><h3>Concurrency ceiling at the edge</h3><p>2 per camera · 8 per device address · 16 per edge. Beyond that it answers 429, because an NVR accepts only a limited number of replay sessions and each ffmpeg consumes edge CPU</p></div>
+    <div><h3>Three nested tiers need ordered timeouts</h3><p>The outer tier timeout must exceed the inner one by at least 2 seconds, otherwise the outer tier fails first · closing the window midway must close the lower-tier pipes too. This passed testing against a simulated source, but has not yet been confirmed against every real NVR type on the three-tier topology</p></div>
+    <div><h3>Why a link waits only 45 seconds</h3><p>An upload session works once and must come from the owning edge. If it does not arrive within 45 seconds (<code>LINK_PLAYBACK_WAIT_MS</code>) the viewer gets 504 · set longer than a normal RPC because Profile G may search recordings in several rounds, taking over ten seconds</p></div>
+  </div>
+</section>
+
+<!-- ============ AREA ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">Area · province and district</p>
+    <h2>Every path must state the area before saving</h2>
+    <p>The Edge enforces a matching province and district when adding a camera, by any method. The API rejects blanks and mismatched pairs with 400 before writing anything to the database. The system does not guess a province for existing cameras</p>
+  </div>
+  <div class="type-grid">
+    <article class="tcard">
+      <header><span class="tag">required</span><h3>When adding a camera</h3><span class="who">The form has a province dropdown, then loads the districts under that province (<span class="mono">GET /api/regions</span>)</span></header>
+      <ol class="steps">
+        <li>Covers <span class="mono">POST /api/cameras</span>, <span class="mono">/api/cameras/bulk-add</span> (NVR, Uniview, AXIS S30, Milestone) and <span class="mono">/api/vms/import</span> (Digifort, DSS Pro)</li>
+        <li><span class="mono">validateRequiredRegion(province_code, district_code)</span> checks that the district really belongs to the province; failure = 400</li>
+        <li>Once it passes, INSERT the camera row, then <span class="mono">saveCameraRegion</span> writes the area before sync issues the Global ID</li>
+      </ol>
+    </article>
+    <article class="tcard focal">
+      <header><span class="tag accent">PATCH /api/cameras/region</span><h3>Edit the area for a whole group</h3><span class="who">Only at the Edge that owns the cameras · accepts cameras selected across groups</span></header>
+      <dl class="kv">
+        <dt>Accepts</dt><dd><span class="mono">ids</span> 1–1000 cameras + province + district</dd>
+        <dt>Rejects</dt><dd>A list containing a camera not found (404 before writing) · <span class="mono">edge_relay</span> cameras (403) · cameras outside the user scope (403)</dd>
+      </dl>
+      <ol class="steps">
+        <li>Checks the <span class="mono">device.manage</span> permission and ownership of every camera</li>
+        <li>A single <span class="mono">UPDATE</span> for the whole batch · Global ID and coordinates are unchanged</li>
+        <li>Clears the role cache by region, then <span class="mono">catalogSoon()</span> sends the catalog up to the Regional and Central immediately</li>
+      </ol>
+    </article>
+    <article class="tcard">
+      <header><span class="tag">upper tiers</span><h3>What Regional and Central do with the area</h3><span class="who">Receive area data from the Edge and never edit it</span></header>
+      <ul class="plain">
+        <li>The Regional rejects Edges outside the region number block, and catalogs containing provinces outside the region</li>
+        <li>Central uses the province for per-region/province role permissions; new cameras in the area become visible automatically without ticking</li>
+        <li>Existing cameras with no province need a real area chosen at the Edge, then wait for sync to the upper tiers</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ============ COMMON ============ -->
+<section>
+  <div class="sec-head">
+    <p class="eyebrow">After saving · the same for every type</p>
+    <h2>What happens after the INSERT</h2>
+  </div>
+  <ul class="plain">
+    <li><strong>Global ID</strong> format <code>TH-&lt;province&gt;-&lt;node no.&gt;-&lt;seq&gt;</code>. The Edge issues it once on the first sync round, so the province must be saved first (<code>saveCameraRegion</code>). Sequence numbers are never reused even after a camera is deleted. Regional and Central pass the original value through every tier and never reissue it · district, site and Remark are location data and are not in the ID</li>
+    <li><strong>go2rtc gets 3 lines per camera</strong>: <code>&lt;id&gt;</code> (main) and <code>&lt;id&gt;_sub</code>, always transcoded to H.264 through ffmpeg because go2rtc 1.9.14 crashes when sending H.265 out over MSE · <code>&lt;id&gt;_raw</code> is a passthrough with <code>#backchannel=0</code> for clients that decode H.265 themselves</li>
+    <li><strong>Updates go through REST</strong> without restarting go2rtc, so adding one camera never cuts the video of other cameras</li>
+    <li><strong>How the upper tiers learn of cameras</strong>: the Edge sends its catalog up to the Regional, and the Regional sends it up to Central every 10 minutes, with an immediate notice when a camera changes (two nested tiers can lag up to ~20 minutes without the immediate notice) · <code>reachable</code> on a branch whose link is down is <code>null</code>, not <code>false</code></li>
+    <li><strong>No coordinates by default</strong>: multi-channel adds and VMS always get lat/lng = NULL; no map-center point is filled in</li>
+    <li><strong>Camera passwords</strong> are embedded in the <code>rtsp</code> and <code>onvifPass</code> columns and must never leave through <code>/api/v1</code> (queries use <code>SAFE_CAMERA_COLUMNS</code>)</li>
+    <li><strong>Camera state</strong> is decided by <code>server/shared/camera-state.js</code> (enabled / reachable / streaming), not by go2rtc <code>ready</code></li>
+  </ul>
+</section>
+
+<footer>
+  <span>Surveillance Gateway · Camera onboarding backend · 2026-09-30 · build 5c0b404</span>
+  <span>powered by Warapon Wichitpan</span>
+</footer>
+
+</div>

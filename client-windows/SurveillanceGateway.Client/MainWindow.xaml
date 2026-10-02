@@ -1,0 +1,279 @@
+<Window x:Class="SurveillanceGateway.Client.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services"
+        Title="Surveillance Gateway Client"
+        Icon="/Assets/app.ico"
+        Width="1280" Height="720"
+        MinWidth="1024" MinHeight="640"
+        WindowStyle="None"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BackgroundBrush}"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType">
+    <Window.Resources>
+        <Style x:Key="TitlebarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#CED5D1" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#34403A" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="34" ResizeBorderThickness="6" GlassFrameThickness="0"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <!--
+        720p at startup, not the size of the biggest screen this was developed on. A window that
+        opens larger than the display cannot be resized back on a laptop - the title bar is off
+        the top of the screen - and the wall is the thing people run full screen anyway, which
+        F11 does.
+
+        AllowsTransparency stays false. Setting it silently drops WebView2 to software rendering
+        and breaks VideoView outright, and this shell hosts both.
+
+        The shell matches the web consoles (Surveillance Gateway Central / Surveillance Gateway Edge,
+        src/components/shell/AppShell.jsx), which borrow their layout from a reference edge project:
+        a dark collapsible sidebar, a navbar with a breadcrumb, a strip of open-page tabs, and pages
+        that slide in. Only pages without video slide - see MainWindow.xaml.cs.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="TitlebarRow" Height="34" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border x:Name="Titlebar" Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource SideBgBrush}"
+                BorderBrush="#626B67" BorderThickness="0,0,0,1">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="13,0,0,0">
+                    <Ellipse Width="14" Height="14" Fill="{DynamicResource BrandYellowBrush}" />
+                    <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}"
+                               FontSize="12" FontWeight="SemiBold" Foreground="White" Text="{svc:T app.title}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="MinimizeButton" Style="{StaticResource TitlebarButton}"
+                            Width="44" Height="33" FontSize="17" Content="&#x2212;"
+                            ToolTip="{svc:T shell.minimize}" WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button x:Name="MaximizeButton" Style="{StaticResource TitlebarButton}"
+                            Width="44" Height="33" FontSize="16" Content="&#x25A1;"
+                            ToolTip="{svc:T shell.maximize}" WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button x:Name="CloseButton" Style="{StaticResource TitlebarButton}"
+                            Width="44" Height="33" FontSize="18" Content="&#x00D7;"
+                            ToolTip="{svc:T shell.closeWindow}" WindowChrome.IsHitTestVisibleInChrome="True" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== sidebar ===== -->
+        <Border x:Name="Sidebar" Grid.Row="1" Grid.Column="0" Width="220" Background="{StaticResource SideBgBrush}" ClipToBounds="True">
+            <DockPanel LastChildFill="True">
+                <!-- Mark + program name: Surveillance Gateway Client (talks to Surveillance Gateway Central). -->
+                <Border DockPanel.Dock="Top" Height="50" BorderBrush="{StaticResource SideLineBrush}" BorderThickness="0,0,0,1" Padding="17,0,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid Width="30" Height="30" VerticalAlignment="Center">
+                            <Ellipse Fill="{DynamicResource BrandYellowBrush}" />
+                            <Ellipse Width="15" Height="15" Fill="{StaticResource SideBgBrush}" />
+                            <Ellipse Width="6" Height="6" Margin="0,0,9,9" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="White" />
+                        </Grid>
+                        <StackPanel x:Name="BrandText" Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="13" FontWeight="SemiBold" Foreground="White" Text="Surveillance Gateway" />
+                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="10" Foreground="{StaticResource SideMutedBrush}" Text="CLIENT" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource SideLineBrush}"
+                        BorderThickness="0,1,0,0" Margin="8,0,8,10" Padding="0,8,0,0">
+                    <Button x:Name="SettingsButton" Style="{StaticResource SideUtilityButton}"
+                            ToolTip="{svc:T shell.settings}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="18" Height="18" Stretch="Uniform" Fill="{x:Null}"
+                                  StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  Data="M12 9 A3 3 0 1 0 12 15 A3 3 0 1 0 12 9 M12 2 V5 M12 19 V22 M4.2 4.2 L6.3 6.3 M17.7 17.7 L19.8 19.8 M2 12 H5 M19 12 H22 M4.2 19.8 L6.3 17.7 M17.7 6.3 L19.8 4.2" />
+                            <TextBlock x:Name="SettingsRailLabel" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Text="{svc:T shell.settings}" />
+                        </StackPanel>
+                    </Button>
+                </Border>
+
+                <StackPanel Margin="0,12,0,0">
+                    <TextBlock x:Name="SecOverview" Style="{StaticResource SideSectionText}" Text="{svc:T shell.secOverview}" />
+                    <RadioButton x:Name="HomeNav" Style="{StaticResource SideNavButton}" GroupName="Nav" IsChecked="True" ToolTip="{svc:T shell.navHome}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M4 11 L12 4 L20 11 L20 19 L15 19 L15 13 L9 13 L9 19 L4 19 Z" />
+                            <TextBlock x:Name="HomeLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navHome}" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <TextBlock x:Name="SecMonitoring" Style="{StaticResource SideSectionText}" Text="{svc:T shell.secMonitoring}" />
+                    <RadioButton x:Name="WallNav" Style="{StaticResource SideNavButton}" GroupName="Nav" ToolTip="{svc:T shell.navWall}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M3 4 H11 V11 H3 Z M13 4 H21 V11 H13 Z M3 13 H11 V20 H3 Z M13 13 H21 V20 H13 Z" />
+                            <TextBlock x:Name="WallLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navWall}" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="MapNav" Style="{StaticResource SideNavButton}" GroupName="Nav" ToolTip="{svc:T shell.navMap}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M9 4 L15 6 L20 4 V18 L15 20 L9 18 L4 20 V6 Z M9 4 V18 M15 6 V20" />
+                            <TextBlock x:Name="MapLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navMap}" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="EventsNav" Style="{StaticResource SideNavButton}" GroupName="Nav" ToolTip="{svc:T shell.navEvents}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M12 3 L14 9 L20 10 L15 14 L16.5 20 L12 17 L7.5 20 L9 14 L4 10 L10 9 Z" />
+                            <TextBlock x:Name="EventsLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navEvents}" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="PlaybackNav" Style="{StaticResource SideNavButton}" GroupName="Nav" ToolTip="{svc:T shell.navPlayback}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M12 3 A9 9 0 1 0 21 12 M12 3 V8 M12 12 L8 9 M12 12 L12 6" />
+                            <TextBlock x:Name="PlaybackLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navPlayback}" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <TextBlock x:Name="SecDevices" Style="{StaticResource SideSectionText}" Text="{svc:T shell.secDevices}" />
+                    <RadioButton x:Name="DetailNav" Style="{StaticResource SideNavButton}" GroupName="Nav" ToolTip="{svc:T shell.navDetail}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource SideIcon}" Data="M3 6 H21 V12 H3 Z M3 14 H21 V19 H3 Z" />
+                            <TextBlock x:Name="DetailLabel" Margin="12,0,0,0" VerticalAlignment="Center" Text="{svc:T shell.navDetail}" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== main ===== -->
+        <Grid Grid.Row="1" Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- navbar: sidebar toggle · breadcrumb (program / section / page) · status and buttons -->
+            <Border Grid.Row="0" Height="58" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,0,18,0">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="CollapseButton" Style="{StaticResource IconButton}" ToolTip="{svc:T shell.toggleMenu}">
+                            <Path Style="{StaticResource GlyphIcon}" Data="M4 7 H20 M4 12 H20 M4 17 H20" RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform><RotateTransform x:Name="CollapseRotate" Angle="0" /></Path.RenderTransform>
+                            </Path>
+                        </Button>
+                        <TextBlock Margin="8,0,0,0" Style="{StaticResource CrumbText}" Text="Surveillance Gateway Client" />
+                        <TextBlock x:Name="CrumbSep1" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
+                        <TextBlock x:Name="CrumbSection" Style="{StaticResource CrumbText}" Text="" />
+                        <TextBlock x:Name="CrumbSep2" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
+                        <TextBlock x:Name="CrumbPage" Style="{StaticResource CrumbText}" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" Text="">
+                            <TextBlock.RenderTransform><TranslateTransform x:Name="CrumbShift" /></TextBlock.RenderTransform>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel x:Name="Chrome" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- Shown only while central reports an edge down: those cameras have no picture. -->
+                        <Border x:Name="EdgeDownChip" Style="{StaticResource Chip}" Margin="0,0,8,0" VerticalAlignment="Center"
+                                Visibility="Collapsed" BorderBrush="{DynamicResource StatusCritBrush}">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource StatusCritBrush}" />
+                                <TextBlock x:Name="EdgeDownText" Margin="8,0,0,0" Style="{StaticResource MonoText}"
+                                           Foreground="{DynamicResource StatusCritBrush}" Text="" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="ServerChip" Style="{StaticResource Chip}" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="FeedDot" Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource FaintForegroundBrush}" />
+                                <TextBlock x:Name="ServerText" Margin="8,0,0,0" Style="{StaticResource MonoText}" Text="" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="KeyChip" Style="{StaticResource Chip}" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="UserText" Style="{StaticResource MonoText}" Text="" />
+                        </Border>
+
+                        <!-- Only ever shown when an update has finished downloading. -->
+                        <Button x:Name="UpdateButton" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Visibility="Collapsed" Content="{svc:T shell.update}" />
+
+                        <Button x:Name="FullScreenButton" Style="{StaticResource IconButton}" Margin="10,0,0,0" ToolTip="{svc:T shell.fullScreen}">
+                            <Path Style="{StaticResource GlyphIcon}" Data="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15" />
+                        </Button>
+                        <!-- Leaving through a door, not a power symbol: this disconnects from the
+                             gateway, it does not shut the machine down. -->
+                        <Button x:Name="SignOutButton" Style="{StaticResource IconButton}" Margin="2,0,0,0" ToolTip="{svc:T shell.signOut}">
+                            <Path Style="{StaticResource GlyphIcon}" Data="M14 4 H19 A1 1 0 0 1 20 5 V19 A1 1 0 0 1 19 20 H14 M10 8 L14 12 L10 16 M14 12 H4" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!--
+                Pages are tabs, not one swapped view. Opening the map while a wall is arranged has to
+                leave the wall arranged - and on a wall display the tab strip is also the only place
+                that says what is currently loaded and decoding.
+            -->
+            <Border x:Name="TabStrip" Grid.Row="1" Height="46" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center">
+                    <ItemsControl x:Name="TabItems">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ToggleButton Style="{StaticResource PageTab}" Margin="0,0,6,0" IsChecked="{Binding IsSelected, Mode=TwoWay}" Tag="{Binding}" Click="OnTabClicked">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{Binding Marker}" />
+                                        <TextBlock Margin="7,0,0,0" VerticalAlignment="Center" Text="{Binding Title}" />
+                                        <!--
+                                            A Button, not a TextBlock with a mouse handler: the
+                                            surrounding ToggleButton captures the mouse, so a raw
+                                            MouseLeftButtonUp on a child never fires. Home has no
+                                            close button - closing the page you return to leaves
+                                            nowhere to go.
+                                        -->
+                                        <Button Margin="6,0,-4,0" Style="{StaticResource IconButton}" Width="18" Height="18" FontSize="10"
+                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                                Visibility="{Binding CloseVisibility}" Tag="{Binding}" Click="OnTabClose" Content="&#x2715;" />
+                                    </StackPanel>
+                                </ToggleButton>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!--
+                Exactly one content host is realised at a time. Both video hosts own HWNDs, and a
+                collapsed HwndHost is not reliably hidden, so views are added and removed rather
+                than toggled with Visibility.
+            -->
+            <ContentControl x:Name="ContentHost" Grid.Row="2">
+                <ContentControl.RenderTransform><TranslateTransform x:Name="PageShift" /></ContentControl.RenderTransform>
+            </ContentControl>
+
+            <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16,6">
+                <TextBlock x:Name="StatusText" Style="{StaticResource MonoText}" Text="" />
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

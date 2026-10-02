@@ -1,0 +1,179 @@
+/* Fonts and the --font-* stacks live in fonts.css, shared with the client's map page. */
+@import './fonts.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Grid-Based Technical Minimalism — paper/ink neutrals + one real brand accent (#FDD20A,
+       sampled from the original logo, not invented). --primary stays a deep brass/amber
+       (not the raw poster-yellow) because it doubles as running `text-primary` colour in ~80
+       places across the app; raw #FDD20A fails contrast as text on a light ground. The raw
+       yellow lives in --brand-yellow for fills/chips/focus rings only, where it always sits
+       under dark ink text, never used as text-on-light itself. */
+    --background: 40 12% 98%; /* Paper: #FAFAF9 */
+    --foreground: 222 16% 9%; /* Ink: #14161A */
+    --card: 0 0% 100%;
+    --card-foreground: 222 16% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 16% 9%;
+    --primary: 43 70% 42%; /* Brass/amber — legible as text on both paper and ink */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 10% 95%;
+    --secondary-foreground: 222 16% 9%;
+    --muted: 40 10% 95%;
+    --muted-foreground: 220 6% 40%; /* Ink-soft: #62646c approx */
+    --accent: 40 10% 95%;
+    --accent-foreground: 43 70% 36%;
+    --destructive: 0 53% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 13% 85%; /* Real hairline, not near-invisible — Swiss rules must actually read */
+    --input: 40 13% 85%;
+    --ring: 49 98% 52%; /* Raw brand yellow as focus ring — a fill, not text, so full brightness is safe */
+    --radius: 0.25rem; /* 4px — near-square; kept just above 0 so Tailwind's `md`/`sm` derivations (radius - 2px/4px) never go negative */
+    --sidebar-background: 40 12% 98%;
+    --sidebar-foreground: 222 16% 9%;
+    --sidebar-primary: 43 70% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 10% 95%;
+    --sidebar-accent-foreground: 43 70% 36%;
+    --sidebar-border: 40 13% 85%;
+    --sidebar-ring: 49 98% 52%;
+
+    /* Extra tokens the shadcn base set doesn't have — brand fill + semantic status, kept
+       separate from --primary/--destructive so redesigned screens (Camera Management, AI
+       Detection, Video Wall status dots) have a real vocabulary instead of overloading the
+       generic tokens further. */
+    --brand-yellow: 49 98% 52%; /* #FDD20A, sampled from the real logo */
+    --brand-yellow-ink: 222 16% 9%; /* fixed dark text-on-yellow — never theme-inverted */
+    --status-ok: 152 55% 30%;
+    --status-warn: 20 80% 40%;
+    --status-crit: 5 65% 45%;
+  }
+
+  .dark {
+    --background: 225 11% 7%; /* Ink ground: #101114 */
+    --foreground: 60 9% 94%; /* Paper text: #F2F1EC */
+    --card: 228 10% 11%; /* #17181C */
+    --card-foreground: 60 9% 94%;
+    --popover: 228 10% 11%;
+    --popover-foreground: 60 9% 94%;
+    --primary: 43 70% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 228 10% 11%;
+    --secondary-foreground: 60 9% 94%;
+    --muted: 228 10% 11%;
+    --muted-foreground: 220 10% 63%;
+    --accent: 228 10% 11%;
+    --accent-foreground: 43 70% 55%;
+    --destructive: 0 53% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 228 8% 20%;
+    --input: 228 8% 20%;
+    --ring: 49 98% 52%;
+    --sidebar-background: 225 11% 7%;
+    --sidebar-foreground: 60 9% 94%;
+    --sidebar-primary: 43 70% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 228 10% 11%;
+    --sidebar-accent-foreground: 43 70% 55%;
+    --sidebar-border: 228 8% 20%;
+    --sidebar-ring: 49 98% 52%;
+
+    --brand-yellow: 49 98% 52%;
+    --brand-yellow-ink: 222 16% 9%;
+    --status-ok: 152 45% 48%;
+    --status-warn: 28 85% 55%;
+    --status-crit: 4 75% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600; /* apple.com headlines: semibold with tight tracking, not a black weight */
+    letter-spacing: -0.015em;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground rounded-full;
+}
+
+/* .custom-scrollbar ถูกอ้างถึงใน App.jsx และ CommandCenter.jsx มานาน แต่ไม่เคยถูกนิยามจริง
+   (เป็นคลาสเปล่ามาตลอด) นิยามให้จริงตรงนี้ พร้อมกับสิ่งที่ต้องการบนอุปกรณ์สัมผัส:
+   overscroll-behavior: contain กันไม่ให้การเลื่อนจนสุดขอบรายการไปลาก scroll ของทั้งหน้าต่อ
+   (rubber-band) ซึ่งบน iPad ทำให้ทั้งหน้าเด้งตามนิ้วโดยไม่ตั้งใจ
+   ส่วนแถบเลื่อนกว้าง 6px จับด้วยนิ้วง่ายกว่า 4px เดิมเล็กน้อย และยังบางพอสำหรับเดสก์ท็อป */
+.custom-scrollbar {
+  overscroll-behavior: contain;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground;
+}
+/* Google Maps Overrides */
+.gm-style-iw {
+  @apply !bg-card !p-0 !rounded-lg !border-border !shadow-lg;
+}
+.gm-style-iw-d {
+  @apply !overflow-hidden !max-h-none;
+}
+.gm-ui-hover-effect {
+  @apply !top-2 !right-2 !bg-background/80 !rounded-full !flex !items-center !justify-center;
+}
+/* .animate-fade-in ถูกใช้ทั่วทั้งแอปมาตั้งแต่ต้น แต่ไม่เคยมี keyframes จริงมาก่อน (dead class) —
+   เพิ่ม transition เข้าหน้า/การ์ดจริงตรงนี้ที่เดียว มีผลทุกหน้าที่ใช้ class นี้อยู่แล้วทันที */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.45s cubic-bezier(0.16, 0.8, 0.28, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in { animation-duration: 0.001ms; }
+}
+/* สลับหน้าแบบ fade-transform ของ reference edge project — เลื่อนเข้าจากซ้ายพร้อมจางขึ้น
+   ใช้กับ <div key={currentTab}> ใน AppShell ทุกครั้งที่เปลี่ยนหน้า */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.page-transition {
+  /* backwards ไม่ใช่ both: จบแล้วต้องไม่ค้าง transform ไว้ ไม่งั้น position:fixed ข้างในหน้า (แผนที่เต็มจอ) จะอิงกรอบนี้แทนหน้าจอ */
+  animation: page-enter 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+/* การ์ดในหน้าเดียวกันไล่เข้ามาทีละใบ — ใส่ style="--i: n" ให้แต่ละใบ */
+.stagger-in {
+  animation: fade-in 0.45s cubic-bezier(0.16, 0.8, 0.28, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-transition, .stagger-in { animation-duration: 0.001ms; animation-delay: 0ms; }
+}

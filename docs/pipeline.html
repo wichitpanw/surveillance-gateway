@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Surveillance Gateway pipeline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --paper:  #f5f5f5;
+      --ink:    #2d3142;
+      --muted:  #4f5d75;
+      --soft:   #7a8399;
+      --rule:   rgba(45,49,66,0.12);
+      --accent: #eb6c36;
+      --link:   #2e5aa8;
+      --sans:   'Geist', 'Noto Sans Thai', system-ui, sans-serif;
+      --thai:   'Noto Sans Thai', 'Geist', system-ui, sans-serif;
+      --serif:  'Instrument Serif', serif;
+      --mono:   'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--sans);
+      background: var(--paper);
+      color: var(--ink);
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; margin: 0 auto; }
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 0.5rem;
+    }
+    .standfirst {
+      font-family: var(--thai);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--muted);
+      max-width: 70ch;
+      margin-bottom: 1.5rem;
+    }
+    .diagram { overflow-x: auto; }
+    svg { width: 100%; min-width: 900px; display: block; }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 2.5rem 0 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--rule);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem 1.2rem;
+    }
+    .hops { margin-top: 1.5rem; }
+    .card.focal { border-color: rgba(235,108,54,0.55); background: rgba(235,108,54,0.04); }
+    .card-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.35rem; }
+    .num {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: rgba(45,49,66,0.08);
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+    }
+    .card.focal .num { color: var(--accent); background: rgba(235,108,54,0.14); }
+    .card h3 { font-family: var(--sans); font-size: 0.98rem; font-weight: 600; }
+    .who {
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      color: var(--soft);
+      margin-bottom: 0.6rem;
+    }
+    .card p {
+      font-family: var(--thai);
+      font-size: 0.84rem;
+      line-height: 1.7;
+      color: var(--ink);
+    }
+    .card p + p { margin-top: 0.45rem; }
+    .files {
+      margin-top: 0.7rem;
+      font-family: var(--mono);
+      font-size: 0.64rem;
+      line-height: 1.6;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    code { font-family: var(--mono); font-size: 0.78em; color: var(--muted); }
+
+    footer {
+      margin-top: 2rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--rule);
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(79,93,117,0.75);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Process · Surveillance Gateway · updated 2026-09-27</p>
+    <h1>The pipeline, step by step</h1>
+    <p class="standfirst">One camera passes through 8 steps before its picture reaches a viewer. The top half prepares the picture, almost entirely at the edge (register → sync catalog → ingest). The bottom half is delivery at central (authorise → sign token → deliver → watch). Step 04 is the pivot: central is the only place that transcodes, and only the line browsers need.</p>
+
+    <div class="diagram">
+    <svg viewBox="0 0 960 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pipeline-title pipeline-desc">
+      <title id="pipeline-title">Surveillance Gateway pipeline, step by step</title>
+      <desc id="pipeline-desc">Eight-step process of Surveillance Gateway: cameras are registered at an edge gateway, the edge sends its catalog to central by pull or link, the edge relays the untranscoded stream on demand, and central go2rtc keeps a raw H.265 line while transcoding H.264 only for browsers; consumers are then authorised with an API key, issued a short-lived stream token, served through the central gateway proxy, and watch on the web Live page or the Windows client.</desc>
+      <defs>
+        <marker id="pl-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="pl-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="pl-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="960" height="440" fill="#f5f5f5"/>
+
+      <!-- phase bands -->
+      <text x="48" y="64" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">PREPARE THE PICTURE · EDGE</text>
+      <line x1="48" y1="72" x2="912" y2="72" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="48" y="224" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">DELIVER IT · CENTRAL</text>
+      <line x1="48" y1="232" x2="912" y2="232" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+
+      <!-- ===== arrows (before nodes) ===== -->
+      <line x1="228" y1="128" x2="272" y2="128" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#pl-arrow)"/>
+      <line x1="456" y1="128" x2="500" y2="128" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#pl-arrow)"/>
+      <line x1="684" y1="128" x2="728" y2="128" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#pl-arrow)"/>
+
+      <!-- 04 → 05 : down the right edge -->
+      <line x1="822" y1="168" x2="822" y2="244" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#pl-arrow-accent)"/>
+      <rect x="832" y="192" width="72" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="868" y="202" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">H.264 + RAW</text>
+
+      <!-- row 2 right → left -->
+      <line x1="732" y1="288" x2="688" y2="288" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#pl-arrow-link)"/>
+      <line x1="504" y1="288" x2="460" y2="288" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#pl-arrow-link)"/>
+      <line x1="276" y1="288" x2="232" y2="288" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#pl-arrow-link)"/>
+
+      <!-- ===== nodes ===== -->
+      <!-- 01 Register -->
+      <rect x="48" y="88" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="48" y="88" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="56" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="68" y="105" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">01</text>
+      <text x="138" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Register</text>
+      <text x="138" y="144" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">edge admin adds cameras</text>
+      <text x="138" y="158" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">edge vms.db · main + sub</text>
+
+      <!-- 02 Sync -->
+      <rect x="276" y="88" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="276" y="88" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="284" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="296" y="105" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">02</text>
+      <text x="366" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sync</text>
+      <text x="366" y="144" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">edge catalog → central</text>
+      <text x="366" y="158" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">pull key · link websocket</text>
+
+      <!-- 03 Ingest -->
+      <rect x="504" y="88" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="504" y="88" width="180" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="512" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="524" y="105" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">03</text>
+      <text x="594" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ingest</text>
+      <text x="594" y="144" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">edge pulls, relays untouched</text>
+      <text x="594" y="158" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">rtsp · _raw · on demand</text>
+
+      <!-- 04 Normalise (focal) -->
+      <rect x="732" y="88" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="732" y="88" width="180" height="80" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <rect x="740" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+      <text x="752" y="105" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">04</text>
+      <text x="822" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Normalise</text>
+      <text x="822" y="144" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">central: h.264 for web only</text>
+      <text x="822" y="158" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">nvenc h264 | _raw h265</text>
+
+      <!-- 05 Authorise -->
+      <rect x="732" y="248" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="732" y="248" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="740" y="256" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="752" y="265" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">05</text>
+      <text x="822" y="288" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Authorise</text>
+      <text x="822" y="304" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">API key · camera scope</text>
+      <text x="822" y="318" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">/api/v1 · Bearer</text>
+
+      <!-- 06 Sign -->
+      <rect x="504" y="248" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="504" y="248" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="512" y="256" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="524" y="265" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">06</text>
+      <text x="594" y="288" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sign</text>
+      <text x="594" y="304" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">token bound to one stream</text>
+      <text x="594" y="318" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">HMAC · 5 min</text>
+
+      <!-- 07 Deliver -->
+      <rect x="276" y="248" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="276" y="248" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="284" y="256" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="296" y="265" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">07</text>
+      <text x="366" y="288" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Deliver</text>
+      <text x="366" y="304" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">token checked, video piped</text>
+      <text x="366" y="318" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">/stream/&lt;name&gt;.mp4 :5173</text>
+
+      <!-- 08 Watch (consumer) -->
+      <rect x="48" y="248" width="180" height="80" rx="6" fill="#f5f5f5"/>
+      <rect x="48" y="248" width="180" height="80" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="56" y="256" width="24" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+      <text x="68" y="265" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">08</text>
+      <text x="138" y="288" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Watch</text>
+      <text x="138" y="304" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">web Live · Windows client</text>
+      <text x="138" y="318" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">h264 browser | h265 own GPU</text>
+
+      <!-- ===== legend ===== -->
+      <line x1="48" y1="368" x2="912" y2="368" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="48" y="388" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+      <rect x="128" y="380" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="152" y="389" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Edge or central does it</text>
+
+      <rect x="268" y="380" width="16" height="12" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="292" y="389" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Cameras involved</text>
+
+      <rect x="396" y="380" width="16" height="12" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <text x="420" y="389" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Consumer</text>
+
+      <rect x="496" y="380" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="520" y="389" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Pivot</text>
+
+      <line x1="128" y1="416" x2="156" y2="416" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#pl-arrow)"/>
+      <text x="164" y="420" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Inside the system</text>
+
+      <line x1="272" y1="416" x2="300" y2="416" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#pl-arrow-accent)"/>
+      <text x="308" y="420" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">The picture itself</text>
+
+      <line x1="420" y1="416" x2="448" y2="416" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#pl-arrow-link)"/>
+      <text x="456" y="420" fill="#4f5d75" font-size="8" font-family="'Geist', sans-serif">Request from a consumer over HTTP</text>
+    </svg>
+    </div>
+
+    <p class="section-label">What each step does</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><span class="num">01</span><h3>Register</h3></div>
+        <p class="who">Edge admin · edge web UI</p>
+        <p>Cameras can be added 5 ways: manual RTSP, single-camera ONVIF, NVR scan via ONVIF, Uniview API, and VMS (Digifort) · central cannot add cameras itself (403)</p>
+        <p>The system keeps main = stream 1 and sub = stream 2, never stream 3 · each camera gets a global ID <code>TH-province-node-seq</code> that never changes for its lifetime · camera passwords live only at the edge</p>
+        <p class="files">server/server.js (resolveOnvifStreams · groupOnvifProfiles) · server/gateway/identity.js</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">02</span><h3>Sync</h3></div>
+        <p class="who">edge → central</p>
+        <p><strong>pull</strong>: central reads the edge <code>/api/v1</code> with an API key issued by the edge (health every 60 s, sync every 10 min) · <strong>link</strong>: the edge opens a WebSocket to <code>/api/edge-link</code> itself, for edges behind NAT</p>
+        <p>Name, coordinates, province and reachable state always come from the edge; central owns only display groups, wall layouts and permissions</p>
+        <p class="files">server/vms/edge-source.js · server/vms/edge-link-server.js · edge-link-client.js</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">03</span><h3>Ingest</h3></div>
+        <p class="who">edge go2rtc ← camera</p>
+        <p>The edge opens RTSP to the camera only while someone is watching, then passes the <code>_raw</code> line to central untranscoded: with pull, central go2rtc fetches it; with link, the edge ffmpeg pushes (<code>-c copy -an</code>) to the <code>&lt;id&gt;_in</code> stream that central prepared</p>
+        <p>The edge does not transcode, so it needs no GPU; a mini PC or Raspberry Pi 5 is enough</p>
+        <p class="files">server/gateway/go2rtc-sync.js (rawSourceFor) · server/vms/edge-link-client.js</p>
+      </div>
+
+      <div class="card focal">
+        <div class="card-head"><span class="num">04</span><h3>Normalise</h3></div>
+        <p class="who">central go2rtc · GPU NVENC</p>
+        <p><strong>The system pivot.</strong> Central builds two lines per camera: the normal line is forced to H.264 (<code>#video=h264#hardware</code>) for browsers, because go2rtc crashes when sending H.265 over MSE, and the <code>_raw</code> line passes the camera original codec through</p>
+        <p>Transcoding happens only while someone opens the H.264 line · the web Live page always uses the sub stream</p>
+        <p class="files">server/gateway/go2rtc-sync.js (sourceFor · rawSourceFor)</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">05</span><h3>Authorise</h3></div>
+        <p class="who">consumer → central /api/v1</p>
+        <p>Clients and external systems call <code>/api/v1</code> with <code>Authorization: Bearer &lt;key&gt;</code> issued on the API Clients page. Each key is bound to camera-group scope and PTZ rights, filtered in SQL</p>
+        <p>Camera passwords never leave through the API: queries use whitelisted columns, no <code>SELECT *</code> · web users log in with a password stored as a scrypt hash</p>
+        <p class="files">server/gateway/auth.js · server/gateway/index.js · server/shared/password.js</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">06</span><h3>Sign</h3></div>
+        <p class="who">central gateway</p>
+        <p><code>GET /api/v1/cameras/:id/streams</code> returns a URL with an HMAC token bound to a single stream, valid 5 minutes, checked only at open time</p>
+        <p>A token is needed because the <code>&lt;video&gt;</code> tag cannot send headers, and one token opens only the path it was signed for</p>
+        <p class="files">server/gateway/stream-token.js · server/gateway/streams.js</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">07</span><h3>Deliver</h3></div>
+        <p class="who">Node proxy :5173</p>
+        <p>Checks the token at <code>/stream/&lt;name&gt;.mp4</code>, then pipes fMP4 from go2rtc straight through; everything leaves through the single port 5173 · link cameras: if nobody is pushing yet, central sends <code>stream.open</code> to the edge and waits up to 8 seconds for video</p>
+        <p>Camera state goes out over SSE <code>/api/v1/events</code> (enabled · reachable · streaming)</p>
+        <p class="files">server/server.js (requireStreamToken · proxyToStreamCore) · server/shared/camera-state.js</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">08</span><h3>Watch</h3></div>
+        <p class="who">central web · Windows client</p>
+        <p>The Windows client plays <code>mp4Raw</code> (the original H.265 from the camera), decoded on the user GPU, with a 1–25 tile video wall and main/sub switching · the central web UI plays the H.264 line on the Live page (1/4/9/16 tiles + PTZ)</p>
+        <p>The client updates itself from <code>/client-updates</code> on the same central</p>
+        <p class="files">client-windows/ · src/components/LiveWall.jsx · docs/CLIENT-RELEASES.md</p>
+      </div>
+    </div>
+
+    <p class="section-label">Network hops — camera to screen (see architecture.html for the overview)</p>
+
+    <div class="cards hops">
+      <div class="card">
+        <div class="card-head"><span class="num">H1</span><h3>Camera → edge</h3></div>
+        <p class="who">RTSP · ONVIF · site LAN</p>
+        <p>The edge always dials out to the camera; the camera never sends to us. ONVIF is used for scanning and reading profiles, RTSP for pulling video. The edge checks whether the camera answers (TCP to the RTSP port) every 15 seconds</p>
+        <p>Video is connected only while someone watches; no viewer = no video connection to the camera</p>
+      </div>
+
+      <div class="card focal">
+        <div class="card-head"><span class="num">H2</span><h3>Edge → central</h3></div>
+        <p class="who">pull :5173 + RTSP :8555 · or link ws + push</p>
+        <p>pull: central connects to the edge with an API key and fetches RTSP <code>_raw</code> from the edge go2rtc · link: the edge opens the WebSocket itself, trying central addresses in order (LAN, VPN, NAT-translated IP), then pushes video to the central RTSP</p>
+        <p>No TLS yet: tokens and RTSP credentials travel unencrypted, so use only on a LAN or Tailscale · edge update packages are signed with ed25519</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">H3</span><h3>Inside central</h3></div>
+        <p class="who">HOST · 203.0.113.80</p>
+        <p>go2rtc (<code>:1984</code> API, <code>:8555</code> RTSP) receives video from the edge and hands it to the Node gateway over localhost. Node checks the token before every outgoing video</p>
+        <p>Edge 001 runs on the same host, on ports 5273 / 1994 / 8565</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">H4</span><h3>Central → user</h3></div>
+        <p class="who">HTTP :5173 · LAN / Tailscale</p>
+        <p>Users enter through the single port <code>5173</code>: web UI, API, video, client installer and edge install kit. On the LAN use <code>203.0.113.80</code>; from outside, enter via the central Tailscale address</p>
+        <p>Users never connect to cameras or edges directly and never know camera passwords</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="num">H5</span><h3>Side door</h3></div>
+        <p class="who">RTSP :8555</p>
+        <p>Port 8555 connects directly to the central go2rtc without passing Node, so tokens are not checked. It has its own RTSP account (<code>.rtsp-credentials.json</code>) used by link edges and operations tooling</p>
+        <p>Open the firewall for this port and 1984 only to the IP ranges that need it</p>
+      </div>
+    </div>
+
+    <footer>Surveillance Gateway Central · 203.0.113.80:5173 · Surveillance Gateway Edge · go2rtc 1.9.14 · client 1.7.4</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Surveillance Gateway — Camera Map</title>
+    <!--
+      หน้าแผนที่สำหรับ client บน Windows โดยเฉพาะ ไม่ใช่ส่วนหนึ่งของหน้าเว็บบริหารจัดการ
+
+      อยู่ที่นี่เพราะ Gateway เสิร์ฟไทล์อยู่แล้ว (/api/map-style.json, /api/tiles) และ maplibre
+      เป็น dependency ของ repo นี้อยู่แล้ว การให้ client โหลดหน้านี้ผ่าน WebView2 จึงแปลว่า
+      ตัวโปรแกรมไม่ต้องแบก JS bundle ไปด้วย และแผนที่กับไทล์อัปเดตพร้อมกันเสมอ
+
+      หน้านี้ไม่รู้จัก API key และไม่เคยเรียก /api/v1 — รายชื่อกล้องถูกส่งเข้ามาจากตัวโปรแกรม
+      ผ่าน window.setCameras() ซึ่งเป็นฝั่งที่ถือคีย์อยู่แล้ว
+    -->
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="hint"></div>
+
+    <!--
+      ข้อความในหน้านี้ถูกเติมโดย main.js ตามภาษาที่ตัวโปรแกรมส่งมาใน ?lang= — เขียนค่าไว้ในนี้ตรง ๆ
+      ไม่ได้ เพราะภาษาของ client เปลี่ยนได้ระหว่างใช้งาน
+    -->
+    <div id="layers">
+      <h2 data-i18n="layers"></h2>
+      <label><input id="toggle-3d" type="checkbox" checked /> <span data-i18n="buildings"></span></label>
+      <label><input id="toggle-roads" type="checkbox" checked /> <span data-i18n="roads"></span></label>
+      <label><input id="toggle-poi" type="checkbox" checked /> <span data-i18n="poi"></span></label>
+    </div>
+
+    <div id="summary"></div>
+
+    <script type="module" src="/src/client-map/main.js"></script>
+  </body>
+</html>

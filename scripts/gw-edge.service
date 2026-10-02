@@ -1,0 +1,23 @@
+# systemd unit ของ Surveillance Gateway Edge บน Linux — ติดตั้งด้วย `sudo scripts/setup-edge.sh --install-service`
+# (ค่า @…@ ถูกแทนตอนติดตั้ง อย่าคัดลอกไฟล์นี้ไปวางตรง ๆ)
+#
+# รัน pm2-runtime จาก ecosystem.edge.config.cjs ใน git ทุกครั้งที่บูต — ไม่ใช้ `pm2 resurrect`/`pm2 startup`
+# เพราะสองอย่างนั้นปลุกจาก dump.pm2 ซึ่งเป็น "สิ่งที่เคยรันอยู่" ไม่ใช่ไฟล์ที่อยู่ใน git (บทเรียนเดียวกับ
+# scripts/start-gateway.cmd ฝั่ง Windows) · PM2_HOME แยกไว้ใน state ไม่ปนกับ pm2 ของผู้ใช้
+[Unit]
+Description=Surveillance Gateway Edge (go2rtc + gateway)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@REPO@
+Environment=PM2_HOME=@STATE@/pm2
+Environment=PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@PM2_RUNTIME@ start @REPO@/ecosystem.edge.config.cjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

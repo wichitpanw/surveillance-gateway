@@ -1,0 +1,183 @@
+/*
+  หน้าแผนที่ของ client — เป็นหน้าเดี่ยว ไม่ได้ใช้ Tailwind ของแอปหลัก
+
+  สีถูกมิเรอร์มาจาก Themes/Tokens.*.xaml ของตัวโปรแกรม เพื่อให้แผนที่กับกรอบหน้าต่างที่ล้อมมัน
+  อยู่เป็นชุดสีเดียวกัน ไม่ใช่สองโทนซ้อนกัน
+*/
+
+:root {
+  --bg: #101114;
+  --card: #17181c;
+  --fg: #f2f1ec;
+  --muted: #969aa6;
+  --border: #2f3138;
+  --brand: #fdd20a;
+  --brand-ink: #14161a;
+  --ok: #42b183;
+}
+
+body[data-theme='light'] {
+  --bg: #fafaf9;
+  --card: #ffffff;
+  --fg: #14161a;
+  --muted: #61646b;
+  --border: #dcd9d3;
+  --ok: #227751;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+#hint {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/*
+  แผงเปิด/ปิดชั้นข้อมูล อยู่ในหน้านี้ไม่ใช่ฝั่ง WPF โดยตั้งใจ — ทุกอย่างที่มันสลับคือเลเยอร์ของ
+  MapLibre การส่งสวิตช์ข้ามไปกลับผ่าน postMessage จะเพิ่มทางเดินโดยไม่ได้อะไรกลับมา
+*/
+#layers {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  min-width: 168px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+#layers h2 {
+  margin: 0 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+#layers label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#layers input {
+  accent-color: var(--brand);
+}
+
+/* สรุปจำนวนกล้อง มุมล่างซ้าย — ตำแหน่งเดียวกับที่ตัวโปรแกรมไม่ได้เอาอะไรไปทับ */
+#summary {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 10px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+#summary strong {
+  color: var(--fg);
+  font-size: 15px;
+}
+
+/*
+  หมุดกล้อง
+
+  วาดด้วย DOM ไม่ใช่ symbol layer เพราะหมุดต้องคลิกได้และต้องคงขนาดคงที่บนแผนที่ที่เอียง —
+  สัญลักษณ์ในไทล์จะถูกบิดไปตามมุมกล้อง ส่วน DOM marker ของ MapLibre ยึดกับพิกัดแต่ยังตั้งตรงเสมอ
+*/
+.pin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
+}
+
+.pin:hover {
+  border-color: var(--brand);
+}
+
+.pin .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+
+.pin.offline .dot {
+  background: #e85b4d;
+}
+
+.pin.edgeUnavailable .dot,
+.pin.missing .dot,
+.pin.awaitingStream .dot {
+  background: #d6a22b;
+}
+
+.pin.disabled .dot,
+.pin.unknown .dot {
+  background: var(--border);
+}
+
+.pin .label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.maplibregl-ctrl-group {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}

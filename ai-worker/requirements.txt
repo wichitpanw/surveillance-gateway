@@ -1,0 +1,6 @@
+# ai-worker (docs/EDGE-PLAN.md phase 5 D) - install into a separate venv, never the system Python.
+# Keep this file ASCII: pip on Windows reads it with the console code page (Thai text breaks the edge kit build).
+# onnxruntime-gpu 1.30 targets CUDA 13; the [cuda,cudnn] extras pull the matching NVIDIA runtime wheels.
+onnxruntime-gpu[cuda,cudnn]==1.30.0
+numpy
+opencv-python-headless

@@ -1,0 +1,133 @@
+# Brainstorm companion / agent local
+.superpowers/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# VMS CCTV Dashboard additions
+server/vms.db*
+server/cctv.db*
+# ไทล์ OSM ที่แคชไว้ — ดึงใหม่ได้เสมอ และโตได้เรื่อย ๆ ตามการใช้งาน
+server/map_data/osm-cache/
+# go2rtc เขียนสตรีมที่รับมาทาง REST กลับลงไฟล์นี้เอง รหัสผ่านกล้องจึงโผล่มาเป็นข้อความล้วน
+# ตั้งแต่นาทีที่ backend ซิงก์กล้องเข้าไปครั้งแรก — เหตุผลเดียวกับที่กัน server/vms.db*
+go2rtc/go2rtc.yaml
+snapshot/
+.env
+codec_cache.json
+temp_venv/
+*.mp4
+*.exe
+*.dll
+*.pdb
+*.cs
+!server/SilentRunner.cs
+!server/SilentRunner.exe
+
+# กฎ *.cs ข้างบนมาจากยุคที่มีไฟล์ C# หลงมาไฟล์เดียว แต่ตอนนี้ client ฝั่ง Windows เป็น
+# โปรเจกต์ C# เต็มตัว ถ้าไม่ยกเว้นไว้ repo จะเก็บแต่ XAML ที่ไม่มี code-behind
+!client-windows/**/*.cs
+
+# ไฟล์ csproj ชั่วคราวที่ MSBuild สร้างระหว่าง build งาน WPF
+*_wpftmp.csproj
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Model weights and runtime artifacts left by the AI stack that was removed on
+# 2026-08-20. The directories are gone from git but may still sit on old machines,
+# so the rules stay until those are cleared.
+*.pt
+*.onnx
+*.engine
+server/ai_clips/
+server/ai_crops/
+server/ai_frames/
+server/ai_meta/
+
+# Debug/diagnostic scratch output from live troubleshooting sessions
+server/_*.txt
+server/_*.json
+server/_*.py
+
+server/.gateway-key-secret
+server/.stream-token-secret
+server/.rtsp-credentials.json
+
+# เวอร์ชันสูตรของ source เส้น _raw ที่ลงไว้กับ go2rtc ตัวนี้ — สถานะของเครื่อง ไม่ใช่ของโปรเจกต์
+server/.go2rtc-raw-recipe
+server/ai_meta/
+
+# design-md เป็น repo อื่นที่ถูก clone ไว้ในนี้ ไม่ใช่โค้ดของโปรเจกต์
+# เคยถูก commit เป็น gitlink (mode 160000) โดยไม่มี .gitmodules ซึ่งทำให้คนที่ clone
+# repo นี้ได้โฟลเดอร์ว่างและ git submodule update ล้มเหลว — ถอดออกจาก index แล้ว
+design-md/
+
+# permission allowlist ของ Claude Code ที่เป็นของเครื่องแต่ละคน — path ข้างในเป็น temp dir
+# ประจำ session ซึ่งใช้กับเครื่องอื่นไม่ได้เลย ส่วน .claude/launch.json ยังอยู่ใน repo
+# ตามเดิม เพราะอันนั้นเป็นค่าที่ใช้ร่วมกันได้จริง
+.claude/settings.local.json
+
+# ไทล์ vector ที่สร้างเองด้วย scripts/build-map-tiles.ps1 — สร้างใหม่ได้เสมอ ไม่ต้องขึ้น git
+# (ของเดิมสองไฟล์ที่ commit ไปแล้วยัง track อยู่ ไม่แตะ)
+server/map_data/thailand-[0-9]*.mbtiles
+
+# โปรเจกต์ตัวอย่างที่เอามาดูรูปแบบแผนที่ ไม่ใช่ของระบบนี้
+ex visual map/
+
+# ตัวติดตั้ง client ที่ scripts/build-client-release.ps1 สร้าง — Gateway เสิร์ฟจากโฟลเดอร์นี้
+# สร้างใหม่ได้เสมอ และไฟล์ระดับ 150 MB ไม่ควรอยู่ใน git
+client-updates/
+
+# สำเนาฐานข้อมูลก่อนล้างกล้อง (scripts/reset-cameras.cjs) — มีรหัสผ่านกล้องอยู่ข้างใน ห้ามเข้า git
+backups/
+# ไทล์ดาวเทียม Esri ที่แคชไว้ (/api/sat) — ดึงใหม่ได้เสมอ
+server/map_data/sat-cache/
+
+# commit ที่ deploy-edge.sh เขียนไว้บนเครื่องที่ไม่มี .git
+BUILD
+
+# ไฟล์ตั้งค่า edge ที่ดาวน์โหลดจาก central (มี token)
+edge-[0-9]*.json
+
+# แพ็กเกจอัปเดตของ edge ที่ central เผยแพร่ (build-edge-kit.ps1 -Publish)
+server/edge-updates/
+server/edge-kits/
+
+# ภาพประกอบ event ของ AI และไฟล์บันทึกภาพ เมื่อ state อยู่ที่ server/ (central ค่าเริ่มต้น) — ภาพจากกล้อง ห้ามเข้า git
+server/ai-snapshots/
+server/recordings/
+
+# ไฟล์สถานะอื่นที่อยู่ใน server/ เมื่อไม่ได้ตั้ง GATEWAY_STATE_DIR (audit 2026-09-29) — มีรหัสผ่านกล้องหรือกุญแจ
+# vms_restore_temp.db = สำเนาชั่วคราวระหว่างกู้ DB (server.js) · updates/ = แพ็กเกจที่ edge โหลดจาก central
+server/vms_restore_temp.db*
+server/updates/
+server/.session-secret
+server/.ai-worker-key
+.session-secret
+# สำรองที่ scripts/lock-go2rtc-api.cjs ทิ้งไว้ — go2rtc.yaml มี URL กล้องพร้อมรหัสผ่าน
+go2rtc/go2rtc.yaml.bak
+*.yaml.bak
