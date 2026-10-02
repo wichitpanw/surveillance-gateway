@@ -135,3 +135,7 @@ $env:PM2_HOME = "D:\gw-pm2\home"; & "C:\Program Files\nodejs\node.exe" "D:\gw-pm
 5. Central → **API Clients** → ออก key ให้ Windows client → เปิด client แล้วใส่ key
 
 credit **"powered by Warapon Wichitpan"** ต้องคงไว้ทุกที่ที่มีอยู่
+
+## สัญญาอนุญาต
+
+MIT — ดู [LICENSE](LICENSE)

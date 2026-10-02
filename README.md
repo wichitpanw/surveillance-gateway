@@ -5,7 +5,7 @@
 A LAN-first platform that unifies CCTV cameras from many vendors (ONVIF, NVR, RTSP, VMS) behind one API.
 It runs entirely on your own network — no cloud dependency.
 
-> **Status:** private portfolio snapshot. All rights reserved. UI is mostly English with some Thai labels; the Windows client ships EN/TH.
+> **Status:** portfolio snapshot. UI is mostly English with some Thai labels; the Windows client ships EN/TH.
 
 ![Central dashboard](docs/manual/images/c01-dashboard.png)
 
@@ -91,6 +91,6 @@ There is no automated test suite; verification is `node --check`, `npm run lint`
 
 ## License
 
-Proprietary — all rights reserved unless a license file is added.
+MIT — see [LICENSE](LICENSE). Bundled third-party fonts keep their own licenses (SIL OFL, see the `licenses/` folders); go2rtc and other tools you download separately keep theirs.
 
 powered by Warapon Wichitpan
