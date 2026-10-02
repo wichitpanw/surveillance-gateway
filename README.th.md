@@ -44,7 +44,7 @@ client มีหน้า Playback ตั้งแต่ 1.8.3 (1.8.4 เปล�
 · **Dahua DSS Pro (VMS)** แอดที่ edge ได้ครบ: ภาพสด main/sub, ย้อนหลัง, PTZ, สถานะ (ทดสอบกับ DSS Pro V8.5.0 เมื่อ 2026-09-29)
 
 
-## เครื่องและพอร์ต (HOST, Windows Server 2022)
+## พอร์ตและโปรเซส
 
 | พอร์ต | ของ | pm2 app |
 |---|---|---|
@@ -52,10 +52,7 @@ client มีหน้า Playback ตั้งแต่ 1.8.3 (1.8.4 เปล�
 | 1984 / 8555 / 8556 | go2rtc ของ central — API (127.0.0.1 เท่านั้น) / RTSP / WebRTC | `0-go2rtc` |
 | 5273 | Regional ภาคกลาง — เว็บ + API | `3-regional-gateway` |
 | 1994 / 8565 / 8566 | go2rtc ของ Regional (API 127.0.0.1 เท่านั้น) | `1-go2rtc-regional` |
-| — | AI พักไว้ ไม่ได้เริ่ม worker บนเครื่องนี้ | — |
 
-- LAN `203.0.113.80` · Tailscale `203.0.113.112`
-- repo นี้ **คือของที่รันจริง** — แก้ไฟล์แล้ว restart คือ deploy ทันที ดู [docs/OPERATIONS.md](docs/th/OPERATIONS.md)
 
 ## โครง repo
 
@@ -67,7 +64,6 @@ server/                 backend (Node.js + Express + SQLite) — ตัวเด
   vms/                  แหล่งกล้องภายนอก: Digifort, AXIS S30, Uniview NVR, สาย link, แจ้งเตือน edge หลุด
   shared/               instance.js (บทบาท/พอร์ต/state), regions.js (จังหวัด), time.js, ai-events.js
   data/                 thai-regions.csv — รหัสจังหวัด/อำเภอ/ตำบล
-ai-worker/              AI บน GPU ของ edge (Python, YOLOX) — pm2 app 4-edge-ai · venv/โมเดลอยู่นอก git ที่ D:\gateway-ai
 src/                    หน้าเว็บ React (build ได้สองแอป)
   main.jsx / edge-main.jsx   entry ของ central / edge
   lib/app-config.js     ชื่อ + เมนูของแต่ละแอป

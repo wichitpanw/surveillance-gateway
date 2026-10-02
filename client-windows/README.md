@@ -50,7 +50,6 @@ The screen layout matches the Central/Edge web UI (`src/components/shell/AppShel
 | Map | Camera pins on a 3D map in WebView2 from central's `/client-map.html` (that page does not hold a key) |
 | Camera details | Camera information, streams, tracks |
 | Player window | One window per camera, draggable to another screen · PTZ panel beside the video (hold = rotate) |
-| AI events | Events from the edge's ai-worker for the last 24 hours (`GET /api/v1/ai/events`) + new events over SSE · thumbnails load one at a time · clicking a row opens `EventDetailWindow` (full image, details, ←/→ to move, Esc to close) |
 
 The Home and Camera details pages slide in with a fade-transform, while the wall and map do not animate, because **video (libVLC) and WebView2 are HWNDs —
 WPF cannot draw over them or move/fade them** · for the same reason the content host shows one page at a time, and views are added/removed rather than hidden with Visibility

@@ -25,7 +25,6 @@ Written 2026-09-29 · **Status: the real three-tier system has been migrated · 
 - Dashboard uses the source Regional's region when a camera has no province; it does not guess a province for existing cameras — a real area must be chosen at the Edge and synced upward
 - Edge update: failed downloads retry automatically at 5/15/60 seconds and can be retried on demand; Regional mirrors and Edges check for packages every 1 minute; the API build is confirmed and the catalog confirmed readable from the DB before announcing a new version as ready, to support rollback
 - Windows Client `1.9.0` can save multiple Gateways/keys and connect to one Gateway at a time; there is no automatic Central → Regional switchover yet
-- AI is parked (`ai: false`) · syntax check, ESLint and build pass; API tested with a simulated DB, including DSS/Digifort import with simulated device connections, and the Global IDs of all 162 real cameras were confirmed unchanged; the operator confirmed the work is complete, but the assistant has not checked the real UI after login
 - Not yet verified on the real topology: cutting the Regional → Central link and keeping video flowing, and playback/PTZ across three tiers with every type of real device; the simulated test results below do not substitute for real-hardware results
 
 ### Milestone Playback close-out (2026-09-30, build a36a2d8)
@@ -146,7 +145,7 @@ Camera ─▶ Province Edge ─▶ Regional ─▶ Central ─▶ Nationwide Cli
 
 ## 6. Pilot test with :5273
 
-Right now **:5273 is the real Edge**: it has cameras, `4-edge-ai`, `1-go2rtc-edge` · the system owner permitted starting a fresh camera database, but state must be backed up and the values needed for re-adding must be surveyed before changing the role:
+Right now **:5273 is the real Edge**: it has cameras, `1-go2rtc-edge` · the system owner permitted starting a fresh camera database, but state must be backed up and the values needed for re-adding must be surveyed before changing the role:
 
 | Step | What to do |
 |---|---|
@@ -155,7 +154,7 @@ Right now **:5273 is the real Edge**: it has cameras, `4-edge-ai`, `1-go2rtc-edg
 | M2 | Set up Regional at **:5273** with new state and the block-start number · have the province Edges connect to Regional in link mode · check a Client pointed directly at Regional and test cutting the link to Central |
 | M3 | Central adds Regional and then issues nationwide keys · check cameras/global IDs and per-region/province permissions · switch other province Edges one machine at a time after the first region passes |
 
-Confirmed 2026-09-30: Central `203.0.113.80:5173` unchanged · Regional `203.0.113.80:5273` uses new state `D:\gateway-regional` · the old Edge's PM2 was removed before using port 5273 and `D:\gateway-edge` was kept with a backup · the old cameras at 5273 need not be moved, the operator adds them again · AI is parked
+Confirmed 2026-09-30: Central `203.0.113.80:5173` unchanged · Regional `203.0.113.80:5273` uses new state `D:\gateway-regional` · the old Edge's PM2 was removed before using port 5273 and `D:\gateway-edge` was kept with a backup · the old cameras at 5273 need not be moved, the operator adds them again 
 
 Do phases 0–4 and the pass criteria that can be tested on the simulation (5383/5483/5283) before starting M0–M3 · clearing real data comes after the backup and review of the data list, and is not done during development
 

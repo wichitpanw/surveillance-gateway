@@ -28,12 +28,8 @@ powershell -ExecutionPolicy Bypass -File <repo>\scripts\build-edge-kit.ps1
   - `server\edge-updates\<platform>\` update package `app-<platform>-<build>.tar.gz` (~12 MB) + a signed `manifest.json` — section 5
   - `server\edge-kits\` per-OS install kits (`.zip` for Windows, `.tar.gz` for Linux, ~120 MB) + `kits.json` — downloadable from the Edge Nodes page (section 2)
   - Takes effect immediately, no restart needed · requires the signing key (section 6)
-- **`-WithAi`** bundles ai-worker (AI on GPU, docs/EDGE-PLAN.md phase 5 item D) — `windows-x64` and `linux-x64` only (the Pi has no NVIDIA card)
-  - Adds `<platform>\ai\`: portable Python 3.11 (python-build-standalone), wheels for `ai-worker/requirements.txt`, the YOLOX-s model (sha256 verified)
   - The kit grows to ~1.7 GB per platform · wheels are cached separately per requirements (`cache\wheels-<platform>-<hash>`)
   - When the installer finds `ai\` + `nvidia-smi` it creates a venv at `<Root>\ai\venv` offline (~40 s the first time; skipped later if requirements are unchanged)
-    and writes `aiWorker`, `aiPython`, `aiModel` into edge.json · no card found = skipped (that edge has no AI)
-  - The ai-worker code already ships in every kit and every update package — `-WithAi` only adds Python/libraries/model
 
 ## 2. Download the install kit + issue the config file at central
 

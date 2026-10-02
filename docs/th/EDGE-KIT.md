@@ -28,12 +28,8 @@ powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\build-edge
   - `server\edge-updates\<platform>\` แพ็กเกจอัปเดต `app-<platform>-<build>.tar.gz` (~12 MB) + `manifest.json` ที่เซ็นแล้ว — ข้อ 5
   - `server\edge-kits\` ชุดติดตั้งแยกต่อ OS (`.zip` Windows, `.tar.gz` Linux ~120 MB) + `kits.json` — ให้ดาวน์โหลดจากหน้า Edge Nodes (ข้อ 2)
   - มีผลทันทีไม่ต้อง restart · ต้องมีกุญแจเซ็น (ข้อ 6)
-- **`-WithAi`** พก ai-worker (AI บน GPU, docs/EDGE-PLAN.md เฟส 5 ข้อ D) ไปด้วย — เฉพาะ `windows-x64`, `linux-x64` (Pi ไม่มีการ์ด NVIDIA)
-  - เพิ่ม `<แพลตฟอร์ม>\ai\`: Python 3.11 แบบพกพา (python-build-standalone), wheels ของ `ai-worker/requirements.txt`, โมเดล YOLOX-s (ตรวจ sha256)
   - ชุดใหญ่ขึ้นเป็น ~1.7 GB ต่อแพลตฟอร์ม · wheels เก็บใน cache แยกตาม requirements (`cache\wheels-<แพลตฟอร์ม>-<hash>`)
   - ตัวติดตั้งเจอ `ai\` + `nvidia-smi` → สร้าง venv ที่ `<Root>\ai\venv` แบบออฟไลน์ (ครั้งแรก ~40 วิ, ครั้งหลังข้ามถ้า requirements ไม่เปลี่ยน)
-    แล้วเขียน `aiWorker`, `aiPython`, `aiModel` ลง edge.json · ไม่เจอการ์ด = ข้าม (edge นั้นไม่มี AI)
-  - โค้ด ai-worker ไปกับทุกชุดและทุกแพ็กเกจอัปเดตอยู่แล้ว — `-WithAi` เพิ่มแค่ Python/ไลบรารี/โมเดล
 
 ## 2. ดาวน์โหลดชุดติดตั้ง + ออกไฟล์ตั้งค่าที่ central
 

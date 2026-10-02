@@ -90,7 +90,6 @@ GET /api/v1/ai/events and SSE /api/v1/events remain the read paths for the Clien
   Two events of the same rule within the same second may be indistinguishable
 - The external API is responsible for retrying and for mapping NVR/VMS channels to the correct Global ID
 - This version disables worker creation in the ecosystem and GET /api/v1/ai/config answers 410
-  A machine that already has 4-edge-ai running must stop the old process at deploy time; updating the code alone does not stop a running process
 - The camera is already at Edge 101: after the update, enable AI Sources on the existing row
   Never add it again / change its Global ID, and never overwrite Regional with an old Edge DB
 

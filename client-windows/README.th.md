@@ -50,7 +50,6 @@ bin\Release\net8.0-windows\win-x64\SurveillanceGateway.exe [--server=203.0.113.8
 | Map | หมุดกล้องบนแผนที่ 3 มิติใน WebView2 จาก `/client-map.html` ของ central (หน้านั้นไม่ถือ key) |
 | Camera details | ข้อมูลกล้อง สตรีม แทร็ก |
 | Player window | หนึ่งหน้าต่างต่อกล้อง ลากไปจออื่นได้ · แผง PTZ ข้างภาพ (กดค้าง = หมุน) |
-| AI events | event จาก ai-worker ของ edge 24 ชม.ล่าสุด (`GET /api/v1/ai/events`) + event ใหม่ทาง SSE · ภาพย่อโหลดทีละภาพ · คลิกแถว = `EventDetailWindow` (ภาพเต็ม, รายละเอียด, ←/→ เลื่อน, Esc ปิด) |
 
 หน้า Home และ Camera details เลื่อนเข้าแบบ fade-transform ส่วน wall และ map ไม่ animate เพราะ **วิดีโอ (libVLC) และ WebView2 เป็น HWND —
 WPF วาดทับหรือขยับ/จางไม่ได้** ด้วยเหตุผลเดียวกัน host ของเนื้อหามีได้ทีละหน้า และ view ถูกเพิ่ม/ถอดออก ไม่ใช่ซ่อนด้วย Visibility

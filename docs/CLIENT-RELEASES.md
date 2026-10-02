@@ -35,7 +35,6 @@ GET /api/v1/cameras/:id/download.mp4?start=<ISO-8601>&duration=<1–1800> (the b
 - Camera groups show online/total counts as `1/5`; the dark/light themes use text color tokens that passed a contrast check
 - Version 1.7.3 fixed F11 to cover the taskbar and restore the previous position on exit; window edges were checked against the real screen edges, and Full / Delta were published to both addresses in Central's feed
 - Version 1.7.4 asks for confirmation before quitting (the ✕ button, Alt+F4, closing from the taskbar) — it does not ask when clicking update or when Windows is shutting down
-- Version 1.8.0 added the **AI events** page (events from the edge's ai-worker via central, last 24 hours + live over SSE) and an edge-disconnected warning bar
 - Version 1.8.1 removed object colors, "people counting" and events from camera-side AI (as removed from the system on 2026-09-28)
 - Version 1.8.2: clicking a row on the AI events page opens a popup window (`Views/EventDetailWindow`) with the full image, details, and left/right arrows to move between events
 

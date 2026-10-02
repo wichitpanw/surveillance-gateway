@@ -5,7 +5,6 @@
 
 
 อัปเดต 2026-09-28 · เฟส 0–3 ใช้งานจริงแล้ว (edge `001` กับ central อยู่เครื่องเดียวกัน) · เฟส 4 (link) ใช้จริงกับ edge `002` (Ubuntu, Tailscale) ยังไม่มี TLS
-· ติดตั้ง edge ใหม่จากชุด offline และอัปเดตผ่านสายด้วยปุ่มในหน้า Edge Nodes ([EDGE-KIT.md](EDGE-KIT.md)) · เฟส 5: AI บน GPU ของ edge (ai-worker) ใช้จริงแล้ว · การบันทึกภาพที่ edge และ AI หัวกล้องถอดออก 2026-09-28 · ดูย้อนหลังดึงจากอุปกรณ์ (AXIS S30 / Uniview ใช้จริง · Hikvision / Dahua / ONVIF Profile G รอทดสอบ)
 
 ## ภาพรวม
 
@@ -151,11 +150,9 @@ edge ตรวจลายเซ็น โหลดทาง HTTP ด้วย t
 | งาน | ทำไม / รายละเอียด |
 |---|---|
 | **TLS ของสาย link** | `wss://` ที่ central + RTSPS สำหรับ push — ต้องมีโดเมนและ cert ก่อน จนกว่าจะมี link ใช้ได้เฉพาะ Tailscale/LAN |
-| **กฎ perimeter (ถัดไป — เน้นก่อน)** | ปรับกฎเส้น/โซนบุกรุก/อยู่นานของ ai-worker ให้ใช้กับรั้ว/พื้นที่หวงห้ามจริง · แยกแค่ประเภทคน/รถ ไม่แยกสี |
 | **ดูย้อนหลังจากอุปกรณ์** | AXIS S30 (ทดสอบ S30/edge 002 แล้ว) · Uniview NVR (ทดสอบ SITE-1 ถึง SITE-3/edge 002 แล้ว) · **เขียนแล้ว รอเครื่องทดสอบ**: Hikvision, Dahua, ONVIF Profile G (กล้อง SD card ทุกยี่ห้อ, NVR ยี่ห้ออื่น, Milestone Bridge) · Digifort รอเอกสาร API ส่วน playback |
-| **AI ที่ edge ต่อ** | FP16/TensorRT เพื่อเพิ่มจำนวนกล้องต่อการ์ด · ชุด `-WithAi` ฝั่ง Linux x64 ยังไม่ได้ลองบนเครื่องจริง (ทำแล้ว 2026-09-28: ชุดติดตั้งพก ai-worker, client 1.8.0 แสดง event และ edge หลุด) |
 
-## เฟส 5 — AI ที่ edge (ตกลง 2026-09-27 · การบันทึกภาพถอดออก 2026-09-28)
+## เฟส 5 — ภาพย้อนหลังและ AI จากต้นทาง (ตกลง 2026-09-27 · การบันทึกภาพถอดออก 2026-09-28)
 
 หลัก: **edge รัน AI · central รวม event และส่งต่อ ไม่รัน inference ไม่เก็บภาพ**
 
@@ -226,7 +223,6 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
 **B. Event backbone (ทำแล้ว 2026-09-28)** — `server/shared/ai-events.js` ตาราง `ai_events` เดียวกันทั้งสองบทบาท
 - event: `type` (a-z 0-9 _ . -), `label`, `rule`, `ts` (+07:00), `trackId`, `attrs` (≤ 8 KB), `origin` camera|edge-ai, ภาพ JPEG ≤ 300 KB
   เก็บ `<stateDir>/ai-snapshots/<YYYYMMDD>/<id>.jpg` · ลบเมื่อเก่ากว่า `AI_EVENT_DAYS` (90)
-- edge: `POST /api/v1/ai/events` (event เดียวหรือ `{events:[…]}` ≤ 100, key ต้องมี **allow_event_write** = ติ๊ก "ส่ง event" — ให้ ai-worker เท่านั้น)
 - ทั้งสอง: `GET /api/v1/ai/events?since=|from&to&cameraId&type&label&origin&limit` (ตอบ `nextSince`), `GET /api/v1/ai/events/:seq/snapshot.jpg`,
   SSE `/api/v1/events` ส่ง `{type:'ai_event', event:{…}}` · ขอบเขตกล้องตาม key
 - central ไล่ตามเองด้วยเคอร์เซอร์ `remote_seq` (unique `source_id + remote_seq`) — สายสดเป็นแค่สัญญาณ:
@@ -245,14 +241,8 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
 → กลับมาได้ครบ ไม่ซ้ำ · ภาพข้ามทั้ง pull และ link ตรงทุกไบต์ · key ไม่มีสิทธิ์ = 403, ชนิด/กล้องผิด = 400/404 · edge หลุด → แถบแดง + `EDGE_DOWN`
 แล้วกลับมา → `EDGE_UP` · Tiandy จริง: ย้าย PK สำเร็จ, ยอดที่เพิ่มขึ้นกลายเป็น `people_count` ถึง central
 
-**D. AI บน GPU ของ edge (ทำแล้ว 2026-09-28, ขึ้น production)** — `ai-worker/` (Python) เป็น pm2 app `4-edge-ai` แยกจาก gateway
-- โมเดล YOLOX-s (Apache-2.0, release ทางการของ Megvii — ห้าม Ultralytics AGPL) บน ONNX Runtime GPU 1.30 (CUDA 13)
-- ของที่ไม่อยู่ใน git อยู่ที่ `D:\gateway-ai`: `venv\` (ติดตั้งจาก `ai-worker/requirements.txt`, ~1.4 GB) และ `models\yolox_s.onnx`
   (sha256 `c5c2d13e…998063`) · edge Linux: `<stateDir>/ai/venv`, `<stateDir>/ai/models`
-- เปิด: `"aiWorker": true` (+ `"aiGpu": 1` ถ้าการ์ด 0 ต่อจอ เช่น HOST) ใน edge.json → gateway ออก key ให้เอง
-  (`apic_ai_worker_local`, ไฟล์ `<stateDir>/.ai-worker-key`) · ตั้งกล้องและกฎที่หน้า **AI Rules** ของ edge
 - ทางเดิน: `GET /api/v1/ai/config` (ทุก 30 วิ) → RTSP เส้น sub raw ของ go2rtc บนเครื่อง → ffmpeg ถอดบน GPU 5 fps กว้าง 640
-  → YOLOX → tracker (IoU + ระยะ, ต้องเห็น ≥ 3 เฟรมก่อนกฎทำงาน, หายไม่เกิน 30 วิแล้วกลับมาที่เดิม = ตัวเดิม)
   → `line_cross` (ทิศ ab/ba) / `intrusion` / `loitering` + `object` หนึ่งแถวต่อวัตถุ (ประเภท เวลา ภาพชัดสุด) → `POST /api/v1/ai/events`
 - กฎ (ตาราง `ai_rules`, `gateway/ai-config.js`): เส้น 2 จุด / โซน 3–20 จุด พิกัด 0–1, คลาสจาก COCO, โซนตั้งเวลาอยู่นานได้
 - central: หน้า AI Events กรองประเภทวัตถุ (คน / จักรยาน / รถยนต์ / จักรยานยนต์ / รถบัส / รถบรรทุก) · ปุ่ม "ย้อนหลัง" เปิดภาพจากอุปกรณ์ (ตามตาราง "แหล่งภาพตามอุปกรณ์")
@@ -272,7 +262,6 @@ key ไม่มี allow_playback = 403 · ช่วงไม่มีภาพ
   ผูก 127.0.0.1 · หน้าเว็บเก็บรหัสผ่านจริงใน localStorage → session token · operator สร้าง/ดู API key ข้ามขอบเขตกล้องได้ · route แก้/ลบกล้องไม่เช็กขอบเขต ·
   ยก `role_id` เป็น superadmin ได้ · รหัสกล้องรั่วลง log จาก stderr ของ ffmpeg · central ไม่ตรวจ scheme ของ URL จาก edge · ไม่มี rate limit ของ login
 - **ความเสถียร** — DB error ตอน edge `hello` ทำ central ล่ม · playback แบบ link ถูกตัด 300 วิ (`requestTimeout`) · ffmpeg/session NVR ค้างเมื่อผู้ชมปิดก่อนภาพเริ่ม ·
-  `RtspSplitter` วนไม่รู้จบ · Profile G จับคู่ recording ผิดกล้อง · edge ไม่รู้ว่าสายตาย · เลข build ไม่นับ `src/`/`ai-worker/` (edge แบบ link ไม่ได้อัปเดต) ·
   แพ็กเกจรุ่นเก่าที่เซ็นถูกใช้ถอยรุ่น edge ได้ (เพิ่ม `sig2`/`issuedAt`) · AI worker ทิ้ง event เมื่อ gateway ล่มนาน / บันทึกครึ่งก้อน (transaction + `eventId`)
 - **ทดสอบ** — `node --check` ทั้งหมด · eslint 0 error · vite build · dotnet build 0 warning · test แยกของแต่ละด้าน · central+edge จำลอง DB ใหม่ 27/27 ผ่าน
   (login token, token ปลอม 401, `/hls` 404, `/api/v1` 401, rate limit 429) · **ยังไม่ได้ทดสอบกับกล้อง/GPU/edge 002 จริง**

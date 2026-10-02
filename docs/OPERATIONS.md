@@ -1,6 +1,6 @@
 # OPERATIONS — Operations Guide
 
-Everything you need to do on the production machine (HOST, `203.0.113.80`) · updated 2026-09-30
+Everything you need to do on the machine running the gateway · updated 2026-09-30
 Rules for changing code are in [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## AI source release — 2026-10-02
@@ -21,7 +21,6 @@ Rules for changing code are in [CONTRIBUTING.md](CONTRIBUTING.md)
 | `2-vms-backend` | Surveillance Gateway Central | 5173 | `ecosystem.windows.config.cjs` | `server/` (`vms.db`, `.gateway-key-secret`, …) |
 | `1-go2rtc-regional` | go2rtc for Regional | 1994 · 8565 · 8566 | `ecosystem.regional.config.cjs` | `D:\gateway-regional\go2rtc.yaml` |
 | `3-regional-gateway` | Surveillance Gateway Regional, central region (node `100`) | 5273 | `ecosystem.regional.config.cjs` | `D:\gateway-regional\` |
-| `4-edge-ai` | ai-worker (YOLOX-s on GPU) — present when `aiWorker: true` in `D:\gateway-edge\edge.json` | — | `ecosystem.edge.config.cjs` | `D:\gateway-ai` (venv, models) · key `D:\gateway-edge\.ai-worker-key` |
 
 The go2rtc API (1984 / 1994) has no auth — it listens on `127.0.0.1` only (the gateway proxies it to users via 5173/5273) · see the "Locking the go2rtc API" section below
 
@@ -34,7 +33,6 @@ The .NET SDK (for building the client) is in `%LOCALAPPDATA%\Microsoft\dotnet` o
 - Deploy result: `D:\gateway-backups\regional-migration-M0\milestone-playback-a36a2d8-result.json` (`ok: true`); the transcript has the same name with a `.log` extension
 - Milestone Playback was verified end to end through Regional/Central for both AXIS and TIANDY, 8 clips in total, with two seek positions each; the operator confirmed playback works · do not re-add cameras to fix playback, because the existing Global IDs must be kept
 - Windows Edge 101 is on a new machine; Ubuntu Edge 102 uses Tailscale `<edge-102-tailscale-ip>:5173`, service `gw-edge` (`sudo systemctl restart gw-edge` when needed) **never call pm2 by hand on Ubuntu**
-- AI is parked; the `4-edge-ai` row above is historical, not a running process · the old Edge state `D:\gateway-edge` is kept together with a backup
 - Regional mirrors and Edges check for updates every 1 minute; failed downloads retry at 5/15/60 seconds or via the retry button; wait for the package to finish downloading before pressing install, and check the build/install status after the node comes back online
 - Edge Cameras page → **Edit province–district for the whole group**; if the selection spans groups, use the **Edit province–district** button at the top → choose province and district → Save; Global IDs and existing pins do not change
 - Old cameras with no province still need a real area chosen; new cameras added by any route are now enforced by both the web UI and the API
@@ -92,7 +90,7 @@ The plan and test criteria are in [REGIONAL-PLAN.md](REGIONAL-PLAN.md) sections 
    powershell -ExecutionPolicy Bypass -File D:\gateway-dev\backup-windows.ps1 -SourceRepo D:\gateway-dashboard -Destination D:\gateway-backups\regional-migration-M0 -SkipPrune
    ```
 2. **M1 — separate Edge machines**: the operator provides a new Edge to replace Edge 001 and adds the cameras themself; Ubuntu Edge 002 stays on the existing machine. Assign node numbers from the region's block and change the link destination to Regional. There is no need to start a new Edge on :5373 on the Central machine
-3. **M2 — switch :5273 to Regional**: back up again, stop the old Edge's PM2 apps `3-edge-gateway`, `1-go2rtc-edge`, `4-edge-ai`, verify ports 5273/1994/8565 are free, create a new `D:\gateway-regional\regional.json` using `role: "regional"`, `region: "central"`, `node: "100"`, `stateDir: "D:\\gateway-regional"`, `port: 5273`, `go2rtcApi: 1994`, `go2rtcRtsp: 8565`; create Regional's `go2rtc.yaml` with the API listening on loopback only, start `ecosystem.regional.config.cjs`, verify `/api/instance` reports `regional`, issue keys for Clients at Regional and tokens for province Edges from the Edge Nodes page. Then point the province Edges' link at Regional and test cutting only the Regional → Central link: a Client pointed at Regional must still see the catalog and video
+3. **M2 — switch :5273 to Regional**: back up again, stop the old Edge's PM2 apps `3-edge-gateway`, `1-go2rtc-edge`, verify ports 5273/1994/8565 are free, create a new `D:\gateway-regional\regional.json` using `role: "regional"`, `region: "central"`, `node: "100"`, `stateDir: "D:\\gateway-regional"`, `port: 5273`, `go2rtcApi: 1994`, `go2rtcRtsp: 8565`; create Regional's `go2rtc.yaml` with the API listening on loopback only, start `ecosystem.regional.config.cjs`, verify `/api/instance` reports `regional`, issue keys for Clients at Regional and tokens for province Edges from the Edge Nodes page. Then point the province Edges' link at Regional and test cutting only the Regional → Central link: a Client pointed at Regional must still see the catalog and video
 4. **M3 — connect the country**: at Central, add Regional as link / issue a token for node `100`, then put `centralUrls` and `centralToken` in `regional.json` and run `deploy.ps1 -ReloadRegionalConfig`. Verify Central sees the existing global IDs of the province Edges, per-region/province permissions, and automatic reconnection. Do the other provinces and regions one set at a time
 
 `scripts/start-gateway.cmd` starts the old Edge as long as there is no `regional.json`; once the file exists it starts Regional instead; a province Edge on this machine is optional and only when a config exists after M2. `deploy.ps1` refuses to run if the old Edge's PM2 apps are still present, to prevent port collisions. Never create `regional.json` before stopping the old Edge and checking the backup
@@ -108,7 +106,7 @@ Steps M1–M3 must still be verified against real devices, especially Tiandy and
 | `ecosystem.*.config.cjs` | `pm2 delete` + `pm2 start … --only …` for that app |
 | `go2rtc/go2rtc.yaml` | do not edit by hand — the backend syncs streams into go2rtc itself via REST (except locking the API with `scripts/lock-go2rtc-api.cjs`) |
 
-The `build` number = the latest commit that touched `server src ai-worker scripts package.json ecosystem.edge.config.cjs`
+The `build` number = the latest commit that touched `server src scripts package.json ecosystem.edge.config.cjs`
 (the source of truth is `BUILD_PATHS` in `server/shared/instance.js` — deploy.ps1, build-edge-kit.ps1 and deploy-edge.sh use the same set)
 Commits that only touch `docs/` or `client-windows/` do not change the build number
 
@@ -127,7 +125,7 @@ You should get `{"role":"central","node":"000",...,"build":"<commit>"}` and `{"r
 | Code | yes (local repo, no remote) | git |
 | `server/vms.db` (central) | no | `.\backup-windows.ps1` (VACUUM INTO) |
 | `D:\gateway-edge\vms.db` (edge) | no | `.\backup-windows.ps1` (since 2026-09-23 · `-EdgeStateDir` if the edge is elsewhere) |
-| Secrets on both machines (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.ai-worker-key`, `.rtsp-credentials.json`, `go2rtc.yaml`) + `D:\gateway-edge\edge.json` | no | `.\backup-windows.ps1` · **losing `.gateway-key-secret` = issued API keys can no longer be viewed, and central cannot connect to the edge until a new key is entered** |
+| Secrets on both machines (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.rtsp-credentials.json`, `go2rtc.yaml`) + `D:\gateway-edge\edge.json` | no | `.\backup-windows.ps1` · **losing `.gateway-key-secret` = issued API keys can no longer be viewed, and central cannot connect to the edge until a new key is entered** |
 | `.env` (Google Maps key) | no | `.\backup-windows.ps1` |
 
 - Each run is a folder `D:\gateway-backups\daily\<yyyyMMdd-HHmmss>\{central,edge}\` · kept 30 days but the 3 most recent runs are always kept
@@ -168,7 +166,7 @@ A copy from before the clear is in `backups/` (git-ignored because it contains c
 | Boot | `D:\gw-pm2\home\boot-start.log` |
 | System events (login, adding cameras, edge sync) | Web UI → System Logs (the `logs` table) |
 
-Since 2026-09-29 `ecosystem.edge.config.cjs` pins the logs of `1-go2rtc-edge`, `3-edge-gateway`, `4-edge-ai` to
+Since 2026-09-29 `ecosystem.edge.config.cjs` pins the logs of `1-go2rtc-edge`, `3-edge-gateway` to
 `D:\gw-pm2\home\logs\` (previously they landed in `C:\Users\Administrator\.pm2\logs\` when started from a shell without `PM2_HOME`)
 and every app in both ecosystems has a timestamp in front of each line (`log_date_format`) — takes effect after `pm2 delete` + `pm2 start` of that app (see Deploy)
 `-error.log` files accumulate across eras — check the timestamp of a line before concluding the system has an error

@@ -13,7 +13,7 @@ Test results and limitations are in [EXTERNAL-AI.md](EXTERNAL-AI.md).
 
 ## Current state
 
-The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; all four instances run the same Gateway build · Windows Client 1.9.x · our own AI parked
+The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; all four instances run the same Gateway build · Windows Client 1.9.x
 Central issues nation-wide keys and accepts Regionals only; a Regional issues in-region keys and accepts Edges only, so Clients can point at the region directly when the link to Central is down.
 One province can have several sites by installing separate Edges and using Remark; there is no Sub-edge.
 Every camera must have a province and district when added, including VMS imports; the area of a whole group or of selected cameras can be changed, but an already-issued Global ID and the coordinates do not change with it.
@@ -47,7 +47,6 @@ for live view / PTZ control without installing software, while serious multi-scr
 | Next day | Offline edge install kit (Windows/Pi/Linux) downloaded from the Edge Nodes page · edge numbers reserved at Central · edge updates over the link, triggered from Central (an edge updated twice for real, no SSH/sudo) | `scripts/build-edge-kit.ps1`, `scripts/edge-kit/`, `scripts/edge-run.cjs`, `server/vms/edge-update*.js`, [docs/EDGE-KIT.md](EDGE-KIT.md) |
 | Following days | Client 1.7.3 reworked Home / Wall, shows the status of every camera, F11 covers the true screen edge including the taskbar; unused build output and samples cleared | `client-windows/`, [docs/CLIENT-RELEASES.md](CLIENT-RELEASES.md) |
 | AI-at-edge decision | Agreed that AI lives at the edge (Central aggregates events and runs no inference) · recording at the edge + Playback via Central | `server/shared/ai-events.js`, `server/gateway/playback.js` |
-| Next day | ai-worker (YOLOX-s, ONNX Runtime GPU) as pm2 app `4-edge-ai` · AI Rules / AI Events pages · client 1.8.0 shows events · single-command deploy.ps1 · **removed camera-side AI and edge recording** (playback will be pulled from the device) · no object-color classification · event popups on web and client 1.8.2 | `ai-worker/`, `scripts/deploy.ps1`, `src/components/modals/AiEventDialog.jsx`, `client-windows/SurveillanceGateway.Client/Views/EventDetailWindow.xaml` |
 | Same day | Edge added Milestone Open Network Bridge VMS via ONVIF; tested with 2 real channels, viewable through the Client · fixed Central's pull sync so it accepts the initial status of newly added cameras; Online confirmed for all after a restart | `server/vms/edge-source.js`, [docs/CAMERA-QUIRKS.md](CAMERA-QUIRKS.md) |
 
 ## Decisions worth knowing (and why)
@@ -78,7 +77,6 @@ The `_raw` path (passthrough) exists for clients/Central that can decode H.265 t
 because a gateway that also runs inference puts two systems with different failure modes in one process — if analytics are wanted, they should be a separate service pulling from `/api/v1`.
 Reading results from camera-side AI still has code, but it is switched off with `GATEWAY_AI` to finish consolidating video first,
 and it was later decided not to merge it into the system — do not turn it back on without a new agreement (CONTRIBUTING.md item 1).
-(The "removed what we ran" sentence above describes the early era — once AI moved to the edge, our own inference came back as ai-worker at the edge, as described in the next section.)
 
 **AI moved to the edge.** If AI lived at Central, it would have to pull every camera across the network all the time
 (150 cameras × sub stream ≈ 80–160 Mbps), contradicting the principle "heavy video flows only while someone is watching", and when an edge drops, AI stops (an edge was in fact down for 2 days).
@@ -95,8 +93,6 @@ The playback pipe (Central → edge, the link upload, the Playback page, the `pl
 with every camera's password, and that the web page kept the real password in the browser · fixed as: go2rtc API bound to `127.0.0.1` on every machine,
 `/hls` forwards only playlists/segments, the web page uses a 12-hour session token, failed logins are rate-limited, camera scope is checked on every route that edits data,
 and camera passwords are redacted from logs · full details in docs/EDGE-PLAN.md, section "Whole-system review" · TLS is not done yet (waiting for a domain/cert).
-Camera-side AI is not merged into the system — the system's AI has one path, the edge's ai-worker:
-before the Regional move, an Edge ran on the central host (pm2 `4-edge-ai`, YOLOX-s on a GPU); that AI is now parked and the worker stopped · an Edge without an NVIDIA card (e.g. a Pi) has no GPU AI worker.
 
 **A Windows client instead of viewing in the browser.** It decodes H.265 on the user's own GPU, so the server does not have to transcode for every viewer.
 It updates itself from Central (`/client-updates`, Velopack) because user machines have no outbound internet.
@@ -143,7 +139,6 @@ so the person on site chooses the time, and `edge-run` rolls back by itself if t
 - The Surveillance Client exists only for Windows (WPF) — a Linux client (port to Avalonia) was agreed but parked
 - The admin-requiring steps of the edge kit's Windows installer have not been tried on a real machine · the Raspberry Pi kit has not been tried on a real Pi
 - `server/edge-updates/` and `server/edge-kits/` are created by an admin shell — `-Publish` from an ordinary shell cannot delete old versions
-- Next work discussed but not yet done: ai-worker perimeter rules (priority), testing Hikvision / Dahua / ONVIF Profile G playback on real devices, Digifort playback (awaiting API docs), Linux client (Avalonia), TLS for the link, off-machine backup
 - Time to first frame depends on the camera's keyframes — a sub stream with a sparse I-frame (e.g. 5 fps + GOP 10 s) makes Live Wall channels wait tens of seconds;
   set at the camera: I-frame interval ≈ fps (see docs/CAMERA-QUIRKS.md)
 - `server/package.json` is still named `onvif-scanner` — a leftover name from the start of the project

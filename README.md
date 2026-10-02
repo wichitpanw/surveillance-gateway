@@ -54,7 +54,6 @@ server/        backend (Express + SQLite) — same code runs Central, Regional a
   shared/      instance roles/ports/state, regions, time helpers
 src/           React web UI (central / regional / edge entry points)
 client-windows/  Windows client (.NET 8 / WPF)
-ai-worker/     optional GPU inference worker (not started by default)
 scripts/       deploy, edge kit builders, installers, backup, simulators
 docs/          documentation (see below)
 ```

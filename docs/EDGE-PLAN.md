@@ -5,7 +5,6 @@
 
 
 Updated 2026-09-28 · phases 0–3 are in real use (edge `001` and central on the same machine) · phase 4 (link) is in real use with edge `002` (Ubuntu, Tailscale), no TLS yet
-· new edges are installed from the offline kit and updated over the link with a button on the Edge Nodes page ([EDGE-KIT.md](EDGE-KIT.md)) · phase 5: AI on the edge GPU (ai-worker) is in real use · edge-side video recording and camera-side AI were removed 2026-09-28 · playback is pulled from the devices (AXIS S30 / Uniview in real use · Hikvision / Dahua / ONVIF Profile G awaiting testing)
 
 ## Overview
 
@@ -151,11 +150,9 @@ To go out on the internet, a domain + cert is needed first (`wss://` at central'
 | Task | Why / details |
 |---|---|
 | **TLS for the link** | `wss://` at central + RTSPS for push — needs a domain and cert first; until then the link is usable only over Tailscale/LAN |
-| **Perimeter rules (next — prioritized)** | Adapt ai-worker's line/intrusion-zone/loitering rules to real fences/restricted areas · distinguish only person/vehicle types, not color |
 | **Playback from devices** | AXIS S30 (tested on S30/edge 002) · Uniview NVR (tested on SITE-1 to SITE-3/edge 002) · **written, awaiting test hardware**: Hikvision, Dahua, ONVIF Profile G (SD-card cameras of any brand, other NVR brands, Milestone Bridge) · Digifort awaiting playback API docs |
-| **AI at the connected edge** | FP16/TensorRT to increase cameras per card · the Linux x64 `-WithAi` kit has not been tried on real hardware (done 2026-09-28: install kit carries ai-worker, client 1.8.0 shows events and edge-down) |
 
-## Phase 5 — AI at the edge (agreed 2026-09-27 · video recording removed 2026-09-28)
+## Phase 5 — Playback and external AI (agreed 2026-09-27 · video recording removed 2026-09-28)
 
 Principle: **the edge runs AI · central aggregates events and forwards them, runs no inference and stores no video**
 
@@ -226,7 +223,6 @@ in existing DBs may stay, nobody reads them · a new video source must provide `
 **B. Event backbone (done 2026-09-28)** — `server/shared/ai-events.js`, the same `ai_events` table in both roles
 - event: `type` (a-z 0-9 _ . -), `label`, `rule`, `ts` (+07:00), `trackId`, `attrs` (≤ 8 KB), `origin` camera|edge-ai, JPEG image ≤ 300 KB
   stored at `<stateDir>/ai-snapshots/<YYYYMMDD>/<id>.jpg` · deleted when older than `AI_EVENT_DAYS` (90)
-- edge: `POST /api/v1/ai/events` (a single event or `{events:[…]}` ≤ 100; the key must have **allow_event_write** = tick "send events" — for ai-worker only)
 - both: `GET /api/v1/ai/events?since=|from&to&cameraId&type&label&origin&limit` (returns `nextSince`), `GET /api/v1/ai/events/:seq/snapshot.jpg`,
   SSE `/api/v1/events` emits `{type:'ai_event', event:{…}}` · camera scope follows the key
 - central catches up by itself with a `remote_seq` cursor (unique `source_id + remote_seq`) — the live feed is only a signal:
@@ -245,14 +241,8 @@ sent as events) and then the operator decided to remove it: there is no `ai` opt
 → all recovered, no duplicates · images crossed both pull and link byte-identical · key without permission = 403, wrong type/camera = 400/404 · edge down → red bar + `EDGE_DOWN`
 then back → `EDGE_UP` · real Tiandy: PK migration succeeded, the increasing count became `people_count` and reached central
 
-**D. AI on the edge GPU (done 2026-09-28, in production)** — `ai-worker/` (Python) is the pm2 app `4-edge-ai`, separate from the gateway
-- Model YOLOX-s (Apache-2.0, official Megvii release — never Ultralytics AGPL) on ONNX Runtime GPU 1.30 (CUDA 13)
-- Things not in git live at `D:\gateway-ai`: `venv\` (installed from `ai-worker/requirements.txt`, ~1.4 GB) and `models\yolox_s.onnx`
   (sha256 `c5c2d13e…998063`) · Linux edge: `<stateDir>/ai/venv`, `<stateDir>/ai/models`
-- Enable: `"aiWorker": true` (+ `"aiGpu": 1` if card 0 drives a monitor, e.g. HOST) in edge.json → the gateway issues the key itself
-  (`apic_ai_worker_local`, file `<stateDir>/.ai-worker-key`) · set cameras and rules on the edge's **AI Rules** page
 - Pipeline: `GET /api/v1/ai/config` (every 30 s) → the local go2rtc's raw sub RTSP path → ffmpeg decodes on GPU at 5 fps, 640 wide
-  → YOLOX → tracker (IoU + distance, must be seen ≥ 3 frames before rules fire, missing up to 30 s then reappearing at the same place = the same object)
   → `line_cross` (direction ab/ba) / `intrusion` / `loitering` + `object`, one row per object (type, time, sharpest image) → `POST /api/v1/ai/events`
 - Rules (`ai_rules` table, `gateway/ai-config.js`): a line of 2 points / a zone of 3–20 points, coordinates 0–1, COCO classes, zones can have a dwell time
 - central: the AI Events page filters by object type (person / bicycle / car / motorcycle / bus / truck) · the "Playback" button opens device footage (per the "Video sources by device" table)
@@ -272,7 +262,6 @@ Audited 8 areas (security, central↔edge, playback, AI, web, Windows client, sc
   bound to 127.0.0.1 · the web UI stored the real password in localStorage → session token · an operator could create/view API keys beyond their camera scope · the edit/delete camera routes did not check scope ·
   `role_id` could be raised to superadmin · camera passwords leaked into logs from ffmpeg's stderr · central did not validate the scheme of URLs from the edge · no login rate limit
 - **Stability** — a DB error during edge `hello` crashed central · link playback was cut at 300 s (`requestTimeout`) · ffmpeg/NVR sessions left hanging when the viewer closed before video started ·
-  `RtspSplitter` looped forever · Profile G matched a recording to the wrong camera · the edge did not know the link had died · the build number did not count `src/`/`ai-worker/` (link-mode edges were not updated) ·
   an old signed package could be used to downgrade an edge (added `sig2`/`issuedAt`) · the AI worker dropped events when the gateway was down for a long time / on half-saved batches (transaction + `eventId`)
 - **Testing** — `node --check` on everything · eslint 0 errors · vite build · dotnet build 0 warnings · separate tests per area · simulated central+edge with a fresh DB 27/27 passed
   (login token, forged token 401, `/hls` 404, `/api/v1` 401, rate limit 429) · **not yet tested against real cameras/GPU/edge 002**

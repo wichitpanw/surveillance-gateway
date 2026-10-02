@@ -1,6 +1,6 @@
 # OPERATIONS — คู่มือปฏิบัติการ
 
-ทุกอย่างที่ต้องทำกับเครื่องที่รันจริง (HOST, `203.0.113.80`) · อัปเดต 2026-09-30
+ทุกอย่างที่ต้องทำกับเครื่องที่รันระบบ · อัปเดต 2026-09-30
 กติกาการแก้โค้ดอยู่ใน [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Release AI จากต้นทาง — 2026-10-02
@@ -21,7 +21,6 @@
 | `2-vms-backend` | Surveillance Gateway Central | 5173 | `ecosystem.windows.config.cjs` | `server/` (`vms.db`, `.gateway-key-secret`, …) |
 | `1-go2rtc-regional` | go2rtc ของ Regional | 1994 · 8565 · 8566 | `ecosystem.regional.config.cjs` | `D:\gateway-regional\go2rtc.yaml` |
 | `3-regional-gateway` | Surveillance Gateway Regional ภาคกลาง (node `100`) | 5273 | `ecosystem.regional.config.cjs` | `D:\gateway-regional\` |
-| `4-edge-ai` | ai-worker (YOLOX-s บน GPU) — มีเมื่อ `aiWorker: true` ใน `D:\gateway-edge\edge.json` | — | `ecosystem.edge.config.cjs` | `D:\gateway-ai` (venv, โมเดล) · key `D:\gateway-edge\.ai-worker-key` |
 
 go2rtc API (1984 / 1994) ไม่มี auth — ฟังเฉพาะ `127.0.0.1` (gateway ส่งต่อให้ผู้ใช้ผ่าน 5173/5273) · ดูหัวข้อ "ล็อก go2rtc API" ข้างล่าง
 
@@ -34,7 +33,6 @@ ffmpeg อยู่ที่ `C:\ffmpeg\bin\ffmpeg.exe` · Node.js ที่ `C:
 - ผล deploy: `D:\gateway-backups\regional-migration-M0\milestone-playback-a36a2d8-result.json` (`ok: true`); transcript ชื่อเดียวกันนามสกุล `.log`
 - Milestone Playback ยืนยันจริงแล้วผ่าน Regional/Central ทั้ง AXIS และ TIANDY รวม 8 คลิป พร้อม seek คนละสองช่วงเวลา; ผู้ใช้ยืนยันดูได้แล้ว · อย่าแอดกล้องใหม่เพื่อแก้ playback เพราะ Global ID เดิมต้องคงไว้
 - Windows Edge 101 อยู่เครื่องใหม่; Ubuntu Edge 102 ใช้ Tailscale `203.0.113.80:5173`, service `gw-edge` (`sudo systemctl restart gw-edge` เมื่อจำเป็น) **ห้ามเรียก pm2 ด้วยมือที่ Ubuntu**
-- AI พักไว้; แถว `4-edge-ai` ด้านบนเป็นข้อมูลเดิม ไม่ใช่ process ที่รันอยู่ · state Edge เดิม `D:\gateway-edge` เก็บไว้พร้อม backup
 - Regional mirror และ Edge ตรวจอัปเดตทุก 1 นาที; โหลดขาด retry 5/15/60 วินาทีหรือกดลองใหม่; ต้องรอแพ็กเกจโหลดครบก่อนกดติดตั้งและตรวจ build/สถานะติดตั้งหลังกลับมา online
 - หน้า Cameras ของ Edge → **แก้จังหวัด–อำเภอทั้งกลุ่ม**; ถ้าเลือกข้ามกลุ่มใช้ปุ่ม **แก้จังหวัด–อำเภอ** ด้านบน → เลือกจังหวัดและอำเภอ → บันทึก; ไม่เปลี่ยน Global ID และหมุดเดิม
 - กล้องเก่าที่ไม่มีจังหวัดยังต้องเลือกพื้นที่จริง; กล้องใหม่ทุกช่องทางถูกบังคับโดยหน้าเว็บและ API แล้ว
@@ -92,7 +90,7 @@ Scheduled Task **"CCTV Gateway (pm2 resurrect at boot)"** (At system start up, u
    powershell -ExecutionPolicy Bypass -File D:\gateway-dev\backup-windows.ps1 -SourceRepo D:\gateway-dashboard -Destination D:\gateway-backups\regional-migration-M0 -SkipPrune
    ```
 2. **M1 — Edge แยกเครื่อง**: ผู้ดูแลจัดหา Edge ใหม่แทน Edge 001 และแอดกล้องเอง; Ubuntu Edge 002 ใช้เครื่องเดิม ออกเลข node ตามบล็อกของภาคและเปลี่ยนปลายทาง link เป็น Regional ไม่ต้องเปิด Edge ใหม่ที่ :5373 บนเครื่อง Central
-3. **M2 — สลับ :5273 เป็น Regional**: สำรองอีกครั้ง หยุด PM2 `3-edge-gateway`, `1-go2rtc-edge`, `4-edge-ai` ของ Edge เดิม ตรวจว่าพอร์ต 5273/1994/8565 ว่างแล้ว สร้าง `D:\gateway-regional\regional.json` ใหม่โดยใช้ `role: "regional"`, `region: "central"`, `node: "100"`, `stateDir: "D:\\gateway-regional"`, `port: 5273`, `go2rtcApi: 1994`, `go2rtcRtsp: 8565`; สร้าง `go2rtc.yaml` ของ Regional โดย API ฟัง loopback เท่านั้น เริ่ม `ecosystem.regional.config.cjs` ตรวจ `/api/instance` เป็น `regional` ออก key สำหรับ Client ที่ Regional และ token สำหรับ Edge จังหวัดจากหน้า Edge Nodes จากนั้นตั้ง Edge จังหวัดให้ link ไป Regional แล้วทดสอบตัดเฉพาะสาย Regional → Central: Client ที่ชี้ Regional ต้องยังเห็น catalog และภาพ
+3. **M2 — สลับ :5273 เป็น Regional**: สำรองอีกครั้ง หยุด PM2 `3-edge-gateway`, `1-go2rtc-edge` ของ Edge เดิม ตรวจว่าพอร์ต 5273/1994/8565 ว่างแล้ว สร้าง `D:\gateway-regional\regional.json` ใหม่โดยใช้ `role: "regional"`, `region: "central"`, `node: "100"`, `stateDir: "D:\\gateway-regional"`, `port: 5273`, `go2rtcApi: 1994`, `go2rtcRtsp: 8565`; สร้าง `go2rtc.yaml` ของ Regional โดย API ฟัง loopback เท่านั้น เริ่ม `ecosystem.regional.config.cjs` ตรวจ `/api/instance` เป็น `regional` ออก key สำหรับ Client ที่ Regional และ token สำหรับ Edge จังหวัดจากหน้า Edge Nodes จากนั้นตั้ง Edge จังหวัดให้ link ไป Regional แล้วทดสอบตัดเฉพาะสาย Regional → Central: Client ที่ชี้ Regional ต้องยังเห็น catalog และภาพ
 4. **M3 — เชื่อมประเทศ**: ที่ Central เพิ่ม Regional แบบ link/ออก token สำหรับ node `100` จากนั้นใส่ `centralUrls` และ `centralToken` ใน `regional.json` แล้ว `deploy.ps1 -ReloadRegionalConfig` ตรวจ Central เห็น global ID เดิมของ Edge จังหวัด, สิทธิ์รายภาค/จังหวัด และการกลับมาต่อสายเอง ทำจังหวัดและภาคอื่นทีละชุด
 
 `scripts/start-gateway.cmd` จะเริ่ม Edge เดิมตราบใดที่ยังไม่มี `regional.json`; เมื่อมีไฟล์นี้จะเริ่ม Regional แทน; Edge จังหวัดบนเครื่องนี้เป็นตัวเลือกเฉพาะเมื่อมี config หลัง M2 `deploy.ps1` ปฏิเสธการทำงานถ้า PM2 ของ Edge เดิมยังอยู่ เพื่อกันการชนพอร์ต ห้ามสร้าง `regional.json` ก่อนหยุด Edge เดิมและตรวจ backup
@@ -108,7 +106,7 @@ Scheduled Task **"CCTV Gateway (pm2 resurrect at boot)"** (At system start up, u
 | `ecosystem.*.config.cjs` | `pm2 delete` + `pm2 start … --only …` ของแอปนั้น |
 | `go2rtc/go2rtc.yaml` | อย่าแก้มือ — backend ซิงก์สตรีมเข้า go2rtc เองผ่าน REST (ยกเว้นล็อก API ด้วย `scripts/lock-go2rtc-api.cjs`) |
 
-เลข `build` = commit ล่าสุดที่แก้ `server src ai-worker scripts package.json ecosystem.edge.config.cjs`
+เลข `build` = commit ล่าสุดที่แก้ `server src scripts package.json ecosystem.edge.config.cjs`
 (ต้นฉบับ `BUILD_PATHS` ใน `server/shared/instance.js` — deploy.ps1, build-edge-kit.ps1, deploy-edge.sh ใช้ชุดเดียวกัน)
 commit ที่แก้แค่ `docs/` หรือ `client-windows/` ไม่เปลี่ยนเลข build
 
@@ -127,7 +125,7 @@ curl http://203.0.113.80:5273/api/instance
 | โค้ด | ใช่ (repo local ไม่มี remote) | git |
 | `server/vms.db` (central) | ไม่ | `.\backup-windows.ps1` (VACUUM INTO) |
 | `D:\gateway-edge\vms.db` (edge) | ไม่ | `.\backup-windows.ps1` (ตั้งแต่ 2026-09-23 · `-EdgeStateDir` ถ้า edge อยู่ที่อื่น) |
-| secret ทั้งสองเครื่อง (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.ai-worker-key`, `.rtsp-credentials.json`, `go2rtc.yaml`) + `D:\gateway-edge\edge.json` | ไม่ | `.\backup-windows.ps1` · **`.gateway-key-secret` หาย = เปิดดู API key ที่ออกไปแล้วไม่ได้ และ central ต่อ edge ไม่ได้จนกว่าจะใส่ key ใหม่** |
+| secret ทั้งสองเครื่อง (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.rtsp-credentials.json`, `go2rtc.yaml`) + `D:\gateway-edge\edge.json` | ไม่ | `.\backup-windows.ps1` · **`.gateway-key-secret` หาย = เปิดดู API key ที่ออกไปแล้วไม่ได้ และ central ต่อ edge ไม่ได้จนกว่าจะใส่ key ใหม่** |
 | `.env` (Google Maps key) | ไม่ | `.\backup-windows.ps1` |
 
 - แต่ละรอบเป็นโฟลเดอร์ `D:\gateway-backups\daily\<yyyyMMdd-HHmmss>\{central,edge}\` · เก็บ 30 วัน แต่เหลือ 3 รอบล่าสุดเสมอ
@@ -168,7 +166,7 @@ node scripts/reset-cameras.cjs D:\gateway-edge\vms.db    # edge — ต้อง
 | การบูต | `D:\gw-pm2\home\boot-start.log` |
 | event ของระบบ (login, แอดกล้อง, sync edge) | หน้าเว็บ → System Logs (ตาราง `logs`) |
 
-ตั้งแต่ 2026-09-29 `ecosystem.edge.config.cjs` ตรึง log ของ `1-go2rtc-edge`, `3-edge-gateway`, `4-edge-ai` ไว้ที่
+ตั้งแต่ 2026-09-29 `ecosystem.edge.config.cjs` ตรึง log ของ `1-go2rtc-edge`, `3-edge-gateway` ไว้ที่
 `D:\gw-pm2\home\logs\` (เดิมไปตกที่ `C:\Users\Administrator\.pm2\logs\` เมื่อ start จาก shell ที่ไม่ได้ตั้ง `PM2_HOME`)
 และทุกแอปทั้งสอง ecosystem มีเวลาหน้าแต่ละบรรทัด (`log_date_format`) — มีผลหลัง `pm2 delete` + `pm2 start` ของแอปนั้น (ดู Deploy)
 ไฟล์ `-error.log` สะสมข้ามยุค — ดูเวลาของบรรทัดก่อนสรุปว่าระบบมี error

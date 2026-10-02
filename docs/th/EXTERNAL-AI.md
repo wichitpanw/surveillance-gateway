@@ -90,7 +90,6 @@ GET /api/v1/ai/events และ SSE /api/v1/events ยังเป็นทา�
   เหตุสองครั้งของกฎเดียวกันในวินาทีเดียวกันอาจแยกไม่ได้
 - API ภายนอกต้องรับผิดชอบ retry และ mapping channel ของ NVR/VMS ให้ตรง Global ID
 - รุ่นนี้ปิดการสร้าง worker ใน ecosystem และ GET /api/v1/ai/config ตอบ 410
-  เครื่องที่เคยมี 4-edge-ai รันอยู่ต้องหยุด process เดิมตอน deploy; update โค้ดอย่างเดียวไม่หยุด process ที่รันค้าง
 - กล้องอยู่ที่ Edge 101 แล้ว: หลัง update ให้เปิด AI Sources ในแถวเดิม
   ห้ามแอดซ้ำ/เปลี่ยน Global ID และห้ามนำ DB Edge เก่าทับ Regional
 

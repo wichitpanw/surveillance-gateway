@@ -8,7 +8,6 @@ Operational commands (restart, backup, logs) are in [docs/OPERATIONS.md](OPERATI
 AI results are received from cameras / NVRs / VMSs / external APIs. Central, Regional and Edge do not run inference.
 Edge receives and converts events → Regional aggregates within the region → Central aggregates all regions; the receiving sources are configured under AI Sources.
 This agreement supersedes the older "AI on the Edge GPU" items and the older prohibition on merging camera-side AI.
-The existing `ai-worker` and analytics code stays in the tree, but do not start `4-edge-ai` and do not re-enable the old poller.
 Details, limitations and tests: [docs/EXTERNAL-AI.md](EXTERNAL-AI.md)
 New cameras of supported brands appear in AI Sources, but the receiver must be enabled separately for each camera.
 
@@ -30,16 +29,12 @@ New cameras of supported brands appear in AI Sources, but the receiver must be e
   - **The Edge has no viewing UI** (Live / live-view button) — the Edge relays video; viewing happens at Central and in the client
   - A child connects to its parent in one of two ways: pull (the parent connects into the child with an API key) and link (the child opens a WebSocket upward — `server/vms/edge-link-*.js`); an Edge must connect to a Regional only
   - Every way of adding a camera must specify a province and a district that match each other; the area of a whole group / selected cameras can be changed at the Edge via `PATCH /api/cameras/region`, with the Global ID and coordinates unchanged
-  - One province can have several Edges, use Remark to identify the site, do not add Sub-edges; 99 Edges per region · AI is parked on every instance
-- **Our own AI is not part of the live deployment** — the `ai-worker/` code (pm2 app `4-edge-ai`) is kept, but its use is superseded by the external AI agreement above
+  - One province can have several Edges, use Remark to identify the site, do not add Sub-edges; 99 Edges per region 
   - An Edge holds full-resolution video and sends only events upward; Central aggregates events / search / forwarding and **does not run inference and does not store video**
   - **The system does not record video itself** — the Edge recorder was removed · playback is pulled from the device via
     `localSource` in `server/gateway/playback.js` · AXIS S30 (VAPIX/RTSP) and Uniview NVR (LAPI/RTSP replay) are supported
     · Hikvision / Dahua / ONVIF Profile G (SD-card cameras, other NVR brands, Milestone) are written and awaiting tests against real devices
     (`server/vms/device-playback.js` selects the path) · Dahua DSS Pro (VMS) works (`server/vms/dss*.js`) · Digifort returns 501 pending API documentation · do not bring the recorder back without agreement
-  - Any inference of our own must be a **separate process** (`ai-worker/`, pm2 app `4-edge-ai`), never inside the gateway process
-    · the venv and models live outside git · if GPU 0 drives a display, the worker uses another card (`aiGpu`)
-    · detectors must have a commercially usable license (Apache-2.0, e.g. YOLOX / RT-DETR) — no Ultralytics (AGPL)
   - **Camera-side AI is not merged into the system** — no option in edge.json, nothing sent into `ai_events`, `POST /api/v1/ai/events`
     accepts only `origin: edge-ai` · the code in `server/gateway/analytics/` stays, do not delete it, but do not wire it back in without agreement
   - Full plan and ordering: [docs/EDGE-PLAN.md](EDGE-PLAN.md), section "Phase 5"
@@ -84,7 +79,7 @@ Then commit, and have the user deploy with a single command (requires an admin s
 ```bash
 powershell -ExecutionPolicy Bypass -File <repo>\scripts\deploy.ps1
 ```
-It does everything: backup → restart Central + Regional (AI parked) → wait until `/api/instance` on both reports the new build → `npm run build` →
+It does everything: backup → restart Central + Regional → wait until `/api/instance` on both reports the new build → `npm run build` →
 **publish the update package to link-mode edges** (`build-edge-kit.ps1 -UpdatesOnly`) · if `edge.json` changed = `-ReloadEdgeConfig` ·
 to release the client too = `-ReleaseClient` · **never skip the publish step** — restarting alone leaves link-mode edges on the old version (this really happened)
 The Edge Nodes page shows a yellow badge when the published version does not match Central.
@@ -174,7 +169,7 @@ If you changed something a human must see (post-login web pages, client windows)
 | go2rtc API | `api: listen` must always be `127.0.0.1:<port>` (the Node proxy is the only way in) · an API open on every interface lets anyone read RTSP with camera passwords · fix installed machines with `scripts/lock-go2rtc-api.cjs` · `/hls` may be forwarded only for playlists/segments whose names were validated; never open a path to go2rtc's `/api/*` |
 | Web login | session token `s1.` (HMAC, 12 h, `shared/session-token.js`, key `.session-secret`) sent as `Authorization: Bearer` · **never store the password in the browser** · the legacy username/password headers are still accepted temporarily (logs `[Auth] legacy`) · 5 failures / 5 minutes = 429 |
 | Logs | anything that may contain a stream URL must pass through `shared/redact.js` before being logged/returned in an error — ffmpeg's stderr contains `rtsp://user:pass@` |
-| Build number | computed from `git log -- server src ai-worker scripts package.json ecosystem.edge.config.cjs` (the main list is `BUILD_PATHS` in `shared/instance.js` · deploy.ps1 / build-edge-kit.ps1 must match) — changing only `src/` still produces a new build, otherwise link-mode edges do not get the update |
+| Build number | computed from `git log -- server src scripts package.json ecosystem.edge.config.cjs` (the main list is `BUILD_PATHS` in `shared/instance.js` · deploy.ps1 / build-edge-kit.ps1 must match) — changing only `src/` still produces a new build, otherwise link-mode edges do not get the update |
 | Dahua DSS Pro | added at the edge (VMS → DAHUA DSS PRO, port 443) · **DSS live/playback URLs are single-use** — go2rtc connects to `rtsp://127.0.0.1:<DSS_RELAY_PORT>/dss/<id>/<main\|sub>` and `vms/dss-rtsp-relay.js` requests a fresh URL every time (port = gateway + 26, listens on 127.0.0.1 only) · token lives 30 s, renewed every 20 s · a wrong login = stop, never retry (DSS locks the account) · camera status comes from DSS, not TCP · playback uses `StartPlaybackByFile` (ByTime does not work) |
 | Edge update package | the manifest must have `sig2` + `issuedAt` (anti-downgrade) — newer edges reject a manifest without them · always publish from the current kit code (`scripts/edge-update-key.cjs`) |
 | New permissions | add the key to `MENU_KEYS`/`OP_KEYS` and `SEED_ROLES` in `server.js` — seeded roles get it on restart (INSERT OR IGNORE); roles users created themselves must be ticked by hand |
