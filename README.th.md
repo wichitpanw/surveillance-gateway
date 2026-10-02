@@ -54,6 +54,22 @@ client มีหน้า Playback ตั้งแต่ 1.8.3 (1.8.4 เปล�
 | 1994 / 8565 / 8566 | go2rtc ของ Regional (API 127.0.0.1 เท่านั้น) | `1-go2rtc-regional` |
 
 
+## Windows client
+
+โปรแกรมดูกล้องสำหรับผู้ปฏิบัติงาน (WPF) ต่อ Central หรือ Regional ด้วย API key
+
+- **Video wall** 1 / 4 / 9 / 16 / 25 ช่อง เลือก main/sub ถอดรหัสด้วย GPU ของเครื่องเอง
+- **แผนที่ 3 มิติ** ปักหมุดกล้องบนอาคาร 3 มิติ
+- รายละเอียดกล้อง, PTZ, ภาพย้อนหลัง, UI ไทย/อังกฤษ, อัปเดตอัตโนมัติ
+
+| หน้าแรก | Video wall |
+|---|---|
+| ![Client home](docs/manual/images/w02-home.png) | ![Client video wall](docs/manual/images/w03-wall.png) |
+| **แผนที่** | **รายละเอียดกล้อง** |
+| ![Client map](docs/manual/images/w05-map.png) | ![Client camera details](docs/manual/images/w06-details.png) |
+
+ดู [คู่มือ](docs/USER-GUIDE.md) และ [บันทึกของ client](client-windows/README.th.md)
+
 ## โครง repo
 
 ```

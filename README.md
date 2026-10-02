@@ -41,6 +41,22 @@ Every camera gets a permanent **Global ID** (`TH-<province>-<node>-<seq>`) issue
 
 ![Edge nodes](docs/manual/images/c04-edge-nodes.png)
 
+## Windows client
+
+A native WPF viewer for operators: connect to Central or Regional with an API key, then work in tabs.
+
+- **Video wall** — 1 / 4 / 9 / 16 / 25 cells, main or sub stream, decoded on the workstation's own GPU
+- **3D map** — camera pins on 3D buildings, tiles served by the gateway
+- **Camera details, PTZ and playback**; English / Thai UI; automatic updates
+
+| Home | Video wall |
+|---|---|
+| ![Client home](docs/manual/images/w02-home.png) | ![Client video wall](docs/manual/images/w03-wall.png) |
+| **Map** | **Camera details** |
+| ![Client map](docs/manual/images/w05-map.png) | ![Client camera details](docs/manual/images/w06-details.png) |
+
+See the [user guide](docs/USER-GUIDE.md) and [client notes](client-windows/README.md).
+
 ## Stack
 
 Node.js + Express + SQLite (backend) · React + Vite + Tailwind + shadcn/ui (web) · .NET 8 WPF + LibVLC + WebView2 (client) · go2rtc · pm2.
