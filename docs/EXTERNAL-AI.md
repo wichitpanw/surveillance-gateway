@@ -4,7 +4,14 @@ Agreement 2026-10-02: cameras / NVRs / VMSs / external APIs do their own process
 The Edge receives and converts events → Regional aggregates within the region → Central aggregates all regions.
 None of the three roles runs inference; no additional video recording is made.
 
-Status: developed in the dev worktree, not yet committed/deployed/published to production
+Current status (2026-10-07): Gateway d645ed9 runs on Central / Regional / Edge 101 / 102; Client 1.9.5 is released · the AI receive code last changed in 10ea98f (worker removed); per-release checks are at the end of this document
+
+## Two main receive sources
+
+- **Source device:** the Edge connects to the camera / NVR with a native adapter to receive events and fetch JPEGs; currently tested with Tiandy and UNV for the models and rules below
+- **External API:** a VMS or another AI system sends a normalized event with an image to the Edge using an API key with the right permission; no automatic camera connection is opened
+- In both cases the source does the AI processing; this choice decides how results are received, it does not turn on AI rules in the camera
+- New cameras show External API as the default with receiving off — this does not mean an external system is already sending events
 
 ## First round
 
@@ -38,7 +45,10 @@ Select utc for sources that really send UTC — never apply the same time correc
 2. Issue an API key at the Edge with allow_event_write and limit scopeGroups to the camera group
 3. Send Authorization: Bearer <api-key> to the Edge's POST /api/v1/ai/events
 
-Example payload (use the existing Global ID or the Edge's local cameraId):
+How it works, for example: the VMS detects a vehicle crossing a line → the VMS connector converts the result and JPEG into our payload → sends an HTTP POST with the API key to the Edge → the Edge checks permissions and stores it → Regional → Central → AI Events
+If the VMS cannot send this format, a connector must be written first; selecting External API alone does not create a connector or pull events automatically
+
+Example payload (use the existing Global ID or the Edge's local cameraId; this example shows only the event data — the sender adds a base64 JPEG snapshot when an image is wanted):
 
 ~~~json
 {
@@ -90,6 +100,7 @@ GET /api/v1/ai/events and SSE /api/v1/events remain the read paths for the Clien
   Two events of the same rule within the same second may be indistinguishable
 - The external API is responsible for retrying and for mapping NVR/VMS channels to the correct Global ID
 - This version disables worker creation in the ecosystem and GET /api/v1/ai/config answers 410
+  deploy.ps1 removes the old inference processes if they are still registered; any other machine with an old process still running must stop it too, because updated code does not end the old process by itself
 - The camera is already at Edge 101: after the update, enable AI Sources on the existing row
   Never add it again / change its Global ID, and never overwrite Regional with an old Edge DB
 
@@ -218,3 +229,18 @@ References:
 - On the real AI Sources page, selecting Office CCTV left 3 cameras, and after a UNV event test only UNV TEST remained
 - The Tiandy and UNV receivers are enabled/connected after the update; Tiandy has delivered event images to Central
 - UNV awaits a new vehicle pass in production; the LineCrossing result with images was checked on the real camera in the simulated system before release
+
+## Removing the old inference (2026-10-02)
+
+- Removed the old inference worker, the AI Rules page, the ai-config module and the Python/GPU installer
+- The old inference settings API answers 410; receivers are set per camera in AI Sources
+- deploy removes the old inference processes if they are still left
+- The database, past events/images and old backups/secrets are kept; the old AI folder outside the project is not deleted
+- New packages do not contain the worker; folder-swap Edges run only the new code, while in-place Edges may keep an unused old folder
+
+## Verified after removing the worker — Gateway 10ea98f / Client 1.9.4
+
+2026-10-02: backed up, then deployed Central/Regional and updated Edge 101/102 from the Regional UI; /api/instance matched on all four and the Edges were Online
+All three platform packages passed signature / size / SHA-256 checks; the real AI Sources page showed Tiandy/UNV connected after the update
+Checked 12 external AI cases + 4 UNV cases, a fresh DB and startup, revoking only the worker key while keeping external keys, syntax / ESLint and the web build
+Client 1.9.4 released with a collapsible Camera Library filter (offscreen render; not a confirmation of the real window)

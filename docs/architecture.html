@@ -58,10 +58,18 @@
       color: rgba(79,93,117,0.75);
     }
   </style>
+  <style>
+    .ai-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+    .ai-details > div { border-top: 1px solid rgba(45,49,66,0.12); padding-top: 1rem; }
+    .ai-details h2 { font-family: var(--font-serif); font-size: 1.35rem; font-weight: 400; margin-bottom: .5rem; }
+    .ai-details p:not(.eyebrow) { font-size: .85rem; line-height: 1.7; color: var(--color-muted); }
+    .doc-links { margin-top: 1.5rem; font-family: var(--font-mono); font-size: .7rem; line-height: 1.8; }
+    .doc-links a { color: var(--color-accent); }
+  </style>
 </head>
 <body>
   <div class="frame">
-    <p class="eyebrow">Architecture · Surveillance Gateway · updated 2026-09-30 · build 5c0b404</p>
+    <p class="eyebrow">Architecture · Surveillance Gateway · updated 2026-10-07 · gateway d645ed9 · client 1.9.5</p>
     <h1>Edges collect, regions gather, central serves</h1>
 
     <div class="scroll">
@@ -79,6 +87,7 @@
         <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
           <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
         </marker>
+        <marker id="arrow-ai" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
       </defs>
 
       <rect width="100%" height="100%" fill="#f5f5f5"/>
@@ -109,6 +118,18 @@
       <text x="1380" y="99" fill="rgba(45,49,66,0.40)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">NATIONAL OPERATORS</text>
 
       <!-- ================= arrows (before boxes) ================= -->
+
+      <!-- AI results and images from the source, separate from the video path -->
+      <path d="M112,232 V180 H400 V232" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-ai)"/>
+      <path d="M400,232 V180 H728 V232" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-ai)"/>
+      <path d="M728,232 V180 H1056 V232" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-ai)"/>
+      <text x="244" y="170" fill="#eb6c36" font-size="11" font-family="'Geist Mono', monospace" text-anchor="middle">EVENT + JPEG</text>
+      <text x="564" y="170" fill="#eb6c36" font-size="11" font-family="'Geist Mono', monospace" text-anchor="middle">EVENT + JPEG</text>
+      <text x="892" y="170" fill="#eb6c36" font-size="11" font-family="'Geist Mono', monospace" text-anchor="middle">EVENT + JPEG</text>
+      <rect x="296" y="80" width="208" height="64" rx="6" fill="rgba(235,108,54,0.10)" stroke="#eb6c36"/>
+      <text x="400" y="104" fill="#2d3142" font-size="14" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">External AI API</text>
+      <text x="400" y="126" fill="#4f5d75" font-size="11" font-family="'Geist Mono', monospace" text-anchor="middle">scoped event-write key</text>
+      <path d="M400,144 V180" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-ai)"/>
 
       <!-- cameras -> edge : the picture -->
       <line x1="184" y1="296" x2="296" y2="296" stroke="#2d3142" stroke-width="1.6" marker-end="url(#arrow-ink)"/>
@@ -165,7 +186,7 @@
       <text x="68" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">FIELD</text>
       <text x="112" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cameras</text>
       <text x="112" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">NVR · VMS</text>
-      <text x="112" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">main + sub</text>
+      <text x="112" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">video + source AI</text>
 
       <!-- edge gateway -->
       <rect x="296" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
@@ -174,7 +195,7 @@
       <text x="324" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
       <text x="400" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Edge gateway</text>
       <text x="400" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">camera creds · global id</text>
-      <text x="400" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">go2rtc _raw · no gpu</text>
+      <text x="400" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">_raw · AI Sources</text>
 
       <!-- regional gateway (focal) -->
       <rect x="624" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
@@ -183,7 +204,7 @@
       <text x="652" y="249" fill="rgba(235,108,54,0.90)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
       <text x="728" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Regional gateway</text>
       <text x="728" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">adds Edge · region keys</text>
-      <text x="728" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">catalog · go2rtc relay</text>
+      <text x="728" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">catalog · events · relay</text>
 
       <!-- central gateway -->
       <rect x="952" y="232" width="208" height="96" rx="6" fill="#f5f5f5"/>
@@ -192,7 +213,7 @@
       <text x="980" y="249" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NODE</text>
       <text x="1056" y="276" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Central gateway</text>
       <text x="1056" y="296" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">adds Regional · scope</text>
-      <text x="1056" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">h.264 for web only</text>
+      <text x="1056" y="316" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">web H.264 · AI Events</text>
 
       <!-- in-region clients -->
       <rect x="624" y="464" width="208" height="88" rx="6" fill="#f5f5f5"/>
@@ -200,7 +221,7 @@
       <rect x="632" y="472" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
       <text x="646" y="481" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WPF</text>
       <text x="728" y="504" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Regional clients</text>
-      <text x="728" y="524" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">live · playback · ptz</text>
+      <text x="728" y="524" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">live · playback · events</text>
       <text x="728" y="540" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">works if Central is cut</text>
 
       <!-- web browser -->
@@ -218,7 +239,7 @@
       <text x="1318" y="241" fill="rgba(45,49,66,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WPF</text>
       <text x="1380" y="268" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Windows client</text>
       <text x="1380" y="288" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">h.265 on own gpu</text>
-      <text x="1380" y="306" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">wall · map · ptz</text>
+      <text x="1380" y="306" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">wall · map · AI Events</text>
 
       <!-- external systems -->
       <rect x="1296" y="344" width="168" height="80" rx="6" fill="#f5f5f5"/>
@@ -244,6 +265,9 @@
       <rect x="524" y="618" width="14" height="12" rx="3" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
       <text x="548" y="628" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FIELD · EXTERNAL</text>
 
+      <line x1="1160" y1="668" x2="1192" y2="668" stroke="#eb6c36" stroke-width="1.4"/>
+      <text x="1204" y="672" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">AI EVENT + JPEG</text>
+
       <line x1="132" y1="668" x2="164" y2="668" stroke="#2d3142" stroke-width="1.6"/>
       <text x="176" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">VIDEO, NOT TRANSCODED</text>
 
@@ -258,7 +282,15 @@
     </svg>
     </div>
 
-    <footer>Central adds Regional only · Regional adds Edge only · Edge adds cameras (province + district required) · child ↔ parent: pull (parent reads child /api/v1 with a key) or link (child dials ws://parent/api/edge-link, ffmpeg -c copy) · global id issued once at the Edge · updates signed ed25519 (sig + sig2), mirrored down the chain · AI parked · no TLS: LAN / Tailscale only</footer>
+    <section class="ai-details" aria-label="External AI architecture">
+      <div><p class="eyebrow">01 · Source → Edge</p><h2>Receive, normalize, attach evidence</h2><p>Enable one receiver per camera in <strong>AI Sources</strong>; adding a camera does not enable it. With a supported device adapter, Edge connects to the device. With an external API, a VMS or AI integration sends normalized events and JPEGs to Edge using an event-write key; selecting it does not create that integration. Filter the list by Group. Credentials remain at the owning Edge.</p></div>
+      <div><p class="eyebrow">02 · Edge → Regional → Central</p><h2>Events travel with their JPEG</h2><p>Events and their evidence images are stored and relayed up the chain with deduplication. Regional serves in-region clients even when the Central link is down. This is event evidence storage; video playback comes from the recorder or VMS.</p></div>
+      <div><p class="eyebrow">03 · Native adapters tested</p><h2>Tiandy perimeter · UNV LineCrossing</h2><p>Tiandy MODEL-A uses AlarmInfo plus the matching alarm JPEG on SD storage. UNV IPC2325SB uses ONVIF RTSP metadata, then GetSnapshotUri immediately for fresh events. ONVIF or Profile M alone does not guarantee every model, AI rule or image path.</p></div>
+      <div><p class="eyebrow">04 · Operators</p><h2>Search events, inspect evidence</h2><p>Central and Regional AI Events filter by Edge and Group within the viewer’s permissions. Windows Client 1.9.4 includes AI event images and a collapsible Camera Library filter panel. Local inference, AI Rules and Python/GPU installers were removed.</p></div>
+    </section>
+    <p class="doc-links"><a href="../README.md">Project README</a> · <a href="camera-onboarding.html#external-ai">AI onboarding</a> · <a href="EXTERNAL-AI.md">Adapter tests and limits</a></p>
+
+    <footer>Central adds Regional only · Regional adds Edge only · Edge adds cameras (province + district required) · child ↔ parent: pull (parent reads child /api/v1 with a key) or link (child dials ws://parent/api/edge-link, ffmpeg -c copy) · global id issued once at the Edge · updates signed ed25519 (sig + sig2), mirrored down the chain · AI Sources receives source events + JPEG; no inference · no TLS: LAN / Tailscale only · powered by Warapon Wichitpan</footer>
   </div>
 </body>
 </html>

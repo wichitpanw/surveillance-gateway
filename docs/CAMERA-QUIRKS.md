@@ -1,7 +1,7 @@
 # CAMERA-QUIRKS — brand/model-specific problems encountered so far
 
 The cameras in this system are a "collection of firmware", not a collection of cameras — Tiandy, Uniview, Dahua, Hikvision and generic NVR brands all
-claim to support ONVIF/RTSP, and each one violates the spec in a different corner. This file records the real problems found, how they were fixed, and how to chase the next one · Updated 2026-09-28
+claim to support ONVIF/RTSP, and each one violates the spec in a different corner. This file records the real problems found, how they were fixed, and how to chase the next one · Updated 2026-10-09
 
 ## Guiding principle before reading the list
 
@@ -21,6 +21,23 @@ A central that pulls from an edge also uses the edge's `_raw` stream and then tr
 
 Other things that follow the same principle: `server/codec_cache.json` remembers the real codec of each RTSP (it does not trust the brand),
 and the AI discovery code (`server/gateway/analytics/discovery.js`, disabled) asks ONVIF camera by camera and uses the brand only as a hint.
+
+## Checklist: adding a new brand / VMS / NVR
+
+Applies to live view, playback and PTZ — drawn from the two DSS failures at the a test province site (2026-10-08/09)
+
+1. **One module per brand** in `server/vms/` (client + sessions + playback), selected by `device-playback.js` — never put brand conditions in shared code
+2. **Send the standard request first, fall back only when the device says clearly what it needs** — an error code or message naming what is missing; do not guess ahead, and never break models that already work
+   (example: `StartPlaybackByFile` is sent without `playbackType` first, and resent only after a 1004 that names the field)
+3. **Remember the result per device** in the client/instance — the next request goes straight down the path that works; with a remote device every wasted round trip is visible delay
+   (`needsPlaybackType` in `DssClient`, `workedVia` in `dss-rtsp-relay.js`)
+4. **Every fallback must be logged, and every failure must say host:port and the cause** — through `hideToken` / `shared/redact.js`, never with a token or password
+   Closing a socket silently leaves the far end with only `404` / `i/o timeout`, which cannot be traced (the original DSS relay)
+5. **When the device hands out URLs, always plan for NAT** — try the URL it gave first, then fall back to the host the user entered, same port
+   (`onvif_patch.js`, `mediaCandidates()` in `dss.js`) · with one-time tokens, test only TCP before sending the real request
+6. **Stop on a bad login, never retry automatically** — DSS, Digifort and Tiandy lock the account
+7. **Test against at least two real setups if you have them** (on the LAN and behind NAT / different versions) and confirm you get real video, not just a connection
+8. **Record it in this file** — symptom, model/version, site, date, cause, fix, and what is still unconfirmed
 
 ## Problems encountered
 
@@ -80,6 +97,16 @@ There is a 15-minute auth backoff in `server/gateway/analytics/poller.js` · the
 `server/onvif_patch.js`: `patchOnvifSoapHttps` chooses http/https according to the xaddr (the library uses only http), and
 `patchOnvifNatAddressing` rebuilds the URI with a host that is actually reachable instead of the internal address the NVR reports
 
+### Dahua DSS behind NAT hands out media URLs pointing at its internal IP (Edge 103, 2026-10-08)
+
+- **Symptom:** the DSS is added by its public IP → login, camera list and status are fine, but live video never arrives; go2rtc logs `read tcp …->127.0.0.1:<relay>: i/o timeout` every 10 s
+- **Cause:** `StartVideo` / `StartPlaybackByFile` answer with the media server's internal address (sometimes several joined by `|`) — TCP hangs until go2rtc gives up
+- **Fixed:** `mediaCandidates()` (`server/vms/dss.js`) tries the URL the DSS gave first, then the same URL with the host replaced by the address the DSS was added with (same port)
+  live view chooses in `dss-rtsp-relay.js`, playback in `firstReachable()` · the `[DSS relay]` / `[DSS]` logs show the route used or the host:port that failed
+- The media ports (usually 9100/9320) must be forwarded on the same address as the API — an external port that differs from the internal one is not supported yet
+- **That DSS requires `playbackType`** in `StartPlaybackByFile` (1004 `Argument [data.playbackType] can not be empty`), while our DSS Pro V8.5.0 does not
+  sending `'0'` makes playback work (confirmed 2026-10-09) · other values are undocumented · `DssClient` remembers it after the first hit
+
 ### NVR channels that are offline during a scan (Uniview NVRs at SITE-1 to SITE-3)
 
 - **Symptom:** a channel whose camera dropped during the scan disappears from `GetProfiles` entirely (not just missing its RTSP) — SITE-3 returned 20 of 28 channels
@@ -122,7 +149,9 @@ There is a 15-minute auth backoff in `server/gateway/analytics/poller.js` · the
 ### Axis (P1488-LE, AXIS OS 12.11) — separate ONVIF account, only a 4K profile
 
 - **ONVIF requires an ONVIF account** created in the camera (System → Accounts → ONVIF accounts) — the web account (root) gets `400 Sender not authorized`
-  - **RTSP works with both the web account and the ONVIF account** · **VAPIX CGI** (`/axis-cgi/jpg/image.cgi`) works only with the web account (an ONVIF account gets 401)
+  - **RTSP paths depend on the account** (tested on a P1488-LE at Edge 102, 2026-10-06): `onvif-media/media.amp?profile=…` accepts the ONVIF account
+    · `axis-media/media.amp` accepts the web account (the ONVIF account gets 401) · **VAPIX CGI** (`/axis-cgi/jpg/image.cgi`) works only with the web account
+  - ONVIF returns the stream URI as `127.0.0.3` — `server/onvif_patch.js` replaces it with the IP actually dialed · the media service is at `/onvif/services`
   - Brand `axis` in the system: when ONVIF fails → use `axis-media/media.amp` instead of guessing `/onvif1` · fallback still image via VAPIX (digest MD5)
 - The brand can be identified without a password: `POST /axis-cgi/basicdeviceinfo.cgi` `{"apiVersion":"1.0","method":"getAllUnrestrictedProperties"}`
   → a scan with a specified range sets `brand: axis` and fills in the model name itself
@@ -130,6 +159,15 @@ There is a 15-minute auth backoff in `server/gateway/analytics/poller.js` · the
   (VAPIX scales according to the parameter, on both `axis-media/media.amp` and `onvif-media/media.amp`)
 - Keyframes are frequent — first picture over the link: sub 2.3 s, main 4.7 s
 - When scanning many hosts, they answer 401 to every ONVIF command except `GetSystemDateAndTime` → the scan uses that command to check whether a host is ONVIF
+
+### AXIS S30 recorder (S30 at Edge 102) — web account only
+
+- Add it via API → AXIS S30 (VAPIX) with the web account (`root`): cameras are listed by `/axis-cgi/externalipdeviceinfo/list.cgi`, then viewed at
+  `rtsp://<user>:<pass>@<S30>:554/axis-media/media.amp?device=<Device ID>`
+- **An ONVIF account does not work with the S30** (tested 2026-10-06): the ONVIF device service answers 401 even for commands that need no login, the media service 404,
+  `onvif-media` logs in but answers 400 (no media profile) · `axis-media` with the ONVIF account = 401
+- There is no second stream per camera — the sub stream is main + `&resolution=640x360` (`axisS30SubRtsp` in `server/vms/axis-s30.js`; before 2026-10-06 sub = main at 1080p,
+  and the server fixes existing rows at startup) · requesting audio with `&audio=1` gets 503 when the camera sends no audio to the S30
 
 ### Dahua ONVIF init fails
 
@@ -143,6 +181,14 @@ A Dahua camera at one site (203.0.113.47) makes `node-onvif` break when reading 
 - Tiandy and Dahua have no metadata track on RTSP · Tiandy gives counts via CGI
 - Times from Tiandy cameras end in `Z` but are the on-screen local time · `analytics/http-digest.js` must use `insecureHTTPParser` (the camera answers with bare LF)
 - Always distinguish three states: no AI / present but off / camera could not be queried
+
+## AI events and images — confirmed 2026-10-02
+
+- Tiandy MODEL-A firmware FW-A: ONVIF services exist but no Perimeter topic/metadata that could replace AlarmInfo was found; the alarm image on SD is matched by channel/second, and a live image is never used in place of an old event
+- UNV MODEL-B firmware FW-B: LineCrossing is received from ONVIF RTSP metadata, which then triggers GetSnapshotUri; /media/flv/picture answers `HTTP JPEG Stream is full`, but the snapshot URI returned by ONVIF serves JPEGs
+- Profile M does not attach a JPEG automatically, and having ONVIF does not guarantee that the same AI rule works on every brand
+- UNV needs its clock offset corrected; events more than 3 s late or images taking more than 5 s to load are not published as events with images; per the user's instruction the camera is not rebooted to clear a stuck JPEG slot
+- Supported scope and three-tier evidence: [EXTERNAL-AI.md](EXTERNAL-AI.md)
 
 ## go2rtc options worth knowing before chasing the next problem
 

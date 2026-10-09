@@ -1,9 +1,14 @@
 # Windows client (SurveillanceGateway)
 
+Release status 2026-10-07: Client **1.9.5** (released 2026-10-06) · Gateway **d645ed9**
+1.9.5 adds a per-tile speaker button for cameras whose Edge has audio enabled; tiles always start muted — see [docs/CAMERA-AUDIO.md](../docs/CAMERA-AUDIO.md)
+AI Events shows thumbnails and full images with Edge / Group / origin filters (1.9.3) · the Camera Library filter panel can be collapsed (1.9.4)
+Build and offscreen WPF rendering pass; the real client window and real audio after installing this release are not yet confirmed
+
 The user's camera viewer — connects to **Surveillance Gateway Regional** or **Surveillance Gateway Central** with the API key of the target machine, then plays video, builds video walls, shows the map, and sends PTZ commands
 
 Clients inside a region should be set to that region's Regional URL and API key directly, so viewing within the region continues when the Regional–Central link is down; nationwide viewers use Central and a key issued by Central
-It is a "consumer" of `/api/v1` and a reference implementation, not another way into the cameras · .NET 8 / WPF · Updated 2026-09-28 (v1.8.2)
+It is a "consumer" of `/api/v1` and a reference implementation, not another way into the cameras · .NET 8 / WPF · Updated 2026-10-07 (v1.9.5)
 
 ## Why this program exists
 
@@ -50,6 +55,8 @@ The screen layout matches the Central/Edge web UI (`src/components/shell/AppShel
 | Map | Camera pins on a 3D map in WebView2 from central's `/client-map.html` (that page does not hold a key) |
 | Camera details | Camera information, streams, tracks |
 | Player window | One window per camera, draggable to another screen · PTZ panel beside the video (hold = rotate) |
+| Playback | A one-day VMS-style recording timeline (`Views/PlaybackTimeline.cs`, 1.8.4) · MP4 download of up to 30 minutes (`PlaybackDownloadWindow`, 1.9.1) · the key needs `allow_playback` · video is pulled from the devices at the edge |
+| AI events | Events from cameras / NVRs / VMS / external APIs, relayed Edge → Regional / Central, for the last 24 hours (`GET /api/v1/ai/events`) + new events over SSE · thumbnails load one at a time · clicking a row opens `EventDetailWindow` (full image, details, ←/→ to move, Esc to close) |
 
 The Home and Camera details pages slide in with a fade-transform, while the wall and map do not animate, because **video (libVLC) and WebView2 are HWNDs —
 WPF cannot draw over them or move/fade them** · for the same reason the content host shows one page at a time, and views are added/removed rather than hidden with Visibility
@@ -97,5 +104,7 @@ and `server.js` serves it via `/stream/<name>.mp4` with `video=copy` · with the
 ## Not yet available
 
 - A satellite map toggle on the client's Map page (the web UI has it)
-- Showing the originating edge name / the camera's global ID on the Camera details page
-- Viewing recorded video (awaiting video sources from devices at central)
+- Showing the originating edge name / the camera's global ID on the Camera details page (searching by global ID already works in the Video wall)
+- Automatic Gateway failover (Central → Regional) when the link drops — the user picks a saved Gateway by hand
+- Audio in Playback (video only, by design)
+- A Linux client (Avalonia) — agreed but on hold

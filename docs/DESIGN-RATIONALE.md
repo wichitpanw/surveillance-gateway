@@ -1,19 +1,22 @@
 # Design rationale — why the system is the way it is
 
 This file records the reasons and history that still affect the code. It is not a manual — see [README.md](../README.md) for the current state
-and [CONTRIBUTING.md](CONTRIBUTING.md) for the rules.
+and [CONTRIBUTING.md](CONTRIBUTING.md) for the rules · updated 2026-10-07
 
 ## New agreement: external AI
 
 AI is done by the source (camera / NVR / VMS / external API), which processes the video itself.
 Central/Regional/Edge only receive, store and forward results; the Edge inference-worker approach is cancelled.
 A Tiandy perimeter camera (203.0.113.12) attached to Edge 101 was the first source, keeping its existing Global ID TH-10-101-00001.
-Tiandy and UNV were tested with real cameras across all three tiers.
+Tiandy delivers real event images to Central production; UNV LineCrossing with images was tested with the real camera across three tiers in the simulated system.
+Gateway 10ea98f reached all four instances and Client 1.9.4 was released; both receivers reconnected after the worker was removed.
+On 2026-10-06 the user asked for camera audio enabled per camera (some cameras have microphones) — off by default because AAC adds work to every stream, set at the Edge per the data-owner model; see [CAMERA-AUDIO.md](CAMERA-AUDIO.md).
 Test results and limitations are in [EXTERNAL-AI.md](EXTERNAL-AI.md).
 
 ## Current state
 
-The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; all four instances run the same Gateway build · Windows Client 1.9.x
+The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; all four instances run Gateway build `d645ed9` (deployed 2026-10-06) · Windows Client `1.9.5` · external AI events with JPEGs are received · per-camera audio is enabled on one camera
+On 2026-10-07 the Regional reserved Edge number `103` as a **test Edge** the user deliberately links to the central Regional although its province is in another region — so the Regional now accepts out-of-region cameras with only a warning (it used to reject the whole batch with 409, silently); permissions and per-region summaries at Central still count cameras by their own province.
 Central issues nation-wide keys and accepts Regionals only; a Regional issues in-region keys and accepts Edges only, so Clients can point at the region directly when the link to Central is down.
 One province can have several sites by installing separate Edges and using Remark; there is no Sub-edge.
 Every camera must have a province and district when added, including VMS imports; the area of a whole group or of selected cameras can be changed, but an already-issued Global ID and the coordinates do not change with it.
@@ -48,6 +51,12 @@ for live view / PTZ control without installing software, while serious multi-scr
 | Following days | Client 1.7.3 reworked Home / Wall, shows the status of every camera, F11 covers the true screen edge including the taskbar; unused build output and samples cleared | `client-windows/`, [docs/CLIENT-RELEASES.md](CLIENT-RELEASES.md) |
 | AI-at-edge decision | Agreed that AI lives at the edge (Central aggregates events and runs no inference) · recording at the edge + Playback via Central | `server/shared/ai-events.js`, `server/gateway/playback.js` |
 | Same day | Edge added Milestone Open Network Bridge VMS via ONVIF; tested with 2 real channels, viewable through the Client · fixed Central's pull sync so it accepts the initial status of newly added cameras; Online confirmed for all after a restart | `server/vms/edge-source.js`, [docs/CAMERA-QUIRKS.md](CAMERA-QUIRKS.md) |
+| Whole-system review | go2rtc API bound to 127.0.0.1, narrower `/hls`, session tokens instead of passwords in the browser, login rate limit · Dahua DSS Pro at the edge · Profile G with Tiandy SD cards | [docs/EDGE-PLAN.md](EDGE-PLAN.md) "Whole-system review", `server/vms/dss*.js` |
+| **Three tiers** | :5273 became the central Regional (node 100); Edge 101 (new Windows) / 102 (existing Ubuntu) link to it · Milestone Playback in real use · Client 1.9.0 with multiple Gateways | [docs/REGIONAL-PLAN.md](REGIONAL-PLAN.md) |
+| Next day | Full-stack review fixes (cross-account permissions, MP4 download with completeness checks, edge-run rollback) · Client 1.9.1–1.9.2 | [docs/FULL-STACK-FIXES.md](FULL-STACK-FIXES.md) |
+| External AI | AI received from the source (AI Sources: Tiandy AlarmInfo, UNV ONVIF LineCrossing, external API) · **the old inference worker and the Python/GPU installer removed** · Client 1.9.3–1.9.4 | [docs/EXTERNAL-AI.md](EXTERNAL-AI.md), `server/gateway/ai-sources.js` |
+| Audio | Camera audio enabled per camera at the Edge · AXIS S30 gets a 640x360 sub stream · `d645ed9` deployed on all four instances + Client 1.9.5 | [docs/CAMERA-AUDIO.md](CAMERA-AUDIO.md) |
+| Public cameras, neutral branding | Central pulls public government cameras (the one exception to "Central adds Regionals only") · Dahua DSS behind NAT falls back to the address it was added with · Edge uninstallers · brand logo and names removed from the UI | [docs/PUBLIC-CAMS.md](PUBLIC-CAMS.md), [docs/CAMERA-QUIRKS.md](CAMERA-QUIRKS.md) |
 
 ## Decisions worth knowing (and why)
 
@@ -73,16 +82,15 @@ The sequence is stored in `settings` and is not counted from remaining rows, so 
 sending H.265 out as MSE segfaults (the browser path must transcode to H.264), and its HLS is unusable (play via fMP4).
 The `_raw` path (passthrough) exists for clients/Central that can decode H.265 themselves — it saves NVENC.
 
-**AI: removed what we ran, turned off what is on the camera.** Our own inference (DeepStream, YOLO, face) was removed permanently at the pivot
-because a gateway that also runs inference puts two systems with different failure modes in one process — if analytics are wanted, they should be a separate service pulling from `/api/v1`.
-Reading results from camera-side AI still has code, but it is switched off with `GATEWAY_AI` to finish consolidating video first,
-and it was later decided not to merge it into the system — do not turn it back on without a new agreement (CONTRIBUTING.md item 1).
+**AI from the source instead of our own inference (2026-10-02).** Cameras / NVRs / VMS / APIs do the analysis; the Edge receives and converts the results with images,
+the Regional aggregates its region and Central aggregates all regions, so no inference load sits in any gateway tier.
+The inference worker, the AI Rules page and the Python/GPU installer are removed; the old analytics code stays but its poller is not turned on.
+Event images are evidence for a single event, not a video recorder: Tiandy searches for the alarm image matching the channel/second, while UNV triggers GetSnapshotUri when a new event arrives.
+The ONVIF path must check topics, metadata and snapshots per model — do not assume Profile M covers every AI type or attaches images.
+Reasons and real limitations are in [EXTERNAL-AI.md](EXTERNAL-AI.md).
+History: inference briefly ran at the Edge, stopped when the Regional was introduced, and was removed from the project on 2026-10-02 at the user's request.
 
-**AI moved to the edge.** If AI lived at Central, it would have to pull every camera across the network all the time
-(150 cameras × sub stream ≈ 80–160 Mbps), contradicting the principle "heavy video flows only while someone is watching", and when an edge drops, AI stops (an edge was in fact down for 2 days).
-So the edge runs AI itself (on edges that have a GPU) and sends only events up to Central · inference stays a separate process for the reasons above.
-
-**We do not record video ourselves — playback is pulled from the device.** We built an edge recorder (an ffmpeg per camera, 60-second files) and then removed it:
+**We do not record video ourselves — playback is pulled from the device.** JPEGs attached to AI events are kept separately under the 2026-10-02 agreement. We built an edge recorder (an ffmpeg per camera, 60-second files) and then removed it:
 most cameras already have an NVR or SD card recording, duplicating the recording eats edge disk (~11 GB/day per camera at sub stream) and needs more upkeep.
 The playback pipe (Central → edge, the link upload, the Playback page, the `playback.view` / `allow_playback` permissions) already works with AXIS S30 and Uniview NVR
 · Windows client 1.8.3 added a Playback page through an API key with `allow_playback` · 1.8.4 changed it to a VMS-style timeline · 1.8.5 fixed issues found in review
@@ -128,17 +136,20 @@ so the person on site chooses the time, and `edge-run` rolls back by itself if t
 
 ## Known limitations and technical debt
 
-- **Web auth is weak by design for a LAN** — originally the password was sent as a header on every request with no session/JWT, acceptable only because it lives inside a LAN/VPN, never expose it to the internet
+- **Web auth is not internet-grade yet** — since the whole-system review it uses a 12-hour `s1.` session token and rate-limits failed logins, but the old username/password header is still accepted for now
+  and everything runs over plain HTTP; usable only inside a LAN/VPN, never expose it to the internet
   · stored in the database as a scrypt hash (`server/shared/password.js`); plaintext rows from an old DB/backup are converted automatically at startup or at login
 - **No TLS** — web, `/api/v1`, RTSP and the link (`ws://`) · crossing sites must go through a VPN
 - **No automated test suite** and **no git remote configured on the production host** (the code backup is only the repo on that machine)
-- **Backups are on the same disk as the data** — `backup-windows.ps1` covers Central + edge fully, but there is no off-machine copy yet
+- **Backups are on the same disk as the data** — `backup-windows.ps1` covers Central + Regional (+ the old edge state if still present) and the signing key, but there is no off-machine copy yet
+  · separate Edge machines back themselves up at 2 a.m. (kit: `edge-backup.cjs` / Ubuntu: `backup-edge.sh`)
   the nightly task must be registered once by hand from an admin shell (command in docs/OPERATIONS.md)
 - `App.jsx` holds almost all state and passes it down as props (no router/state library) — known, not a mistake
 - The map in the Windows client (`src/client-map/`) still uses its own style, with no satellite button like the web page
 - The Surveillance Gateway Client exists only for Windows (WPF) — a Linux client (port to Avalonia) was agreed but parked
 - The admin-requiring steps of the edge kit's Windows installer have not been tried on a real machine · the Raspberry Pi kit has not been tried on a real Pi
 - `server/edge-updates/` and `server/edge-kits/` are created by an admin shell — `-Publish` from an ordinary shell cannot delete old versions
+- Next work discussed but not yet done: testing Hikvision / Dahua / ONVIF Profile G playback on real devices, Digifort playback (awaiting API docs), Linux client (Avalonia), TLS for the link, off-machine backup
 - Time to first frame depends on the camera's keyframes — a sub stream with a sparse I-frame (e.g. 5 fps + GOP 10 s) makes Live Wall channels wait tens of seconds;
   set at the camera: I-frame interval ≈ fps (see docs/CAMERA-QUIRKS.md)
 - `server/package.json` is still named `onvif-scanner` — a leftover name from the start of the project

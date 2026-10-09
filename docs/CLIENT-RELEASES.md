@@ -1,7 +1,7 @@
 # Releasing a new version of the Windows client
 
 One script does everything, with no upload and no server restart — central serves this repo's `client-updates/` folder at `/client-updates`,
-and installed clients read that feed themselves · Updated 2026-09-29 (latest released version 1.8.5)
+and installed clients read that feed themselves · Updated 2026-10-07 (latest release 1.9.5 · 2026-10-06)
 Always check `client-updates/releases.win.json` for what is actually released — the numbers in this document may lag behind.
 
 **Version 1.8.5 (released 2026-09-29):** fixes from the whole-system audit — Playback requests video in chunks that do not extend past the end of a recording or midnight
@@ -27,7 +27,13 @@ GET /api/v1/cameras/:id/download.mp4?start=<ISO-8601>&duration=<1–1800> (the b
 · the fragmented MP4 structure is verified before the .part file is renamed to MP4 · before release, the backend must be deployed so that video-source failures pass through every relay, and so that download ranges spanning recording files are checked
 · a range that the device cannot deliver completely from a single clip answers 416 with the maximum length so the user can choose again, instead of sending a short file and reporting success
 · build and simulated regression checked; WPF / real cameras and a real recording range via Central/Regional still need confirmation
-## Agreed UI state (1.8.2)
+## Current release (1.9.5)
+
+- **1.9.3:** receives AI events from cameras / NVRs / VMS / external APIs relayed Edge → Regional / Central, with images; filter by Edge / group / origin and open full-image details
+- **1.9.4:** click the Camera Library header to collapse or expand the filter section; Search, Group, Status and Favorites stay, and the camera list and layout/stream controls are never hidden
+- **1.9.5 (released 2026-10-06 with Gateway d645ed9):** audio from cameras whose Edge has `audio_enabled` — a speaker button per tile that always starts muted; cameras without audio and Playback add `:no-audio` per media instead of `--no-audio` app-wide · full/delta packages are in the feed · dotnet build passes; the real window and audio are not yet tested ([CAMERA-AUDIO.md](CAMERA-AUDIO.md))
+
+## Agreed UI history (1.8.2)
 
 - The Home page uses a Live Wall card as the most prominent element, followed by Map and Camera details, with a Total / Online / Offline / Other panel
 - The dark top bar has minimize/maximize/close buttons; the maximize button uses the work area above the taskbar, while F11 hides the top bar and places the window over the real screen edges above the taskbar
@@ -87,7 +93,7 @@ Download: `http://203.0.113.80:5173/client-updates/SurveillanceGateway-win-Setup
 ```
 
 Uninstalling (Settings → Apps or `Update.exe --uninstall`) does not delete `SurveillanceGateway.Client\`, because the key is often the only copy on that machine.
-Delete it yourself when decommissioning the machine for good · the app's name is "Surveillance Gateway Client" in both the window and the installer (`--packTitle` in `scripts/build-client-release.ps1`)
+Delete it yourself when decommissioning the machine for good · the app's name is "Surveillance Gateway Client" in both the window and the installer (`--packTitle` in `scripts/build-client-release.ps1`); the `--packId` never changes, so older installs keep updating
 
 ## Rules
 

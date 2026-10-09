@@ -1,5 +1,8 @@
 # Setting up Surveillance Gateway Edge on Linux (Ubuntu 24)
 
+> Current state 2026-10-07: the original Ubuntu machine is now Edge **102**, linked to the central Regional (node 100), web on **:5173**, service **gw-edge**; Gateway d645ed9 (156 cameras as of 2026-10-07). There is no inference worker; external AI results arrive through AI Sources.
+> Restart it when needed with `sudo systemctl restart gw-edge` and never run pm2 by hand on this machine. The tables and install steps below are the original September 2026 method from before the Regional move; new machines use [EDGE-KIT.md](EDGE-KIT.md).
+
 An edge on Linux runs the same code as on Windows; what differs is the machine's config (`<state>/edge.json`) and how it starts at boot (systemd).
 First machine: `edge-linux-01` · VPN address `203.0.113.80` · edge `002` · connects an Axis camera (S30) on a network central cannot reach.
 

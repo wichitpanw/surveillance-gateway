@@ -1,55 +1,55 @@
-# เสียงจากกล้อง (เปิดรายกล้อง)
+# Camera audio (enabled per camera)
 
-อัปเดต: 2026-10-07 · ใช้จริงแล้วตั้งแต่ deploy 2026-10-06 (Gateway `d645ed9` ทั้งสี่ instance, Windows Client 1.9.5)
-· เปิดอยู่ 1 กล้อง ณ 2026-10-07 (Tiandy 203.0.113.12 ที่ Edge 101)
+Updated: 2026-10-07 · in real use since the 2026-10-06 deploy (Gateway `d645ed9` on all four instances, Windows Client 1.9.5)
+· enabled on 1 camera as of 2026-10-07 (a Tiandy at Edge 101)
 
-## หลักการ
+## Principles
 
-- **ปิดเป็นค่าตั้งต้น** — กล้องส่วนใหญ่ไม่มีไมค์ และการแปลงเสียงเป็น AAC เพิ่มงาน ffmpeg ทุกเส้น
-- **ตั้งที่ Edge เท่านั้น** (เหมือน `enabled`) — หน้า Cameras → ปุ่ม "เสียง" · Regional/Central รับค่าตามรอบ sync
-  และตอบ 403 ถ้าพยายามตั้งเอง
-- ผู้ชมทุกช่อง (เว็บและ Windows Client) **เริ่มแบบปิดเสียงเสมอ** แล้วกดลำโพงที่ช่องภาพเอง
-- ภาพย้อนหลังยังเป็นภาพอย่างเดียว (`-an` ใน `server/vms/*-playback.js`)
+- **Off by default** — most cameras have no microphone, and converting audio to AAC adds ffmpeg work on every stream
+- **Set at the Edge only** (like `enabled`) — Cameras page → "Audio" button · Regional/Central take the value from the sync
+  and answer 403 if anyone tries to set it there
+- Every viewer (web and Windows Client) **always starts muted**; the user clicks the speaker on the tile
+- Playback stays video-only (`-an` in `server/vms/*-playback.js`)
 
-## เส้นทางของเสียง
+## The audio path
 
-| จุด | ปิดเสียง (เดิม) | เปิดเสียง |
+| Point | Audio off (before) | Audio on |
 |---|---|---|
-| go2rtc source (`gateway/go2rtc-sync.js`) | `ffmpeg:<rtsp>#video=h264#hardware` | ต่อท้าย `#audio=aac` |
-| สาย link Edge → Regional → Central (`vms/edge-link-client.js`) | `-c copy -an` | `-map 0:v:0 -map 0:a:0? -c copy` |
-| proxy `/stream/<name>.mp4` (`server.js`) | `&video=h264` / `&video=copy` | ต่อท้าย `&audio` |
-| เบราว์เซอร์ (`LivePlayer.jsx`) | `<video muted>` | ปุ่มลำโพงมุมล่างขวา |
-| Windows Client (`LibVlcVideoRenderer`) | `:no-audio` ต่อ media | ปุ่มลำโพงบน tile |
+| go2rtc source (`gateway/go2rtc-sync.js`) | `ffmpeg:<rtsp>#video=h264#hardware` | append `#audio=aac` |
+| Link Edge → Regional → Central (`vms/edge-link-client.js`) | `-c copy -an` | `-map 0:v:0 -map 0:a:0? -c copy` |
+| Proxy `/stream/<name>.mp4` (`server.js`) | `&video=h264` / `&video=copy` | append `&audio` |
+| Browser (`LivePlayer.jsx`) | `<video muted>` | speaker button bottom right |
+| Windows Client (`LibVlcVideoRenderer`) | `:no-audio` per media | speaker button on the tile |
 
-ข้อเท็จจริงที่ทดสอบแล้ว (go2rtc 1.9.14, 2026-10-06):
+Facts confirmed by testing (go2rtc 1.9.14, 2026-10-06):
 
-- ไม่มี `#audio` ใน source = ffmpeg ออกแต่ภาพ
-- `/api/stream.mp4` ที่มีแค่ `video=` ตัดเสียงทิ้ง ต้องขอ `&audio` ด้วย
-- เส้นปกติได้ `mp4a.40.2` (AAC) · เส้น `_raw` go2rtc แปลง PCMA/PCMU เป็น **FLAC** เอง (`audio=aac` ใช้กับ `_raw` ไม่ได้)
-- `#audio=aac` กับต้นทางที่ไม่มีเสียงไม่ทำให้พัง ได้ภาพอย่างเดียว
-- เส้น `_raw` มีเสียงของกล้องติดมาเสมอ proxy จึงขอ `&audio` เฉพาะกล้องที่ `audio_enabled = 1`
+- No `#audio` in the source = ffmpeg outputs video only
+- `/api/stream.mp4` with only `video=` drops the audio; `&audio` must be requested too
+- The normal stream gets `mp4a.40.2` (AAC) · on the `_raw` stream go2rtc converts PCMA/PCMU to **FLAC** itself (`audio=aac` cannot be used on `_raw`)
+- `#audio=aac` on a source with no audio does not break anything; you get video only
+- The `_raw` stream always carries the camera's audio, so the proxy asks for `&audio` only for cameras with `audio_enabled = 1`
 
-## การเปลี่ยน fragment กับ go2rtc-sync
+## Fragment changes and go2rtc-sync
 
-`bareUrl()` ตัด fragment ทิ้งก่อนเทียบ การเปิด/ปิดเสียงจึงมองไม่เห็นถ้าไม่มีตัวช่วย
-sync จด sha1 ของ source ทั้งสตริงไว้ที่ `stateFile('.go2rtc-applied.json')` (hash อย่างเดียว ไม่มีรหัสกล้อง)
-แล้ว PUT เมื่อ hash ต่างจากครั้งก่อน · ไม่มีไฟล์ = ถือว่าตรงกับของที่ต้องการ (ไม่ PUT ทุกเส้นหลังอัปเกรด)
+`bareUrl()` strips the fragment before comparing, so turning audio on/off would be invisible without help.
+The sync records a sha1 of each whole source string in `stateFile('.go2rtc-applied.json')` (hash only, no camera passwords)
+and PUTs when the hash differs from last time · no file = treated as matching (no PUT of every stream after an upgrade)
 
-ffmpeg ที่ push สาย link อยู่ใช้ค่าเสียงตอนเริ่ม — `reconcilePushAudio()` เริ่มใหม่หลังส่งรายการกล้องทุกครั้ง
-(PATCH ที่ Edge เรียก `catalogSoon()` ทันที, Regional ได้รอบเมื่อ go2rtc sync มีการเปลี่ยน)
+An ffmpeg already pushing over the link keeps the audio setting it started with — `reconcilePushAudio()` restarts it after every camera list is sent
+(a PATCH at the Edge calls `catalogSoon()` immediately; the Regional gets its turn when the go2rtc sync changes something)
 
-## ตรวจว่ากล้องมีเสียงไหม
+## Checking whether a camera has audio
 
-ปุ่ม "เสียง" เปิด dialog ที่เรียก `POST /api/cameras/:id/audio-probe` (`ffmpeg -i` ต้นทางตรงแล้วอ่านบรรทัด `Stream #` ตอบ codec/sample rate)
-· ใช้ ffmpeg ไม่ใช่ ffprobe เพราะชุดติดตั้ง edge มีแค่ ffmpeg — รุ่นแรก (b1a01f0) ได้ `spawn ...ffprobe.exe ENOENT` ที่ Edge 101
-ผลที่เจอจริง:
+The "Audio" button opens a dialog that calls `POST /api/cameras/:id/audio-probe` (`ffmpeg -i` on the source, reading the `Stream #` line for codec/sample rate)
+· it uses ffmpeg, not ffprobe, because the edge install kit ships only ffmpeg — the first version (b1a01f0) hit `spawn ...ffprobe.exe ENOENT` at Edge 101
+Real results:
 
-| กล้อง | ผล |
+| Camera | Result |
 |---|---|
-| 203.0.113.12 Tiandy (Office) | `pcm_alaw` 8 kHz mono — เสียงเบา (ห้องเงียบ) |
-| E8272520A1EC AXIS ผ่าน NVR 203.0.113.10 (Edge 102) | ไม่มี track · ขอ `&audio=1` ได้ `503` — ต้องเปิด audio ที่กล้อง/NVR ก่อน |
+| Tiandy (site office) | `pcm_alaw` 8 kHz mono — quiet audio (a quiet room) |
+| AXIS through an S30 recorder (Edge 102) | no track · `&audio=1` gets `503` — audio must be enabled on the camera/recorder first |
 
-## ทดสอบ
+## Testing
 
-edge-sim แบบสามชั้นกับแหล่ง `testsrc` + `sine` ที่ส่ง `pcm_alaw` (ทดสอบ 2026-10-06 ด้วย DB ใหม่):
-ปิด = central ได้ `h264` · เปิด = `h264 + aac` (sub/main) และ `_raw` ได้ `h264 + flac` · ปิดกลับ = `h264` ทุกชั้น
+A three-tier edge-sim with a `testsrc` + `sine` source sending `pcm_alaw` (tested 2026-10-06 with a fresh DB):
+off = central gets `h264` · on = `h264 + aac` (sub/main) and `_raw` gets `h264 + flac` · off again = `h264` on every tier

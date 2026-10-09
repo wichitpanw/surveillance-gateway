@@ -1,9 +1,22 @@
 # OPERATIONS — Operations Guide
 
-Everything you need to do on the machine running the gateway · updated 2026-09-30
+Everything you need to do on the machine running the gateway · updated 2026-10-07
 Rules for changing code are in [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## AI source release — 2026-10-02
+## Current status — 2026-10-07
+
+- Gateway `d645ed9` matches across Central (000), the central Regional (100), Windows Edge 101 and Ubuntu Edge 102 (deployed 2026-10-06 ~20:35; checked with `/api/instance` and `remote_build` at the Regional)
+- Windows Client `1.9.5` released (`client-updates/releases.win.json`): per-tile speaker button for cameras whose Edge has audio enabled · [CAMERA-AUDIO.md](CAMERA-AUDIO.md)
+- Before installing a new Edge, run `build-edge-kit.ps1 -Publish` so the offline install kit (`server/edge-kits/kits.json`) is current, or press update right after the machine links (`deploy.ps1` publishes only the update packages)
+- 163 cameras: Edge 101 = 7, Edge 102 = 156 · Edge `103` "Edge ทดสอบ" = a test Edge deliberately linked to the central Regional (2026-10-07) — out-of-region cameras are accepted with an "out of region" warning badge
+- Windows Client `1.9.4` adds the collapsible Camera Library filter; 1.9.3 adds AI Events images and the Edge / group / origin filters
+- Edges receive AI from cameras / NVRs / VMS / APIs → Regional → Central with JPEGs; no tier runs inference; the old inference worker, AI Rules and the Python/GPU installer are removed
+- AI Sources is general and has a Group filter; new cameras do not enable a receiver automatically — choose the source and enable it per camera
+- Tiandy MODEL-A uses AlarmInfo + alarm images on SD; UNV IPC2325SB uses ONVIF RTSP metadata LineCrossing + GetSnapshotUri for new events (single-channel cameras, channel 1)
+- After the update the Tiandy/UNV receivers at Edge 101 are connected; Tiandy has real event images in Central production; UNV events with images were tested with the real camera across three tiers in the simulated system — no claim yet of a new production event with an image
+- Event images are stored and forwarded, but no video is recorded; playback is pulled from cameras / NVRs / VMS
+
+## AI source release history — 2026-10-02 (38315ff)
 
 - Gateway build `38315ff` matches across Central, Regional, Windows Edge 101 and Ubuntu Edge 102
 - The operator installed the package on both Edges through the Regional page; Online / install success and /api/instance were confirmed
@@ -12,6 +25,8 @@ Rules for changing code are in [CONTRIBUTING.md](CONTRIBUTING.md)
 - Windows Client `1.9.3` published as full/delta/installer; supports event images and the Edge/group/source filters
 - AI is received from the source system per [EXTERNAL-AI.md](EXTERNAL-AI.md); no inference is run and no video is recorded
 - Newly added cameras appear in AI Sources but the receiver must be enabled per camera; native UNV in this round supports LineCrossing on single-channel cameras (channel 1)
+- Backup before removing the worker: `D:\gateway-backups\daily\20261002-220011`; deploy removes the old inference processes if any are left, and startup disables the old worker key
+- Markdown/HTML documents in docs do not change the Gateway build, so a docs-only change needs no restart or publish
 
 ## What is running
 
@@ -27,12 +42,13 @@ The go2rtc API (1984 / 1994) has no auth — it listens on `127.0.0.1` only (the
 ffmpeg is at `C:\ffmpeg\bin\ffmpeg.exe` · Node.js is at `C:\Program Files\nodejs`
 The .NET SDK (for building the client) is in `%LOCALAPPDATA%\Microsoft\dotnet` of the admin user, not in Program Files
 
-## Closed work and latest-build verification (2026-09-30)
+## Closed work and build verification history (2026-09-30)
 
 - Gateway build `a36a2d8` confirmed to match across Central, Regional and Edge 101/102; update packages for all three platforms pass `node scripts/verify-edge-release.cjs a36a2d8`
 - Deploy result: `D:\gateway-backups\regional-migration-M0\milestone-playback-a36a2d8-result.json` (`ok: true`); the transcript has the same name with a `.log` extension
 - Milestone Playback was verified end to end through Regional/Central for both AXIS and TIANDY, 8 clips in total, with two seek positions each; the operator confirmed playback works · do not re-add cameras to fix playback, because the existing Global IDs must be kept
 - Windows Edge 101 is on a new machine; Ubuntu Edge 102 uses Tailscale `<edge-102-tailscale-ip>:5173`, service `gw-edge` (`sudo systemctl restart gw-edge` when needed) **never call pm2 by hand on Ubuntu**
+- In the 2026-09-30 round AI was still parked; today external results are received and there is no inference process · the old Edge state `D:\gateway-edge` is kept together with a backup
 - Regional mirrors and Edges check for updates every 1 minute; failed downloads retry at 5/15/60 seconds or via the retry button; wait for the package to finish downloading before pressing install, and check the build/install status after the node comes back online
 - Edge Cameras page → **Edit province–district for the whole group**; if the selection spans groups, use the **Edit province–district** button at the top → choose province and district → Save; Global IDs and existing pins do not change
 - Old cameras with no province still need a real area chosen; new cameras added by any route are now enforced by both the web UI and the API
@@ -116,7 +132,8 @@ Verify after deploy:
 curl http://203.0.113.80:5173/api/instance
 curl http://203.0.113.80:5273/api/instance
 ```
-You should get `{"role":"central","node":"000",...,"build":"<commit>"}` and `{"role":"edge","node":"001",...}`
+You should get `{"role":"central","node":"000",...,"build":"<commit>"}` and `{"role":"regional","region":"central","node":"100",...,"build":"<commit>"}`
+The build of Edge 101/102 is shown on the Regional's Edge Nodes page (or `curl http://<edge-102>:5173/api/instance` for Edge 102)
 
 ## Backup and restore
 
@@ -124,11 +141,14 @@ You should get `{"role":"central","node":"000",...,"build":"<commit>"}` and `{"r
 |---|---|---|
 | Code | yes (local repo, no remote) | git |
 | `server/vms.db` (central) | no | `.\backup-windows.ps1` (VACUUM INTO) |
-| `D:\gateway-edge\vms.db` (edge) | no | `.\backup-windows.ps1` (since 2026-09-23 · `-EdgeStateDir` if the edge is elsewhere) |
-| Secrets on both machines (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.rtsp-credentials.json`, `go2rtc.yaml`) + `D:\gateway-edge\edge.json` | no | `.\backup-windows.ps1` · **losing `.gateway-key-secret` = issued API keys can no longer be viewed, and central cannot connect to the edge until a new key is entered** |
+| `D:\gateway-regional\vms.db` (Regional 100) | no | `.\backup-windows.ps1` (`-RegionalStateDir` if it lives elsewhere) |
+| `D:\gateway-edge\vms.db` (state of the old Edge 001, kept for reference) | no | `.\backup-windows.ps1` backs it up while the file exists |
+| Secrets (`.gateway-key-secret`, `.stream-token-secret`, `.session-secret`, `.rtsp-credentials.json`, the old worker key if still present) + `go2rtc.yaml`, `regional.json` | no | `.\backup-windows.ps1` · **losing `.gateway-key-secret` = issued API keys can no longer be viewed, and a parent cannot pull from its child until a new key is entered** |
+| Edge package signing key `D:\gw-edge-kits\signing\edge-update-key.pem` | no | `.\backup-windows.ps1` |
+| Edge 101/102 (separate machines) | no | each machine's own 2 a.m. backup ([EDGE-KIT.md](EDGE-KIT.md) section 3, [EDGE-LINUX.md](EDGE-LINUX.md)) |
 | `.env` (Google Maps key) | no | `.\backup-windows.ps1` |
 
-- Each run is a folder `D:\gateway-backups\daily\<yyyyMMdd-HHmmss>\{central,edge}\` · kept 30 days but the 3 most recent runs are always kept
+- Each run is a folder `D:\gateway-backups\daily\<yyyyMMdd-HHmmss>\{central,regional,edge}\` · kept 30 days but the 3 most recent runs are always kept
   (old-style files placed directly in `daily\` before 2026-09-23 are not deleted automatically) · `.\backup-windows.ps1 -List` shows the available runs
 - A failed backup = exit code 1 (the Scheduled Task shows a failed result; see Task Scheduler → Last Run Result)
 - **Set up the nightly backup** (once, in an admin shell — uses the same account/S4U mode as the boot task, no one needs to be logged in):
@@ -143,18 +163,19 @@ You should get `{"role":"central","node":"000",...,"build":"<commit>"}` and `{"r
 - The backups live on the same D: disk as the live data: they protect against mistakes, not against disk failure
 - `D:\gateway-backups\vm-final` = the final state of the VM era; do not delete until you are sure the VHDX is no longer needed
 
-Restoring a DB: stop that app (`pm2 stop 2-vms-backend` or `3-edge-gateway`) → delete `vms.db-wal`, `vms.db-shm` → place `<run>\central\vms.db`
-(or `edge\vms.db`) as that machine's `vms.db`, together with the secrets from the same folder → `pm2 start` · **always restore the DB together with the `.gateway-key-secret` from the same run**
+Restoring a DB: stop that app (`pm2 stop 2-vms-backend` or `3-regional-gateway`) → delete `vms.db-wal`, `vms.db-shm` → place `<run>\central\vms.db`
+(or `regional\vms.db` into `D:\gateway-regional`) as that machine's `vms.db`, together with the secrets from the same folder → `pm2 start` · **always restore the DB together with the `.gateway-key-secret` from the same run**
 (the keys in the DB are encrypted with that secret)
 The central web UI has Backup/Restore buttons in System Settings that do the same thing (and keep a copy before restoring).
 
 ## Clear all cameras (start the system fresh)
 
 ```bash
-node scripts/reset-cameras.cjs                        # central (server/vms.db)
-node scripts/reset-cameras.cjs D:\gateway-edge\vms.db    # edge — must run in an admin shell because the file belongs to an elevated process
+node scripts/reset-cameras.cjs                            # central (server/vms.db)
+node scripts/reset-cameras.cjs D:\gateway-regional\vms.db    # regional — admin shell, because the file belongs to an elevated process
 ```
-Clears: cameras, camera sources (Digifort/edge), AI data (`ai_events`, `ai_rules` and the old camera-side AI tables), `camera_deletions`, logs · keeps: users, roles, API keys
+Clears: cameras, camera sources (Digifort/edge/regional), AI data (`ai_events`, `ai_rules` and the old camera-side AI tables), `camera_deletions`, logs · keeps: users, roles, API keys
+· clearing at Central/Regional also cuts off every child, which must be added back (the Edges still hold their cameras and Global IDs) · the real cameras live on the separate Edge machines; clear there
 (image files in `ai-snapshots/` are not deleted — delete them yourself if wanted)
 A copy from before the clear is in `backups/` (git-ignored because it contains camera passwords) · afterwards restart that app so go2rtc drops the old streams
 
@@ -182,12 +203,12 @@ Existing files are fixed with a script (admin shell — the file belongs to an e
 
 ```powershell
 node D:\gateway-dashboard\scripts\lock-go2rtc-api.cjs --dry-run      # preview what would change
-node D:\gateway-dashboard\scripts\lock-go2rtc-api.cjs                # go2rtc\go2rtc.yaml + D:\gateway-edge\go2rtc.yaml
+node D:\gateway-dashboard\scripts\lock-go2rtc-api.cjs D:\gateway-dashboard\go2rtc\go2rtc.yaml D:\gateway-regional\go2rtc.yaml   # no files given = the old default go2rtc\go2rtc.yaml + D:\gateway-edge\ (Regional not included)
 & $pm2 restart 0-go2rtc 1-go2rtc-regional                              # go2rtc reads api.listen only at start (briefly cuts off viewers)
 netstat -ano | findstr ":1984 :1994"                               # must show only 127.0.0.1:1984 / 127.0.0.1:1994
 ```
 
-Status 2026-09-29: fully locked on central (1984), edge 001 (1994) and edge 002 (1984) · if you accidentally `pm2 delete` the central apps
+Status 2026-09-29: fully locked on central (1984), edge 001 (1994) and edge 002 (1984) · since 2026-09-30 port 1994 belongs to the Regional, whose new `go2rtc.yaml` was created loopback-only from the start (check with `netstat` above) · if you accidentally `pm2 delete` the central apps
 start them again with `pm2 start D:\gateway-dashboard\ecosystem.windows.config.cjs` (the paths in the file are absolute now, so you can run it from any folder)
 and **paste commands one line at a time** — once two commands pasted together as one line meant pm2 did not start central (outage until re-run on 2026-09-29)
 
@@ -205,7 +226,10 @@ Edge from a flash-drive kit: `node <root>/app/scripts/lock-go2rtc-api.cjs <state
 ## Setting up an edge on a new machine
 
 **For a new edge on site, use the flash-drive install kit — [EDGE-KIT.md](EDGE-KIT.md)** (`scripts\build-edge-kit.ps1` → `install-windows.cmd` / `install-linux.sh`)
-**For a self-installed Linux machine in the old style (edge 002) use [EDGE-LINUX.md](EDGE-LINUX.md)** — below is an edge on a Windows machine using pm2 (edge 001)
+Issue the token / `edge-<number>.json` at **that region's Regional** → Edge Nodes (not Central — Central can add only Regionals)
+**For a self-installed Linux machine in the old style (Edge 102) use [EDGE-LINUX.md](EDGE-LINUX.md)**
+
+> Below is the old method for edge 001 on Windows with pm2 — retired on 2026-09-30, kept for reference only
 
 1. Install Node.js 22, ffmpeg (`C:\ffmpeg\bin`), pm2, git — then clone this repo
 2. Put machine-specific values in `<stateDir>\edge.json` (do not edit files in git): `node` (edge number, unique nationwide — see the table in [EDGE-PLAN.md](EDGE-PLAN.md)),
@@ -219,9 +243,9 @@ Edge from a flash-drive kit: `node <root>/app/scripts/lock-go2rtc-api.cjs <state
 8. Edge firewall: open the gateway port and go2rtc RTSP to **the central IP only**
 
 **An edge that central cannot reach (behind NAT)** — skip steps 7–8 and use link mode instead ([EDGE-PLAN.md](EDGE-PLAN.md), link section):
-central → Edge Nodes → Add Edge → "Edge connects up by itself" → copy the URL + token into `centralUrl` / `centralToken` in the edge's `<stateDir>/edge.json`
+Regional → Edge Nodes → Add Edge → "Edge connects up by itself" → copy the URL + token into `centralUrl` / `centralToken` in the edge's `<stateDir>/edge.json`
 (Linux: `scripts/setup-edge.sh --central-url … --central-token …`) then `pm2 delete 3-edge-gateway` + `pm2 start ecosystem.edge.config.cjs --only 3-edge-gateway`
-The edge must be able to reach central's port 5173 and RTSP 8555 · there is no TLS yet — over Tailscale/LAN only
+The edge must be able to reach the parent's gateway and RTSP ports (central Regional: 5273 / 8565) · there is no TLS yet — over Tailscale/LAN only
 
 ## Testing without touching production
 
@@ -247,10 +271,12 @@ powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\edge-sim.p
 | Empty menu, only Dashboard left | The user has no `role_id` / permissions — `GET /api/me` must have `permissions` · log out and log in again |
 | Old web UI / new button not showing | `npm run build` was forgotten or the browser cached it — Ctrl+F5 |
 | New API returns 404 | The backend was not restarted — check `build` in `/api/instance` |
-| Camera from edge shows "unknown status" | Check that central can reach the edge on the Edge Nodes page and `curl http://<edge>:5273/api/instance`; if video plays, compare `state.reachable` of `/api/v1/cameras` at the Edge versus Central, and press Sync on Edge Nodes to receive the initial state of new cameras |
-| Central does not see a camera just added at the edge | Wait for the 10-minute cycle (link: 5 minutes) or press Sync on the Edge Nodes page |
+| Camera from edge shows "unknown status" | Check on the Regional's Edge Nodes page (and Central's Regional Nodes) that the link is up, and `curl http://<edge>:5173/api/instance`; if video plays, compare `state.reachable` of `/api/v1/cameras` at the Edge versus Central, and press Sync on Edge Nodes to receive the initial state of new cameras |
+| Central does not see a camera just added at the edge | Wait for the 10-minute cycle (link: 5 minutes) per tier, or press Sync on the Regional's Edge Nodes and then Central's Regional Nodes |
+| The Regional's Edge Nodes shows an "N out of region" badge | Cameras the Edge set to a province outside the Regional's region — accepted and working (hover to see the camera names) · if the province is wrong, fix it at the Edge · if intended, leave it |
+| The Regional's Edge Nodes shows an "Edge out of region" badge | `province` in that Edge's edge.json is outside the region — the link is accepted and works · if wrong, fix `province` in `<state>/edge.json` and restart the edge (it is also the province used in the global ID of cameras that have no province chosen) |
 | Link-mode edge shows "unreachable" | The edge log lines `[Edge link]` · wrong token = 401 on connect · duplicate node number = central rejects (the message is in both sides' logs) |
-| Link camera opens to a black screen | The edge cannot push up — the edge must be able to reach central's RTSP 8555 · edge log line `push … stopped` |
+| Link camera opens to a black screen | The child cannot push up — it must reach the parent's RTSP port (Regional 8565, Central 8555) · the child's log line `push … stopped` |
 | Live menu missing | The role lacks `menu.live` (seed roles get it by themselves after a backend restart) · PTZ on the web needs `device.ptz` |
 | PTZ via central rejected | The key central holds with the edge must have "control PTZ" ticked on the edge's Central Access page |
 | Camera connects but black screen | [CAMERA-QUIRKS.md](CAMERA-QUIRKS.md) |

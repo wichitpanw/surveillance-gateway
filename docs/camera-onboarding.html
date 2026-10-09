@@ -194,7 +194,7 @@
 <header>
   <p class="eyebrow">Surveillance Gateway Edge · Camera onboarding · behind the scenes</p>
   <h1>Camera onboarding backend</h1>
-  <p class="lede">What the system does after you press Add Camera, by connection type and brand, and where playback for those cameras comes from. Based on the code running at the current build (<code>server/server.js</code>, <code>server/vms/*</code>, <code>server/gateway/go2rtc-sync.js</code>, <code>server/gateway/playback.js</code>)</p>
+  <p class="lede">What the system does after you press Add Camera, by connection type and brand, how AI events with images are received from the source, and where playback for those cameras comes from. Based on the code running at the current build (<code>server/server.js</code>, <code>server/vms/*</code>, <code>server/gateway/go2rtc-sync.js</code>, <code>server/gateway/playback.js</code>)</p>
 </header>
 
 <section>
@@ -433,7 +433,7 @@
   <div class="sec-head">
     <p class="eyebrow">Type by type</p>
     <h2>Where each type gets its video</h2>
-    <p>The <code>type</code> column in the database decides how the system talks to the camera afterwards (PTZ, snapshot, AI probe). Relay rows are never queried over ONVIF</p>
+    <p>The <code>type</code> column in the database decides how the system talks to the camera afterwards (PTZ, snapshot and the AI Source adapter). Relay rows are never queried over ONVIF</p>
   </div>
   <div class="scroll">
     <table>
@@ -696,7 +696,7 @@
   </div>
   <div class="notes">
     <div><h3>Why sub = the 2nd stream, not the smallest</h3><p>On some models the 3rd stream is set small with sparse keyframes (Tiandy MODEL-A: 352×288, keyframe every 20 seconds), making Live Wall wait a long time for a picture. The 2nd stream appears much faster</p></div>
-    <div><h3>After saving</h3><p>Responds to the web UI immediately, then calls <code>discoverCameraAi</code> in the background. Camera-side AI is currently off (<code>AI_ENABLED</code>), so this step does nothing</p></div>
+    <div><h3>After saving</h3><p>Responds to the web UI after the camera is added. AI receiving is enabled separately in <a href="#external-ai">AI Sources</a> and is off by default. <code>discoverCameraAi</code> / <code>AI_ENABLED</code> belong to the old analytics, which stay off; they are not the switch for external receivers</p></div>
   </div>
 </section>
 
@@ -740,7 +740,7 @@
       <dl class="kv">
         <dt>URL</dt><dd><span class="mono">/cam/realmonitor?channel=&lt;channel&gt;&amp;subtype=0|1</span></dd>
         <dt>main/sub</dt><dd>NVRs often omit resolution in the profile; the system uses <span class="mono">subtype=0</span> as main and <span class="mono">subtype=1</span> as sub</dd>
-        <dt>Notes</dt><dd>Some models make <span class="mono">node-onvif</span> crash when reading resolution; not fixed yet, so add them as Manual RTSP · no AI metadata over RTSP</dd>
+        <dt>Notes</dt><dd>A patch now handles profiles without Resolution/RateControl; if a scan still fails, use Manual RTSP · whether AI metadata is available must be checked per model/firmware</dd>
       </dl>
     </article>
 
@@ -1169,7 +1169,7 @@
   </div>
   <div class="notes">
     <div><h3>Tested on real devices</h3><p>AXIS S30, Uniview NVR and Dahua DSS Pro V8.5.0 (2026-09-29). DSS delivers the first frame in ~0.6–0.8 seconds and can start mid-file. <code>StartPlaybackByTime</code> answers 2060 on this unit, so the system searches files and plays them one by one</p></div>
-    <div><h3>Still awaiting real devices</h3><p>Hikvision, Dahua and ONVIF Profile G were written from documentation (2026-09-28). Points to confirm: Hikvision times ending in Z are treated as the device local time (set <code>HIKVISION_TIME_UTC=1</code> if the device really uses UTC) · Dahua channel numbers start at 1 · Profile G uses UTC per the spec</p></div>
+    <div><h3>Still awaiting real devices</h3><p>Hikvision, Dahua and ONVIF Profile G on other NVR models still await tests; Tiandy SD (2026-09-29) and Milestone Bridge through Regional/Central (2026-09-30) are confirmed with real video. Points to confirm: Hikvision times ending in Z are treated as the device local time (set <code>HIKVISION_TIME_UTC=1</code> if the device really uses UTC) · Dahua channel numbers start at 1 · Profile G uses UTC per the spec</p></div>
     <div><h3>ONVIF Profile G matches cameras carefully</h3><p>It finds the camera recording by the VideoSource token first, then by name. If no match is found it opens no video, which is better than opening another camera video · the relay itself adds <code>Require: onvif-replay</code>, <code>Range: clock=</code> and Authorization, because ffmpeg cannot send them, so the password is not on the command line</p></div>
     <div><h3>Known limitation</h3><p>AXIS S30, Uniview, Hikvision and Dahua pass URLs containing the password to ffmpeg via argv; a user who can list processes on the edge machine will see them (ffmpeg stderr is discarded so the password does not leak into logs) · Digifort is waiting for playback API documentation</p></div>
   </div>
@@ -1296,6 +1296,64 @@
   </div>
 </section>
 
+<!-- ============ EXTERNAL AI ============ -->
+<section id="external-ai">
+  <div class="sec-head">
+    <p class="eyebrow">After adding a camera · AI Sources · no inference in the gateway</p>
+    <h2>Receiving AI events with images from the source</h2>
+    <p>Cameras / NVRs / VMS / APIs do the AI analysis; the Edge receives and converts the results and sends events with JPEGs up to the Regional and then Central. The project no longer has an inference worker, an AI Rules page or a Python/GPU installer. Event images are kept separately from recorded video, which is pulled from the devices.</p>
+  </div>
+  <div class="type-grid">
+    <article class="tcard focal">
+      <header><span class="tag accent">EDGE</span><h3>Enable the receiver after adding the camera</h3><span class="who">new cameras start with receiving off</span></header>
+      <ol class="steps">
+        <li>Add the camera at its owning Edge with province, district and group as usual</li>
+        <li>Set the AI rules, schedule and person/vehicle targets in the source device</li>
+        <li>Open AI Sources and use the <strong>Group</strong> filter to find the camera</li>
+        <li>Choose <strong>source device</strong> when an adapter supports it, or <strong>external API</strong>; set the channel and time handling as shown</li>
+        <li>Tick <strong>enable receiving</strong> → save → check the receiver status</li>
+        <li>Trigger a real event, then open AI Events at the Regional/Central or in the Client and check the image, camera, channel and time — "connected" alone does not confirm images</li>
+      </ol>
+    </article>
+    <article class="tcard">
+      <header><span class="tag">Tiandy</span><h3>Perimeter + the original alarm image</h3><span class="who">MODEL-A</span></header>
+      <dl class="kv">
+        <dt>event</dt><dd><code>/CGI/Smart/AlarmInfo</code> · <code>fielddetection</code> → intrusion</dd>
+        <dt>image</dt><dd>Searches/downloads the alarm image on SD through ISAPI, matched by channel and second; if the image is not there yet it is kept pending and retried — a live image never replaces an old event's image</dd>
+        <dt>camera setup</dt><dd>Enable the Perimeter rule and Snapshot for the channel; alarm images must be on SD; no FTP/email push to us is needed</dd>
+        <dt>ONVIF</dt><dd>The tested firmware has no Perimeter topic or metadata track that could replace this adapter, so it does not switch to Profile M just because the camera has ONVIF</dd>
+        <dt>result</dt><dd>Events with JPEGs reach Central production, and the OSD matches the event time</dd>
+      </dl>
+    </article>
+    <article class="tcard">
+      <header><span class="tag">UNV</span><h3>LineCrossing → GetSnapshotUri</h3><span class="who">MODEL-B · channel 1</span></header>
+      <dl class="kv">
+        <dt>event</dt><dd>Opens the ONVIF metadata track over RTSP and receives <code>RuleEngine/LineDetector/Crossed</code> with UTC time, ObjectId and LineIndex</dd>
+        <dt>image</dt><dd>On a new event, fetches the JPEG from the URI returned by <code>GetSnapshotUri</code> immediately, with HTTP Digest — Profile M events carry no image</dd>
+        <dt>time</dt><dd>Corrects the clock offset; events received more than 3 s late or images finishing after more than 5 s are not published as events with images; the current image is never attached to an old event</dd>
+        <dt>camera setup</dt><dd>Enable LineCrossing and the vehicle/person targets you want; the Edge connects in, so no Intelligent Server needs to point at the Edge for this path</dd>
+        <dt>scope</dt><dd>Tested on a single-channel camera, channel 1, with LineCrossing and real images in the simulated system; the production receiver is connected; no claim of UNV NVR or every AI type</dd>
+      </dl>
+    </article>
+    <article class="tcard">
+      <header><span class="tag">API</span><h3>Other brands/systems send normalized events</h3><span class="who">received only at the Edge that owns the camera</span></header>
+      <dl class="kv">
+        <dt>how</dt><dd>The VMS or external AI system sends results in, unlike a source device that the Edge connects to. The default "external API, receiving off" does not mean anyone is sending yet</dd>
+        <dt>endpoint</dt><dd><code>POST /api/v1/ai/events</code>, 1–100 events per request</dd>
+        <dt>permissions</dt><dd>The API key needs <code>allow_event_write</code> and the allowed camera groups; the camera must have external API selected and receiving enabled</dd>
+        <dt>origin</dt><dd><code>origin</code> is camera / nvr / vms / api, never <code>edge-ai</code>; name the real camera and attach the JPEG per the contract</dd>
+        <dt>limits</dt><dd>The AI Sources page is general, but native adapters still need to be added/tested per brand and model; ONVIF or Profile M does not guarantee the same rules and images on every camera</dd>
+      </dl>
+    </article>
+  </div>
+  <div class="notes">
+    <div><h3>Events per site</h3><p>Central/Regional AI Events filter by Edge and Group within the viewer's permissions; the Client shows thumbnails / full images and the source in AI Events</p></div>
+    <div><h3>General stills vs event images</h3><p>The ffmpeg/ONVIF snapshot path in the live view section above is not the AI image policy: Tiandy uses the alarm image matching the event, and UNV takes a snapshot only on a new event</p></div>
+    <div><h3>Receivers are separate from inference</h3><p>Removing the worker does not turn off external receivers; disabling the source or the camera stops the receiver per its config; auth problems pause 15 minutes to avoid hammering wrong passwords</p></div>
+  </div>
+  <p><a href="EXTERNAL-AI.md">Test details and limits</a> · <a href="architecture.html">Architecture</a> · <a href="../README.md">Project README</a></p>
+</section>
+
 <!-- ============ COMMON ============ -->
 <section>
   <div class="sec-head">
@@ -1309,12 +1367,13 @@
     <li><strong>How the upper tiers learn of cameras</strong>: the Edge sends its catalog up to the Regional, and the Regional sends it up to Central every 10 minutes, with an immediate notice when a camera changes (two nested tiers can lag up to ~20 minutes without the immediate notice) · <code>reachable</code> on a branch whose link is down is <code>null</code>, not <code>false</code></li>
     <li><strong>No coordinates by default</strong>: multi-channel adds and VMS always get lat/lng = NULL; no map-center point is filled in</li>
     <li><strong>Camera passwords</strong> are embedded in the <code>rtsp</code> and <code>onvifPass</code> columns and must never leave through <code>/api/v1</code> (queries use <code>SAFE_CAMERA_COLUMNS</code>)</li>
+    <li><strong>AI Sources</strong> receive from devices/APIs separately from adding live video; enable the receiver per camera and check a real event with its image after saving</li>
     <li><strong>Camera state</strong> is decided by <code>server/shared/camera-state.js</code> (enabled / reachable / streaming), not by go2rtc <code>ready</code></li>
   </ul>
 </section>
 
 <footer>
-  <span>Surveillance Gateway · Camera onboarding backend · 2026-09-30 · build 5c0b404</span>
+  <span>Surveillance Gateway · Camera onboarding backend · 2026-10-07 · gateway d645ed9 · client 1.9.5</span>
   <span>powered by Warapon Wichitpan</span>
 </footer>
 

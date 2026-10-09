@@ -1,10 +1,13 @@
 # Edge ↔ Central — How It Works, Agreements, and Remaining Work
 
 > Since 2026-10-02 AI has changed to receiving results from cameras/NVRs/VMSs/external APIs; there is no inference on any of the three tiers.
-> Items B–D in phase 5 below are the historical record; for the latest status and limitations see [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> Current state 2026-10-07: Gateway d645ed9 / Client 1.9.5; external AI is received, there is no inference worker — see [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> This document was written for the two-tier system: "central" in the operation/link sections means **the edge's parent** — today that is the Regional (and the Regional is a child of Central in the same way); see [REGIONAL-PLAN.md](REGIONAL-PLAN.md)
+> Phase 5 item D describes the current receiver; items A/C and the dated test results are history
 
 
-Updated 2026-09-28 · phases 0–3 are in real use (edge `001` and central on the same machine) · phase 4 (link) is in real use with edge `002` (Ubuntu, Tailscale), no TLS yet
+Updated 2026-10-07 · Central → the central Regional (100) → Edge 101/102 in real use (Edge 103 reserved, not yet linked at the time); the link has no TLS, use it over LAN/VPN
+· new edges are installed from the offline kit and updated over the link with a button on the Edge Nodes page ([EDGE-KIT.md](EDGE-KIT.md)) · phase 5: AI events with JPEGs are received from the source through AI Sources; the inference worker is removed · playback is pulled from the devices (AXIS S30 / Uniview in real use · Hikvision / Dahua / ONVIF Profile G awaiting testing)
 
 ## Overview
 
@@ -88,7 +91,7 @@ The `camera_sources` row for this kind of edge has `mode = 'link'` and no host/p
 
 | Direction | Messages |
 |---|---|
-| edge → central | `hello {node, build, name, via, platform, runner}` → `heartbeat` every 20 s · `catalog {cameras}` on connect, every 5 minutes and when requested · `camera_state` immediately on change · `update_status {state, build, error}` · `reply {id, ok, data \| error}` |
+| edge → central | `hello {node, build, name, via, platform, runner, province}` → `heartbeat` every 20 s · `catalog {cameras}` on connect, every 5 minutes and when requested · `camera_state` immediately on change · `update_status {state, build, error}` · `reply {id, ok, data \| error}` |
 | central → edge | `welcome` · `rpc {id, method, params}`: `catalog.push`, `stream.open`, `stream.close`, `ptz.info`, `ptz.cmd`, `update.apply` (10 s timeout) · `update {build, platform, file, size, sha256, signature, path}` · `error` |
 
 Silent for more than 60 s = link dead · node number duplicating central or another edge = rejected · edge reconnecting with the same token = the old link is closed
@@ -136,9 +139,9 @@ To go out on the internet, a domain + cert is needed first (`wss://` at central'
 |---|---|
 | Cross-site network | Tailscale (no TLS yet — must not run directly over the internet) |
 | Central | `203.0.113.80` / Tailscale `<central-tailscale-ip>` · gateway 5173 · go2rtc RTSP 8555 |
-| Node number (`GATEWAY_NODE_NUMBER`) | central `000` · the edge on the central machine `001` · the next real edge `002` onward · `998`/`999` reserved for testing |
+| Node number (`GATEWAY_NODE_NUMBER`) | central `000` · Regional block heads `100`/`200`/…/`600` · Edges in a region +1 to +99 (the central region uses `101`–`103`) · `001`–`099` reserved for the old setup (`001`/`002` retired) · `997`–`999` for testing |
 | Province in the global ID for cameras with no province set | central `10` (hardcoded) · edge sets `GATEWAY_DEFAULT_PROVINCE`, unset = `00` |
-| Edge ports | separate machine: 5173 / 1984 / 8555 are fine · co-located with central: 5273 / 1994 / 8565 / 8566 |
+| Edge ports | separate machine: 5173 / 1984 / 8555 / 8556 · (5273 / 1994 / 8565 / 8566 on the central host belong to the Regional since 2026-09-30) |
 | Edge `GATEWAY_PUBLIC_HOST` | An IP central can really reach — never `127.0.0.1` (it is embedded in the stream URLs sent to central) |
 | Edge firewall | The gateway port and go2rtc RTSP are open to central's IP only |
 | Health / sync | 60 seconds / 10 minutes |
@@ -150,11 +153,12 @@ To go out on the internet, a domain + cert is needed first (`wss://` at central'
 | Task | Why / details |
 |---|---|
 | **TLS for the link** | `wss://` at central + RTSPS for push — needs a domain and cert first; until then the link is usable only over Tailscale/LAN |
-| **Playback from devices** | AXIS S30 (tested on S30/edge 002) · Uniview NVR (tested on SITE-1 to SITE-3/edge 002) · **written, awaiting test hardware**: Hikvision, Dahua, ONVIF Profile G (SD-card cameras of any brand, other NVR brands, Milestone Bridge) · Digifort awaiting playback API docs |
+| **AI from other brands (next)** | Test topics/metadata and event images per model; add a native adapter once confirmed, or receive through the external API |
+| **Playback from devices** | In real use: AXIS S30, Uniview NVR, Tiandy SD (Profile G), Milestone Bridge (2026-09-30), Dahua DSS Pro · **written, awaiting test hardware**: Hikvision, Dahua (cameras/NVRs), Profile G of other NVR brands · Digifort awaiting playback API docs |
 
-## Phase 5 — Playback and external AI (agreed 2026-09-27 · video recording removed 2026-09-28)
+## Phase 5 — AI events from the source (revised 2026-10-02)
 
-Principle: **the edge runs AI · central aggregates events and forwards them, runs no inference and stores no video**
+Principle: **the source runs AI · the Edge receives the results · Regional/Central aggregate events with their images; no tier runs inference**
 
 **A. Video recording — removed 2026-09-28** · An edge recorder was built (`gateway/recorder.js`, the Recording page, one ffmpeg per camera, 60 s files,
 retention by days/quota/free disk) and then the operator decided to remove it, switching to pulling playback from the devices (AXIS S30 and Uniview NVR in real use;
@@ -183,7 +187,7 @@ in existing DBs may stay, nobody reads them · a new video source must provide `
 | Uniview NVR (`onvif_nvr`) | LAPI search + RTSP `/cN/b<epoch>/e<epoch>/replay/` | In real use |
 | Hikvision SD-card camera / NVR | ISAPI `ContentMgmt/search` + RTSP `/Streaming/tracks/<channel>01?starttime=` | Written, awaiting test hardware |
 | Dahua SD-card camera / NVR | `mediaFileFind.cgi` + RTSP `/cam/playback?channel=&starttime=` | Written, awaiting test hardware |
-| All other `onvif_cam` / `onvif_nvr` (Tiandy, Hi-View, generic, Milestone Bridge, SD-card cameras of AXIS/Uniview) | ONVIF Profile G: FindRecordings + FindEvents + GetReplayUri | Tiandy + SD card cameras work (lab, 2026-09-29) · other brands/NVRs/Milestone awaiting test |
+| All other `onvif_cam` / `onvif_nvr` (Tiandy, Hi-View, generic, Milestone Bridge, SD-card cameras of AXIS/Uniview) | ONVIF Profile G: FindRecordings + FindEvents + GetReplayUri (Milestone uses its own path, see below) | Tiandy + SD card cameras work (lab, 2026-09-29) · Milestone Bridge in real use 2026-09-30 · other brands/NVRs awaiting test |
 | Digifort | — | 501, awaiting playback API docs · never guess endpoints (3 wrong credentials get the account blocked and the whole set of cameras goes down) |
 | Manually entered RTSP (`manual`) | — | 501, no way to query recordings |
 - Profile G: ffmpeg cannot send `Range: clock=` / `Require: onvif-replay` itself → `vms/onvif-replay-proxy.js` opens a per-request intermediary at 127.0.0.1
@@ -210,7 +214,8 @@ in existing DBs may stay, nobody reads them · a new video source must provide `
     PTZ `DMS/Ptz/OperateDirect` (4 right, 3 left) / `OperateCamera` (zoom) command 1/0
   - Tested (simulated edge + central, real DSS): scan of 187 channels · every live path through go2rtc · ranges 0.2–0.6 s · stills/playback video both at the edge and via central ·
     PTZ via central → edge → DSS answers 200 · DSS presets/home not yet supported · every channel shows the PTZ panel (no field yet confirms which channels are PTZ)
-- **Milestone Open Network Bridge (2026-09-29, parked — the XProtect SAN is offline)** · Bridge `203.0.113.21:580` (XProtect 2022 R3):
+- **Milestone Open Network Bridge** · Bridge `203.0.113.21:580` (XProtect 2022 R3) · **in real use since 2026-09-30 (`a36a2d8`)** after the operator fixed the Recording Server storage
+  — results and the method actually used (search by GUID + time condition, `Rate-Control: no`) are in [REGIONAL-PLAN.md](REGIONAL-PLAN.md) "Milestone Playback close-out" · the items below are the 2026-09-29 diagnosis notes:
   - Generic ONVIF-style `FindRecordings` (`<Scope/>`) = `InvalidArgs` · **Milestone's own form is required**: `Scope/IncludedSources/Token` = the camera GUID
     + `RecordingInformationFilter` = `boolean(//Track[TrackType = "Video"]),<UTC time>,<ms before>,<count before>,<ms after>,<count after>` → returns a SearchToken
   - `FindEvents` = `ActionNotSupported` (use the tracks from FindRecordings as the recorded ranges instead) · `GetRecordingInformation` returns Earliest=Latest=now (unusable)
@@ -220,9 +225,10 @@ in existing DBs may stay, nobody reads them · a new video source must provide `
     `onvif-profile-g-playback.js` (brand `milestone`: FindRecordings as above, no FindEvents call, token = GUID)
   - Reference: doc.milestonesys.com → Milestone Open Network Bridge → "Manage video playback"
 
-**B. Event backbone (done 2026-09-28)** — `server/shared/ai-events.js`, the same `ai_events` table in both roles
+**B. Event backbone (done 2026-09-28)** — `server/shared/ai-events.js`, the `ai_events` table in all three roles; results and images are copied along Edge → Regional → Central
 - event: `type` (a-z 0-9 _ . -), `label`, `rule`, `ts` (+07:00), `trackId`, `attrs` (≤ 8 KB), `origin` camera|edge-ai, JPEG image ≤ 300 KB
   stored at `<stateDir>/ai-snapshots/<YYYYMMDD>/<id>.jpg` · deleted when older than `AI_EVENT_DAYS` (90)
+- edge: `POST /api/v1/ai/events` (a single event or `{events:[…]}` ≤ 100; the key must have **allow_event_write** = tick "send events" — for trusted source APIs, with the source enabled per camera)
 - both: `GET /api/v1/ai/events?since=|from&to&cameraId&type&label&origin&limit` (returns `nextSince`), `GET /api/v1/ai/events/:seq/snapshot.jpg`,
   SSE `/api/v1/events` emits `{type:'ai_event', event:{…}}` · camera scope follows the key
 - central catches up by itself with a `remote_seq` cursor (unique `source_id + remote_seq`) — the live feed is only a signal:
@@ -231,7 +237,7 @@ in existing DBs may stay, nobody reads them · a new video source must provide `
   SSE `edge_state` to every client, a red bar on every page of the central web UI (`GET /api/edge-alerts`) · link-mode edges that have never connected are counted too
 - Central web: **AI Events** page (permission `menu.ai`) filters by day/camera/type/source, has images, and the "Playback" button opens Playback 10 s before the event
 
-**C. Camera-side AI — removed 2026-09-28 (not integrated into the system for now)** · It was built and ran in production for half a day (ONVIF metadata and Tiandy counts
+**C. History of the old camera-side AI poller — cancelled 2026-09-28; this is not the current external receiver** · It was built and ran in production for half a day (ONVIF metadata and Tiandy counts
 sent as events) and then the operator decided to remove it: there is no `ai` option in edge.json, the poller/metadata-collector does not send into `ai_events`,
 `POST /api/v1/ai/events` accepts only `origin: edge-ai`, the AI Events page has no source filter · the code in `server/gateway/analytics/` is kept
 - What was kept: a fix for a fresh-install bug found during testing: `camera_analytics` on a new DB got PK `(camera_id, ts)` but the code wrote `ON CONFLICT(camera_id, rule, ts)`
@@ -241,14 +247,15 @@ sent as events) and then the operator decided to remove it: there is no `ai` opt
 → all recovered, no duplicates · images crossed both pull and link byte-identical · key without permission = 403, wrong type/camera = 400/404 · edge down → red bar + `EDGE_DOWN`
 then back → `EDGE_UP` · real Tiandy: PK migration succeeded, the increasing count became `people_count` and reached central
 
-  (sha256 `c5c2d13e…998063`) · Linux edge: `<stateDir>/ai/venv`, `<stateDir>/ai/models`
-- Pipeline: `GET /api/v1/ai/config` (every 30 s) → the local go2rtc's raw sub RTSP path → ffmpeg decodes on GPU at 5 fps, 640 wide
-  → `line_cross` (direction ab/ba) / `intrusion` / `loitering` + `object`, one row per object (type, time, sharpest image) → `POST /api/v1/ai/events`
-- Rules (`ai_rules` table, `gateway/ai-config.js`): a line of 2 points / a zone of 3–20 points, coordinates 0–1, COCO classes, zones can have a dwell time
-- central: the AI Events page filters by object type (person / bicycle / car / motorcycle / bus / truck) · the "Playback" button opens device footage (per the "Video sources by device" table)
-- **No color distinction** (decided 2026-09-28) — only person/vehicle types are distinguished; the next work focuses on perimeter rules (line / intrusion zone / loitering) first
-- Measured speed (GPU, 640x360): pure inference 126 fps · with postprocess 88 fps per card → ~17 cameras at 5 fps per card
-  · GPU average ~5–10% and 490 MB for the first camera · can be improved later with FP16/TensorRT
+**D. External AI receiving (in production 2026-10-02, Gateway 10ea98f)**
+
+- The Edge sets AI Sources per camera (device / API); receivers are off by default and can be filtered by Group
+- Tiandy MODEL-A: Perimeter through AlarmInfo + the alarm image on SD matching the channel/second; waits for the image with a durable pending state
+- UNV IPC2325SB: ONVIF RTSP metadata LineCrossing on channel 1 → GetSnapshotUri immediately; a live image is never used in place of an old event
+- Regional/Central receive copies of events + JPEGs and filter by Edge/Group under the key's permissions; Client 1.9.4 shows the images and details
+- The old inference worker, AI Rules and the Python/GPU installer are removed; the old inference settings API answers 410 and the worker's key is revoked
+- The 2026-09-28 GPU detector approach is cancelled — the worker is not installed or turned back on; old DB rows/images and backups are kept
+- Scope of native adapters and real results: [EXTERNAL-AI.md](EXTERNAL-AI.md); ONVIF/Profile M does not guarantee every AI type or model
 
 **Test A (2026-09-27)** — simulated edge 999 / central 000 instances (5283/5383, fresh DB) + Tiandy 203.0.113.12:
 60 s files indexed · ranges/playback (hevc copy and h264)/frame work through central · no token / token for a different name = 401 ·

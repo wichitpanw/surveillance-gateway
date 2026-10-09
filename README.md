@@ -90,9 +90,9 @@ docs/          documentation (see below)
 | [docs/EDGE-PLAN.md](docs/EDGE-PLAN.md) | Edge ↔ central design and agreements |
 | [docs/REGIONAL-PLAN.md](docs/REGIONAL-PLAN.md) | Three-tier architecture |
 | [docs/EDGE-KIT.md](docs/EDGE-KIT.md) / [EDGE-LINUX.md](docs/EDGE-LINUX.md) | Installing and updating Edges |
-| [docs/CAMERA-QUIRKS.md](docs/CAMERA-QUIRKS.md) | Vendor-specific camera issues (the latest notes and the checklist for adding a new brand / VMS / NVR are in the [Thai version](docs/th/CAMERA-QUIRKS.md)) |
-| [docs/CAMERA-AUDIO.md](docs/CAMERA-AUDIO.md) | Per-camera audio (Thai) |
-| [docs/PUBLIC-CAMS.md](docs/PUBLIC-CAMS.md) | Public government cameras at Central (Thai) |
+| [docs/CAMERA-QUIRKS.md](docs/CAMERA-QUIRKS.md) | Vendor-specific camera issues, and the checklist for adding a new brand / VMS / NVR |
+| [docs/CAMERA-AUDIO.md](docs/CAMERA-AUDIO.md) | Per-camera audio |
+| [docs/PUBLIC-CAMS.md](docs/PUBLIC-CAMS.md) | Public government cameras at Central |
 | [docs/CLIENT-RELEASES.md](docs/CLIENT-RELEASES.md) | Releasing the Windows client |
 | [docs/EXTERNAL-AI.md](docs/EXTERNAL-AI.md) | Receiving AI events from external devices |
 | [docs/architecture.html](docs/architecture.html), [pipeline.html](docs/pipeline.html), [workflow.html](docs/workflow.html), [camera-onboarding.html](docs/camera-onboarding.html), [system-flow.html](docs/system-flow.html) | Diagrams (open in a browser) |

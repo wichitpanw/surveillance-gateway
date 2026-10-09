@@ -1,8 +1,21 @@
 # Plan: Three-Tier System Central → Regional → Edge (Province)
 
-Written 2026-09-29 · **Status: the real three-tier system has been migrated · Gateway build a36a2d8 · closed out 2026-09-30** · Decision maker: the system owner · Related code is in `server/vms/edge-*.js`, `server/shared/instance.js`
+Written 2026-09-29 · **Status: the real three-tier system has been migrated · migration closed out 2026-09-30; now Gateway d645ed9 / Client 1.9.5 (2026-10-07)** · Decision maker: the system owner · Related code is in `server/vms/edge-*.js`, `server/shared/instance.js`
 
-## AI source release — 2026-10-02
+## Current status — 2026-10-07
+
+- Gateway `d645ed9` matches across Central (000), the central Regional (100), Windows Edge 101 and Ubuntu Edge 102 (deployed 2026-10-06): per-camera audio, AXIS S30 640x360 sub stream
+- Windows Client `1.9.5` released (per-tile speaker button); 1.9.4 collapsible Camera Library filter; 1.9.3 AI Events images and Edge / group / origin filters
+- 163 cameras: Edge 101 = 7, Edge 102 = 156 · the Regional has 3 child rows: 101, 102 (Online) and **103 "Edge ทดสอบ"** (reserved 2026-10-07)
+  — a **test Edge** the owner deliberately links to the central Regional although its province is in another region: the Regional now accepts out-of-region cameras with an "N out of region" badge on Edge Nodes (it used to reject the whole batch with 409), and an Edge whose own province is out of region gets an "Edge out of region" badge
+- Before installing a new Edge, run `build-edge-kit.ps1 -Publish` so Central (and the Regional mirror) hand out the current offline kit, or update right after linking
+- Edges receive AI from cameras / NVRs / VMS / APIs → Regional → Central with JPEGs; none of the three tiers runs inference; the old worker, AI Rules and the Python/GPU installer are removed
+- AI Sources is general and has a Group filter; new cameras do not enable a receiver automatically — choose the source and enable it per camera
+- Tiandy MODEL-A uses AlarmInfo + alarm images on SD; UNV IPC2325SB uses ONVIF RTSP metadata LineCrossing + GetSnapshotUri for new events (single-channel cameras, channel 1)
+- After the update the Tiandy/UNV receivers at Edge 101 are connected; Tiandy has real event images in Central production; UNV events with images were tested with the real camera across all three tiers in the simulated system — no claim yet of a new production event with an image
+- Event images are stored and forwarded, but the system records no video; playback is pulled from cameras / NVRs / VMS
+
+## AI source release history — 2026-10-02 (38315ff)
 
 - Gateway build `38315ff` matches across Central, Regional, Windows Edge 101 and Ubuntu Edge 102
 - The operator installed the package on both Edges through the Regional page; Online / install success and /api/instance were confirmed
@@ -46,7 +59,7 @@ Written 2026-09-29 · **Status: the real three-tier system has been migrated · 
 - All three instances start with fresh databases (`edge`, `regional`, `central` on simulated ports) · the Regional page shows its own name/menu · the role page shows the real regional scope instead of per-camera counts · a user with a per-region custom role can be created via the API, and mismatched `role`/`role_id` are rejected with 400
 - Two simulated regions (Northeast 100/101 and North 200/201) can connect to the same Central; identical long source camera IDs do not collide at Central and both global IDs are unchanged; the second region's video reaches the nationwide Client
 - Opening video from 3 Central streams and 1 Regional stream at once: the camera source is pulled once, and there is 1 push into Regional and 1 into Central; after all are closed the source stops in about 80 seconds after fixing the chained push closing (about 180 seconds before the fix); clients inside the region keep receiving video when Central stops watching
-- Region-based roles that are cached receive new cameras automatically and drop deleted cameras across both tiers; Regional sends the relay tombstone up to Central before deleting the row, so Central does not keep it as missing at source; it rejects Edges outside the block, nested Regionals, and catalogs with provinces outside the region
+- Region-based roles that are cached receive new cameras automatically and drop deleted cameras across both tiers; Regional sends the relay tombstone up to Central before deleting the row, so Central does not keep it as missing at source; it rejects Edges outside the block, nested Regionals, and catalogs with provinces outside the region (the last one changed to accept with a warning on 2026-10-07)
 - The playback pipe was tested against a simulated HTTP source: bytes and start time match, closing the viewer closes the lower tier, a source reset causes no unhandled error, and nonexistent cameras/recordings are rejected; this is not yet a test of recordings from a real NVR
 - Regional pulled a simulated install kit from Central and the SHA-256 matched and appeared in Regional's list; the mirror was tested with copies of genuinely signed packages for Windows x64/Linux x64/Linux arm64, passing SHA-256 checks, rejecting a forged sig2, re-downloading a corrupted file, and rejecting a manifest older than the sequence previously accepted
 - The real `edge-run.cjs` controller was tested with a Regional app fixture and a separate test key: it swaps app/app.prev when the new version connects to the parent, and rolls back to app.failed/app when the new version cannot connect to the parent — passed; a full Gateway package release on a pilot machine still needs confirming
@@ -61,7 +74,7 @@ Written 2026-09-29 · **Status: the real three-tier system has been migrated · 
 
 - Confirmed 2026-09-30: Central may add only Regional, in both pull/link and token issuing; Regional may add only Edge, with no exception letting Edge 001–099 connect directly to Central again · the Central page is named Regional Nodes and the Regional page uses Edge Nodes · the province is chosen by name from a dropdown and the original code is kept in config
 - The system is still in development with no real users: clearing camera data and re-adding is permitted once the three-tier system is ready; there is no need to preserve existing camera rows, walls, permissions or tokens during the move, but you must back up and review the list of what will be cleared before acting on real data
-- Forwarding of AI events and their images through Regional is parked; the existing code and AI worker at the Edge are not torn out by this work
+- The 2026-10-02 AI agreement replaces the earlier pause: events/JPEGs from the source travel Edge → Regional → Central, and the inference worker is removed
 - Use blocks of 100 numbers per region (1 Regional + up to 99 Edges)
 - Minimum per-region/province permissions at Central must be done before users are allowed onto the three-tier system
 - Regional can issue API keys to the Windows Client and external clients that point their URL directly at Regional, seeing only the cameras in the region per Regional's catalog; Central issues keys for nationwide viewers according to the key's scope
@@ -75,7 +88,7 @@ Written 2026-09-29 · **Status: the real three-tier system has been migrated · 
 - The organization has a network that interconnects the whole country · camera IPs may repeat across provinces, but each province's edge designs the IPs within its own site, and the upper tiers do not see camera IPs (they use the global ID / camera id), so it is not a problem
 - **Not doing yet:** TLS, central login (AD/SSO), viewing audit logs, an escalation table for alerts · workload size (number of sites/cameras/users) is not yet certain and will be adjusted when data is available
 
-**Existing principles that do not change:** the edge owns cameras and camera passwords · AI lives at the edge · video does not go to upper tiers unless someone is watching · the global ID must not change once issued, but if the camera is deleted it goes away with it · playback is pulled from the devices at the edge
+**Existing principles that do not change:** the edge owns cameras and camera passwords · the Edge receives AI from the source · video goes to upper tiers only when someone is watching, while events/JPEGs follow the receivers that are enabled · the global ID must not change once issued, but if the camera is deleted it goes away with it · playback is pulled from the devices at the edge
 
 ## 2. New rules (docs/CONTRIBUTING.md must be updated when this is done)
 
@@ -83,11 +96,11 @@ Written 2026-09-29 · **Status: the real three-tier system has been migrated · 
 |---|---|---|
 | **Edge (province)** | Cameras (ONVIF / NVR / VMS of every kind) | Add another edge |
 | **Regional (region)** | **Province Edges** in its own region | Add cameras itself (like current central) |
-| **Central (country)** | **Regional** (supports edges connecting directly temporarily during the system changeover) | Add cameras itself |
+| **Central (country)** | **Regional** only | Add cameras itself |
 
 - Regional is a Gateway that does **two jobs at once**: the lower side acts as the region's central (accepts province edges, issues keys/tokens to Clients in the region) and the upper side acts as an edge (connects a WebSocket up to central, sends catalog / status / video)
 - No loops: central can add a regional only one way; a regional must not add central or another regional
-- The regional's web UI uses the same set as central (Live, Playback, Edge Nodes, API Clients) with no add-camera button · cross-tier AI Events are parked
+- The regional's web UI uses the same set as central (Live, Playback, Edge Nodes, API Clients) with no add-camera button · AI Events aggregate source results with images and filter by Edge / Group
 
 ## 3. How data flows
 
@@ -104,7 +117,7 @@ Camera ─▶ Province Edge ─▶ Regional ─▶ Central ─▶ Nationwide Cli
 | Live video | go2rtc stacked across three tiers, sent raw (no transcoding) | fan-out at each tier: one camera crosses the link between tiers only once regardless of how many are watching · the source is closed when no one watches for 60 s, which must stack in the right order |
 | PTZ | nested rpc central → regional → edge | outer-tier timeout > inner tier + 2 s · `allow_ptz` must be enabled on both |
 | Playback | ranges/stills via nested rpc · video: the edge uploads a stream up to regional and then **regional pipes it on up to central** (not parked on disk) | a new pipe connector must be written · timeouts: recording ranges 60 s, images 50 s |
-| AI events | **forwarding through Regional is parked** | the AI worker at the Edge remains; redesign events and images after the three-tier camera system passes |
+| AI events | Edge → Regional → Central | results received from the source with JPEGs; no inference in any tier |
 | Edge-down alert | regional alerts for its own province · central alerts on regional down + number of cameras with unknown status | time-based escalation later |
 | Software update | central → regional → province edge (regional keeps the signed package to hand it on, re-checking `sig` + `sig2`) | released in rounds: pilot region → other regions |
 | Users/API keys | separated by tier: regional has users and issues API keys to Clients in the region that connect directly to the Regional's `/api/v1` · central issues keys to nationwide Clients and sets per-region/province permissions | existing self-defined camera groups remain usable |
@@ -141,11 +154,11 @@ Camera ─▶ Province Edge ─▶ Regional ─▶ Central ─▶ Nationwide Cli
 - 4.1 regional hands on updates + release rounds · 4.2 regional install kit (issued from central) and province edge kit (issued from regional, URL pointing at regional)
 - 4.3 `ecosystem.regional.config.cjs`, `start-gateway.cmd`, `deploy.ps1`, backup/prune scripts to know about regional
 
-**Parked work:** AI events/images across Regional, the site table, SSO, viewing audit logs and escalation
+**Parked work:** the site table, SSO, viewing audit logs and escalation · AI events/images across Regional are done as of 2026-10-02
 
-## 6. Pilot test with :5273
+## 6. History of the :5273 migration plan (carried out 2026-09-30)
 
-Right now **:5273 is the real Edge**: it has cameras, `1-go2rtc-edge` · the system owner permitted starting a fresh camera database, but state must be backed up and the values needed for re-adding must be surveyed before changing the role:
+Before the migration **:5273 was the real Edge**: it has cameras, `1-go2rtc-edge` · the system owner permitted starting a fresh camera database, but state must be backed up and the values needed for re-adding must be surveyed before changing the role:
 
 | Step | What to do |
 |---|---|

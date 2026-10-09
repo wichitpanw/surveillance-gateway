@@ -3,13 +3,15 @@
 For new edges at sites with no internet: copy one folder to a flash drive, plug it in, double-click, done.
 Supports **Windows x64** (mini PC) and **Linux arm64** (Raspberry Pi 5), plus **Linux x64** for ordinary Ubuntu machines.
 
-An edge installed from this kit always connects to central in **link** mode (the edge connects up by itself — [EDGE-PLAN.md](EDGE-PLAN.md)).
+An edge installed from this kit always connects to its parent in **link** mode (the edge connects up by itself — [EDGE-PLAN.md](EDGE-PLAN.md)).
+Since the three-tier system (2026-09-30) an edge's parent is **its region's Regional** — every "at central" step in this document is done on the Regional's Edge Nodes page
+(the install kits can be downloaded from both Central and the Regional, which mirrors them)
 
 ## Overview
 
 ```
 HOST (has internet)                   central (web UI)                    site (no internet)
-build-edge-kit.ps1 ──► GW-Edge-Kit-<build>   Edge Nodes → issue token ──► edge-<number>.json
+build-edge-kit.ps1 ──► Edge-Kit-<build>      Edge Nodes → issue token ──► edge-<number>.json
                               └──────────── flash drive ─────────────┘
                                                   └──► install-windows.cmd / install-linux.sh
 ```
@@ -19,17 +21,16 @@ build-edge-kit.ps1 ──► GW-Edge-Kit-<build>   Edge Nodes → issue token �
 ```powershell
 powershell -ExecutionPolicy Bypass -File <repo>\scripts\build-edge-kit.ps1
 ```
-- Output: `D:\gw-edge-kits\GW-Edge-Kit-<build>\`, ~1 GB (all three platforms) · build only the ones you need: `-Platforms windows-x64,linux-arm64`
+- Output: `D:\gw-edge-kits\Edge-Kit-<build>\`, ~1 GB (all three platforms) · build only the ones you need: `-Platforms windows-x64,linux-arm64`
 - Downloaded files are kept in `D:\gw-edge-kits\cache\` and are not downloaded again next time
-- The code comes from the current **commit** (not uncommitted files) · `build` = the latest commit that touched `server/`, the same value central displays
+- The code comes from the current **commit** (not uncommitted files) · `build` = the latest commit that touched `server src scripts package.json ecosystem.edge.config.cjs`, matching BUILD_PATHS in server/shared/instance.js
 - Inside each platform: `app\` (server, scripts, ecosystem, dist, node_modules, BUILD) and `bin\` (node 22, ffmpeg 8.1 static, go2rtc 1.9.14)
 - `sqlite3` is native — the script swaps in the `node_sqlite3.node` matching the platform from the official prebuilt
 - **`-Publish`** (use it every time you release a real version) adds two things for central:
   - `server\edge-updates\<platform>\` update package `app-<platform>-<build>.tar.gz` (~12 MB) + a signed `manifest.json` — section 5
   - `server\edge-kits\` per-OS install kits (`.zip` for Windows, `.tar.gz` for Linux, ~120 MB) + `kits.json` — downloadable from the Edge Nodes page (section 2)
   - Takes effect immediately, no restart needed · requires the signing key (section 6)
-  - The kit grows to ~1.7 GB per platform · wheels are cached separately per requirements (`cache\wheels-<platform>-<hash>`)
-  - When the installer finds `ai\` + `nvidia-smi` it creates a venv at `<Root>\ai\venv` offline (~40 s the first time; skipped later if requirements are unchanged)
+- The kit contains only the gateway and the tools for receiving AI results from the source — no Python/GPU inference
 
 ## 2. Download the install kit + issue the config file at central
 
@@ -93,7 +94,7 @@ build-edge-kit.ps1 -Publish ──► central stores the signed package ──(l
     (the old files go to `.update-prev/`) then exits so pm2 starts the new version · the watchdog `scripts/edge-update-watchdog.cjs` (copied to `<state>/updates/`
     and run as a separate process) waits 5 minutes for the new version's `link-ok.json`; if it never appears it restores the old files and stops the gateway so pm2 starts the old version · log: `<state>/updates/watchdog.log`
     Packages without a watchdog (versions before `c6ecab4`) are rejected at download time
-  - **edge 001 (pm2 on Windows)** notifies only — that repo is the central production, never swap files yourself
+  - **edge 001 (pm2 on Windows)** notifies only — that repo is the central production, never swap files yourself (edge 001 was retired on 2026-09-30)
 - Central does not offer a package older than the edge's build (it asks git: if the package is an ancestor of the edge's build, it is not offered)
   — for example when deploy-edge.sh went first and `-Publish` has not been run yet
 - **Always run `-Publish` from an admin PowerShell** — files in `server\edge-updates\` belong to whoever created them first, and an ordinary shell cannot delete old versions
@@ -122,7 +123,18 @@ Machines installed from the kit **do not use pm2** (it needs a global install an
 - A dead app is restarted within 2 s (rapid repeated deaths back off up to 30 s) · each app has its own log file, rotated at 20 MB · the supervisor's own messages are in `logs/edge-run.log`
 - Kills leftover processes from the previous run according to `edge-run.pids`
 
-edge 001 (pm2 on the HOST) and edge 002 (pm2-runtime on Ubuntu) still use the original method
+Edge 102 (the original Ubuntu machine, systemd `gw-edge` → pm2-runtime) still uses the original method · edge 001 (pm2 on the HOST) is retired
+
+## Uninstalling (Windows)
+
+1. Remove the edge on the Regional's Edge Nodes page first — its token stops working immediately and its cameras disappear from Regional/Central
+2. On the edge machine double-click `uninstall-windows.cmd` (in the install kit) → stops and removes the Scheduled Tasks `Gateway Edge` + `Gateway Edge Backup`, ends the processes under `C:\GW-Edge`, removes the `Gateway Edge*` firewall rules, deletes `app\` and `bin\`
+3. By default it **keeps `state\`** (vms.db, token, camera passwords, backups) — reinstalling brings back the same cameras and Global IDs
+   · `uninstall-windows.cmd -RemoveData` deletes the whole folder (asks you to type the edge number to confirm) · use `-Root` for a different install location
+4. Delete any leftover `edge-<number>.json` (it holds the token)
+
+Linux: `sudo bash uninstall-linux.sh` — removes the `gw-edge` service, the backup cron entry, the `Gateway Edge*` ufw rules and `/opt/gw-edge` · keeps `/var/lib/gw-edge` (`--remove-data` deletes it together with the `gw-edge` user)
+· it refuses machines whose unit was not written by install-linux.sh — **Edge 102 (the original Ubuntu machine, pm2-runtime) is uninstalled by hand**
 
 ## Limitations / not yet tested
 
@@ -131,3 +143,9 @@ edge 001 (pm2 on the HOST) and edge 002 (pm2-runtime on Ubuntu) still use the or
 - The link has no TLS yet (use it over LAN/VPN) — update packages are protected by signature, but tokens and video still travel unencrypted
 - The ffmpeg in the kit is a GPL build, for internal use within an organization
 - Surveillance Gateway Client exists only for Windows — on Linux use central's web Live (the Linux client is on hold)
+
+## AI in the current kit (since 2026-10-02)
+
+Code since Gateway 10ea98f has no inference worker or Python/GPU installer, and the old kit flags for it are gone
+The installer removes the old inference keys from the config while keeping cameras and receive sources
+After installing, add cameras, then enable a receiver per camera in AI Sources
