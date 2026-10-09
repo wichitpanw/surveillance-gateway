@@ -5,7 +5,7 @@
 A LAN-first platform that unifies CCTV cameras from many vendors (ONVIF, NVR, RTSP, VMS) behind one API.
 It runs entirely on your own network — no cloud dependency.
 
-> **Status:** portfolio snapshot. UI is mostly English with some Thai labels; the Windows client ships EN/TH.
+> **Status:** portfolio snapshot, updated October 2026. UI is mostly English with some Thai labels; the Windows client ships EN/TH.
 
 ![Central dashboard](docs/manual/images/c01-dashboard.png)
 
@@ -32,12 +32,17 @@ Every camera gets a permanent **Global ID** (`TH-<province>-<node>-<seq>`) issue
 ## Features
 
 - Live view through [go2rtc](https://github.com/AlexxIT/go2rtc) (H.265 transcoded to H.264, played as fragmented MP4)
-- Camera onboarding: manual RTSP, ONVIF camera, ONVIF NVR, vendor API (Uniview LAPI), VMS (Milestone Open Network Bridge, Dahua DSS Pro)
+- Camera onboarding: manual RTSP, ONVIF camera, ONVIF NVR, vendor API (Uniview LAPI, AXIS S30), VMS (Milestone Open Network Bridge, Dahua DSS Pro)
+- Dahua DSS Pro: live main/sub, playback, PTZ and status. One-time stream URLs go through a local RTSP relay. A DSS behind NAT that hands out its LAN address is handled automatically by falling back to the address the DSS was added with.
+- Per-camera audio, off by default and enabled at the Edge. Viewers always start muted (web player and Windows client).
+- Public cameras: Central can pull public HLS cameras published by government agencies, kept apart from the Edge chain and visible only to API keys that allow them.
 - PTZ control, presets, camera map with pins (3D map in the client)
-- Playback pulled from the devices themselves (AXIS, Uniview, ONVIF Profile G, Hikvision/Dahua drivers) — the system does not record video
+- Playback pulled from the devices themselves (AXIS, Uniview, ONVIF Profile G, Dahua DSS, Hikvision/Dahua drivers) — the system does not record video
 - Receives AI events from cameras/NVRs/VMS (e.g. perimeter, line crossing) — no inference in the gateway; see [docs/EXTERNAL-AI.md](docs/EXTERNAL-AI.md)
 - Role-based access, API clients with per-group scope, audit log
-- Signed (ed25519) Edge updates over a WebSocket "link", offline installer kits for Windows x64 / Linux x64 / Raspberry Pi 5
+- Signed (ed25519) Edge updates over a WebSocket "link"
+- Offline installer kits for Windows x64, Linux x64 and Raspberry Pi 5, with matching uninstallers. The uninstallers keep the camera data and Global IDs unless asked to remove them.
+- Vendor-neutral UI: no brand logo, product names only
 
 ![Edge nodes](docs/manual/images/c04-edge-nodes.png)
 
@@ -85,10 +90,12 @@ docs/          documentation (see below)
 | [docs/EDGE-PLAN.md](docs/EDGE-PLAN.md) | Edge ↔ central design and agreements |
 | [docs/REGIONAL-PLAN.md](docs/REGIONAL-PLAN.md) | Three-tier architecture |
 | [docs/EDGE-KIT.md](docs/EDGE-KIT.md) / [EDGE-LINUX.md](docs/EDGE-LINUX.md) | Installing and updating Edges |
-| [docs/CAMERA-QUIRKS.md](docs/CAMERA-QUIRKS.md) | Vendor-specific camera issues |
+| [docs/CAMERA-QUIRKS.md](docs/CAMERA-QUIRKS.md) | Vendor-specific camera issues (the latest notes and the checklist for adding a new brand / VMS / NVR are in the [Thai version](docs/th/CAMERA-QUIRKS.md)) |
+| [docs/CAMERA-AUDIO.md](docs/CAMERA-AUDIO.md) | Per-camera audio (Thai) |
+| [docs/PUBLIC-CAMS.md](docs/PUBLIC-CAMS.md) | Public government cameras at Central (Thai) |
 | [docs/CLIENT-RELEASES.md](docs/CLIENT-RELEASES.md) | Releasing the Windows client |
 | [docs/EXTERNAL-AI.md](docs/EXTERNAL-AI.md) | Receiving AI events from external devices |
-| [docs/architecture.html](docs/architecture.html), [pipeline.html](docs/pipeline.html), [workflow.html](docs/workflow.html), [camera-onboarding.html](docs/camera-onboarding.html) | Diagrams (open in a browser) |
+| [docs/architecture.html](docs/architecture.html), [pipeline.html](docs/pipeline.html), [workflow.html](docs/workflow.html), [camera-onboarding.html](docs/camera-onboarding.html), [system-flow.html](docs/system-flow.html) | Diagrams (open in a browser) |
 
 ## Quick start (development)
 
