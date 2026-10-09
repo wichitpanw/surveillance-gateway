@@ -95,7 +95,7 @@
                             <Ellipse Width="6" Height="6" Margin="0,0,9,9" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="White" />
                         </Grid>
                         <StackPanel x:Name="BrandText" Margin="11,0,0,0" VerticalAlignment="Center">
-                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="13" FontWeight="SemiBold" Foreground="White" Text="Surveillance Gateway" />
+                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="13" FontWeight="SemiBold" Foreground="White" Text="Surveillance" />
                             <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="10" Foreground="{StaticResource SideMutedBrush}" Text="CLIENT" />
                         </StackPanel>
                     </StackPanel>

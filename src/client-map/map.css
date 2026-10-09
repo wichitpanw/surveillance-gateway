@@ -167,6 +167,49 @@ body {
   background: var(--border);
 }
 
+/*
+  กล้องสาธารณะ (origin.kind = public) — ขอบและจุดสีม่วง แยกจากกล้องของเราที่เป็นเขียว/แดง/เหลือง
+  ออฟไลน์/ยังไม่รู้ยังคงขอบม่วง แต่จุดเป็นม่วงจาง ให้รู้ทั้ง "เป็นกล้อง Public" และ "ดูไม่ได้ตอนนี้"
+*/
+.pin.public {
+  border-color: #8b5cf6;
+  background: color-mix(in srgb, #8b5cf6 18%, var(--card));
+}
+
+.pin.public .dot {
+  background: #8b5cf6;
+}
+
+.pin.public.offline .dot,
+.pin.public.missing .dot,
+.pin.public.unknown .dot,
+.pin.public.disabled .dot {
+  background: color-mix(in srgb, #8b5cf6 35%, var(--border));
+}
+
+#summary .legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+#summary .legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#summary .legend .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+#summary .legend .dot.public {
+  background: #8b5cf6;
+}
+
 .pin .label {
   max-width: 150px;
   overflow: hidden;

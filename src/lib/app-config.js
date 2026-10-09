@@ -11,6 +11,7 @@ import {
   Users,
   ClipboardList,
   Settings,
+  Globe,
 } from 'lucide-react';
 
 /*
@@ -39,6 +40,8 @@ export const APPS = {
           { tab: 'live', label: 'Live', icon: MonitorPlay, perm: 'menu.live' },
           { tab: 'playback', label: 'Playback', icon: History, perm: 'playback.view' },
           { tab: 'ai-events', label: 'AI Events', icon: Sparkles, perm: 'menu.ai' },
+          // กล้องสาธารณะที่ Central ดึงเอง (server/vms/public-cams.js) — Central เท่านั้น Regional ตัดออกข้างล่าง
+          { tab: 'public-cam-map', label: 'Public Cam Map', icon: Globe, perm: 'menu.publiccam' },
         ],
       },
       {
@@ -111,6 +114,7 @@ APPS.regional = {
   nav: APPS.central.nav.map((section) => ({
     ...section,
     items: section.items
+      .filter((item) => item.tab !== 'public-cam-map')
       .map((item) => item.tab === 'edges' ? { ...item, label: 'Edge Nodes' } : item),
   })),
 };

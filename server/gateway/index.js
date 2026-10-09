@@ -33,12 +33,13 @@ const { adapterFor, credsFor, cameraToday } = require('./analytics');
 const { topicLabel } = require('./analytics/discovery');
 const { publicRegion } = require('../shared/regions');
 const { publicState } = require('../shared/camera-state');
-const { ROLE, REGION, NODE_NUMBER, BUILD: GATEWAY_VERSION } = require('../shared/instance');
+const { ROLE, REGION, NODE_NUMBER, DEFAULT_PROVINCE, BUILD: GATEWAY_VERSION } = require('../shared/instance');
 const { nowIso, todayKey, startOfDayIso, isValidTime, toBangkokIso, BANGKOK_SUFFIX } = require('../shared/time');
+const { PUBLIC_TYPE } = require('../vms/public-cams');
 
 /** คอลัมน์ที่ปลอดภัยจะส่งออกนอกระบบ — ทุกอย่างที่ไม่อยู่ในนี้ถือว่าเป็นความลับ */
 const SAFE_CAMERA_COLUMNS =
-  "id, name, group_name, brand, type, stream_type, lat, lng, always_on, enabled, analytics_kind, analytics_probed_at, global_id, province_code, district_code, source_id, source_missing_at, CASE WHEN rtsp IS NOT NULL AND rtsp != '' THEN 1 ELSE 0 END AS stream_configured";
+  "id, name, group_name, brand, type, stream_type, lat, lng, always_on, enabled, audio_enabled, analytics_kind, analytics_probed_at, global_id, province_code, district_code, source_id, source_missing_at, CASE WHEN rtsp IS NOT NULL AND rtsp != '' THEN 1 ELSE 0 END AS stream_configured";
 
 /**
  * สร้าง router ของ Gateway
@@ -65,12 +66,20 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
    * scopeGroups === null แปลว่าไม่จำกัด ส่วน array ว่างแปลว่าไม่ให้เห็นอะไรเลย
    * สองกรณีนี้ต้องแยกกันให้ขาด การเผลอทำให้ array ว่างกลายเป็น "ไม่จำกัด" คือ
    * ช่องโหว่ที่เงียบที่สุดเท่าที่จะเป็นไปได้ในโค้ดแบบนี้
+   *
+   * กล้องสาธารณะ (vms/public-cams.js) ไม่ขึ้นกับกลุ่ม — เห็นทั้งชุดเมื่อ key มี allowPublic เท่านั้น
+   * key ที่เห็น "ทุกกลุ่ม" จึงยังไม่เห็นกล้อง public · คืน WHERE เสมอ ผู้เรียกต่อด้วย `AND ...` ได้
    */
   const scopeClause = (client) => {
-    if (!client.scopeGroups) return { sql: '', params: [] };
-    if (client.scopeGroups.length === 0) return { sql: 'WHERE 1 = 0', params: [] };
-    const marks = client.scopeGroups.map(() => '?').join(',');
-    return { sql: `WHERE group_name IN (${marks})`, params: [...client.scopeGroups] };
+    let own = '1 = 1';
+    let params = [];
+    if (client.scopeGroups && client.scopeGroups.length === 0) own = '1 = 0';
+    else if (client.scopeGroups) {
+      own = `group_name IN (${client.scopeGroups.map(() => '?').join(',')})`;
+      params = [...client.scopeGroups];
+    }
+    const pub = client.allowPublic ? `type = '${PUBLIC_TYPE}'` : '1 = 0';
+    return { sql: `WHERE ((COALESCE(type, '') != '${PUBLIC_TYPE}' AND ${own}) OR ${pub})`, params };
   };
 
   router.use(auth.requireApiKey);
@@ -107,6 +116,8 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
       role: ROLE,
       region: REGION || null,
       node: NODE_NUMBER,
+      // จังหวัดของ edge (edge.json → GATEWAY_DEFAULT_PROVINCE) — Regional ใช้เตือนเมื่อ edge อยู่นอกภาค
+      ...(ROLE === 'edge' ? { province: DEFAULT_PROVINCE } : {}),
       build: GATEWAY_VERSION,
       streamCore: core.id,
       client: req.apiClient.name,
@@ -373,6 +384,11 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
     }
     const camera = await scopedCameraRow(req);
     if (!camera) res.status(404).json({ error: 'ไม่พบกล้องนี้' });
+    // กล้องสาธารณะไม่มีภาพย้อนหลังให้ดึง (ระบบไม่บันทึกเอง และต้นทางไม่เปิด playback)
+    else if (camera.type === PUBLIC_TYPE) {
+      res.status(501).json({ error: 'กล้อง Public ไม่มีภาพย้อนหลัง' });
+      return null;
+    }
     return camera;
   };
 
@@ -441,7 +457,7 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
     central ได้สำเนาจาก edge (vms/edge-source.js) แล้วให้ client อ่านทางเดียวกัน · ขอบเขตกล้องตาม key เสมอ
   */
   const scopeIds = (client) => new Promise((resolve, reject) => {
-    if (!client.scopeGroups) return resolve(null);
+    if (!client.scopeGroups && client.allowPublic) return resolve(null);
     const { sql, params } = scopeClause(client);
     db.all(`SELECT id FROM cameras ${sql}`, params, (err, rows) => (err ? reject(err) : resolve(new Set((rows || []).map((r) => r.id)))));
   });
@@ -1072,6 +1088,8 @@ function toPublicCamera(row, live, capabilities, origin = null, state = null) {
     location: row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null,
     // ตรึงสตรีมหลักให้เปิดค้างไว้หรือไม่ — มาแทน aiEnabled เดิมตอนถอด AI ออกจาก Gateway
     alwaysOn: Boolean(row.always_on),
+    // สตรีมของกล้องนี้มีเสียงไหม (ตั้งที่ edge) — client แสดงปุ่มเปิดเสียงเฉพาะกล้องที่เป็น true · ตั้งต้นปิดเสียงเสมอ
+    audio: Number(row.audio_enabled) === 1,
     /*
       ความสามารถด้าน AI ที่ "อยู่ในหัวกล้อง" ไม่ใช่ของ Gateway
 

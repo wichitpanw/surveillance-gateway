@@ -1,15 +1,15 @@
 ﻿<#
-  สร้างชุดติดตั้ง Gateway Edge แบบ flash drive (offline) — docs/EDGE-KIT.md
+  สร้างชุดติดตั้ง Edge แบบ flash drive (offline) — docs/EDGE-KIT.md
   รันบน HOST (ต้องใช้ internet ตอนสร้างเท่านั้น · ไฟล์ที่โหลดเก็บ cache ไว้ รอบหน้าไม่โหลดซ้ำ)
 
     powershell -ExecutionPolicy Bypass -File scripts\build-edge-kit.ps1 [-Platforms windows-x64,linux-arm64] [-Out D:\gw-edge-kits]
 
-  ผลลัพธ์: <Out>\GW-Edge-Kit-<build>\ — ก๊อปทั้งโฟลเดอร์ลง flash drive
+  ผลลัพธ์: <Out>\Edge-Kit-<build>\ — ก๊อปทั้งโฟลเดอร์ลง flash drive
     install-windows.cmd / install-windows.ps1 / install-linux.sh / README-TH.txt
     <แพลตฟอร์ม>\app   โค้ด server + scripts + ecosystem จาก commit ปัจจุบัน, dist ที่ build ใหม่, node_modules, BUILD
     <แพลตฟอร์ม>\bin   node, ffmpeg, go2rtc ของแพลตฟอร์มนั้น
 
-  build = commit ล่าสุดที่แก้ server src ai-worker scripts package.json ecosystem.edge.config.cjs
+  build = commit ล่าสุดที่แก้ server src scripts package.json ecosystem.edge.config.cjs
   (ต้นฉบับคือ BUILD_PATHS ใน server/shared/instance.js · deploy.ps1 และ deploy-edge.sh ใช้ชุดเดียวกัน) — central เทียบเลขนี้
   โค้ดมาจาก commit (git archive) ไม่ใช่ไฟล์ที่ยังไม่ commit · หน้าเว็บ build จาก src/ ปัจจุบัน
 #>
@@ -21,15 +21,9 @@ param(
   [switch]$Publish,
   [string]$SigningKey = 'D:\gw-edge-kits\signing\edge-update-key.pem',
   [string]$PublishDir = '',
-  # พก ai-worker (AI บน GPU ของ edge) ไปด้วย: Python แบบพกพา + wheels ของ ai-worker/requirements.txt + โมเดล
-  # เฉพาะ windows-x64 และ linux-x64 (การ์ด NVIDIA) · ชุดใหญ่ขึ้น ~1.5 GB ต่อแพลตฟอร์ม · ตัวติดตั้งเปิดเองเมื่อเจอการ์ด NVIDIA
-  [switch]$WithAi,
   # เผยแพร่เฉพาะแพ็กเกจอัปเดตผ่านสาย link (~1 นาที) — ไม่โหลดไบนารี ไม่แพ็กชุดติดตั้ง · scripts\deploy.ps1 ใช้ทุกครั้งที่ deploy
   # ชุดติดตั้งให้ดาวน์โหลดคงรุ่นเดิม (edge ที่ติดตั้งจากชุดเก่าได้ข้อเสนอรุ่นนี้เองเมื่อต่อสาย)
-  [switch]$UpdatesOnly,
-  # แพ็กเกจสะพาน: ไม่ใส่ ai-worker/ — edge แบบ pm2 บน Linux ที่รันรุ่นก่อน 2026-09-28 ปฏิเสธแพ็กเกจที่มีโฟลเดอร์นี้
-  # ("แพ็กเกจมีของที่ไม่คาด: ai-worker") ใช้คู่กับ -UpdatesOnly -Platforms linux-x64 หนึ่งรอบ แล้วรอบถัดไป publish ปกติ
-  [switch]$NoAiWorker
+  [switch]$UpdatesOnly
 )
 if ($UpdatesOnly) { $Publish = $true }
 $ErrorActionPreference = 'Stop'
@@ -41,11 +35,6 @@ $tar = Join-Path $env:SystemRoot 'System32\tar.exe'   # bsdtar ของ Windows
 $GO2RTC = 'v1.9.14'
 $SQLITE3 = '5.1.7'
 $FFMPEG = 'n8.1'   # BtbN FFmpeg-Builds สาขา release (static, gpl)
-# ai-worker (-WithAi): Python แบบพกพาของ astral-sh/python-build-standalone · โมเดล YOLOX-s จาก release ทางการของ Megvii
-$PYSA = '20260924'
-$PYVER = '3.11.16'
-$YOLOX_URL = 'https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx'
-$YOLOX_SHA256 = 'c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063'
 
 function Step($msg) { Write-Host "== $msg" -ForegroundColor Cyan }
 function Get-Cached($url, $name) {
@@ -86,12 +75,12 @@ New-Item -ItemType Directory -Force $cache | Out-Null
 Push-Location $repo
 try {
   # นิยาม build: ต้องตรงกับ BUILD_PATHS ใน server/shared/instance.js (ต้นฉบับ) ทุกตัว
-  $buildPaths = @('server', 'src', 'ai-worker', 'scripts', 'package.json', 'ecosystem.edge.config.cjs')
+  $buildPaths = @('server', 'src', 'scripts', 'package.json', 'ecosystem.edge.config.cjs')
   $build = (git log -1 --format=%h -- @buildPaths).Trim()
   $dirty = git status --porcelain -- @buildPaths
-  if ($dirty) { Write-Host "คำเตือน: มีไฟล์ใน server/ src/ scripts/ ai-worker/ ecosystem ที่ยังไม่ commit — ชุดติดตั้งใช้ของใน commit $build (หน้าเว็บ build จาก src/ ปัจจุบัน)" -ForegroundColor Yellow }
+  if ($dirty) { Write-Host "คำเตือน: มีไฟล์ใน server/ src/ scripts/ ecosystem ที่ยังไม่ commit — ชุดติดตั้งใช้ของใน commit $build (หน้าเว็บ build จาก src/ ปัจจุบัน)" -ForegroundColor Yellow }
   # -UpdatesOnly ใช้โฟลเดอร์ของตัวเอง — ห้ามทับหรือลบชุดติดตั้งเต็มของ build เดียวกันที่อาจอยู่ใน $Out แล้ว
-  $kit = Join-Path $Out $(if ($UpdatesOnly) { "GW-Edge-Update-$build" } else { "GW-Edge-Kit-$build" })
+  $kit = Join-Path $Out $(if ($UpdatesOnly) { "Edge-Update-$build" } else { "Edge-Kit-$build" })
   $stage = Join-Path $Out "staging-$build"
   foreach ($d in $kit, $stage) { if (Test-Path $d) { Remove-Item $d -Recurse -Force } }
   New-Item -ItemType Directory -Force $kit, $stage | Out-Null
@@ -102,8 +91,7 @@ try {
   New-Item -ItemType Directory $app | Out-Null
   $archive = Join-Path $stage 'app.tar'
   # แผนที่ออฟไลน์ .mbtiles (~860 MB) edge ไม่ใช้ — ตัดทิ้งเหมือน deploy-edge.sh
-  # ai-worker/ ไปด้วยเสมอ (โค้ดเล็ก) — แพ็กเกจอัปเดตจึงอัปเดต worker ไปพร้อม gateway · venv/โมเดลมาเฉพาะชุด -WithAi
-  $paths = @('server', 'scripts') + @(if (-not $NoAiWorker) { 'ai-worker' }) + @('ecosystem.edge.config.cjs', 'package.json')
+  $paths = @('server', 'scripts', 'ecosystem.edge.config.cjs', 'package.json')
   git archive --format=tar -o $archive HEAD -- @paths ':(exclude)server/map_data/*.mbtiles'
   if ($LASTEXITCODE) { throw 'git archive ไม่สำเร็จ' }
   & $tar -xf $archive -C $app
@@ -132,8 +120,6 @@ try {
       ffmpeg = @("$ffBase/ffmpeg-$FFMPEG-latest-win64-gpl-$ffVer.zip", "ffmpeg-$FFMPEG-latest-win64-gpl-$ffVer/bin/ffmpeg.exe", 'ffmpeg.exe')
       go2rtc = 'repo'
       sqlite = 'win32-x64'
-      pyTriple = 'x86_64-pc-windows-msvc'
-      wheel = @('win_amd64')
     }
     'linux-arm64' = @{
       node = @("https://nodejs.org/dist/$nodeVer/node-$nodeVer-linux-arm64.tar.xz", "node-$nodeVer-linux-arm64/bin/node", 'node')
@@ -146,9 +132,6 @@ try {
       ffmpeg = @("$ffBase/ffmpeg-$FFMPEG-latest-linux64-gpl-$ffVer.tar.xz", "ffmpeg-$FFMPEG-latest-linux64-gpl-$ffVer/bin/ffmpeg", 'ffmpeg')
       go2rtc = 'go2rtc_linux_amd64'
       sqlite = 'linux-x64'
-      # linux-arm64 (Pi) ไม่มีการ์ด NVIDIA — ไม่พก ai-worker
-      pyTriple = 'x86_64-unknown-linux-gnu'
-      wheel = @('manylinux_2_28_x86_64', 'manylinux_2_27_x86_64', 'manylinux_2_17_x86_64', 'manylinux2014_x86_64')
     }
   }
 
@@ -165,7 +148,7 @@ try {
     # sqlite3 เป็น native module — สลับไฟล์ .node ให้ตรงแพลตฟอร์ม (prebuilt ทางการของ sqlite3)
     $sq = Get-Cached "https://github.com/TryGhost/node-sqlite3/releases/download/v$SQLITE3/sqlite3-v$SQLITE3-napi-v6-$($s.sqlite).tar.gz" "sqlite3-v$SQLITE3-napi-v6-$($s.sqlite).tar.gz"
     Expand-One $sq 'build/Release/node_sqlite3.node' (Join-Path $dst 'app\server\node_modules\sqlite3\build\Release\node_sqlite3.node')
-    if ($UpdatesOnly) { continue }   # แพ็กเกจอัปเดตมีแค่ app\ — ไบนารีกับ ai\ เป็นของชุดติดตั้ง
+    if ($UpdatesOnly) { continue }   # แพ็กเกจอัปเดตมีแค่ app\ — ไบนารีเป็นของชุดติดตั้ง
 
     $n = Get-Cached $s.node[0] (Split-Path $s.node[0] -Leaf)
     Expand-One $n $s.node[1] (Join-Path $bin $s.node[2])
@@ -178,32 +161,6 @@ try {
       Copy-Item $g (Join-Path $bin 'go2rtc')
     }
 
-    # ai-worker: <แพลตฟอร์ม>\ai\ = python.tar.gz (แตกที่ตัวติดตั้ง) + wheels\ + models\ — ตัวติดตั้งสร้าง venv แบบออฟไลน์
-    if ($WithAi -and $s.ContainsKey('wheel')) {
-      $ai = Join-Path $dst 'ai'
-      New-Item -ItemType Directory -Force (Join-Path $ai 'models') | Out-Null
-      $pyName = "cpython-$PYVER+$PYSA-$($s.pyTriple)-install_only.tar.gz"
-      Copy-Item (Get-Cached "https://github.com/astral-sh/python-build-standalone/releases/download/$PYSA/$pyName" $pyName) (Join-Path $ai 'python.tar.gz')
-      $model = Get-Cached $YOLOX_URL 'yolox_s.onnx'
-      if ((Get-FileHash $model -Algorithm SHA256).Hash.ToLower() -ne $YOLOX_SHA256) { throw 'yolox_s.onnx ใน cache ไม่ตรง sha256 — ลบไฟล์ใน cache แล้ว build ใหม่' }
-      Copy-Item $model (Join-Path $ai 'models\yolox_s.onnx')
-      # wheels ตาม requirements.txt ของ commit นี้ แยก cache ตามแพลตฟอร์ม (pip download ข้ามแพลตฟอร์มได้เมื่อเป็น binary ล้วน)
-      $req = Join-Path $app 'ai-worker\requirements.txt'
-      $wh = Join-Path $cache "wheels-$p-$((Get-FileHash $req -Algorithm SHA256).Hash.Substring(0, 12))"
-      if (-not (Test-Path (Join-Path $wh '.done'))) {
-        New-Item -ItemType Directory -Force $wh | Out-Null
-        $py = (Get-Command python -ErrorAction SilentlyContinue).Source
-        if (-not $py) { throw 'ต้องมี python ในเครื่องที่ build เพื่อโหลด wheels ของ ai-worker' }
-        $plat = @($s.wheel | ForEach-Object { '--platform'; $_ })
-        $env:PYTHONUTF8 = '1'   # ให้ pip อ่านไฟล์เป็น UTF-8 ไม่ใช่ code page ของ Windows
-        & $py -m pip download -q -r $req -d $wh --only-binary=:all: --python-version 3.11 --implementation cp @plat
-        if ($LASTEXITCODE) { throw "โหลด wheels ของ ai-worker ($p) ไม่สำเร็จ" }
-        New-Item -ItemType File (Join-Path $wh '.done') | Out-Null
-      }
-      robocopy $wh (Join-Path $ai 'wheels') *.whl /NFL /NDL /NJH /NJS /NP | Out-Null
-      if ($LASTEXITCODE -ge 8) { throw "ก๊อป wheels ไป $p ไม่สำเร็จ" }
-      Copy-Item $req (Join-Path $ai 'requirements.txt')
-    }
   }
 
   # ── ตัวติดตั้ง ──────────────────────────────────────────────────────────────
@@ -215,7 +172,10 @@ try {
   # .cmd ต้อง CRLF · .ps1 ภาษาไทยต้อง UTF-8 BOM (PowerShell 5.1) · .sh ต้อง LF · .txt CRLF ให้ Notepad
   [IO.File]::WriteAllText((Join-Path $kit 'install-windows.cmd'), ((& $read 'install-windows.cmd') -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
   [IO.File]::WriteAllText((Join-Path $kit 'install-windows.ps1'), ((& $read 'install-windows.ps1') -replace "`n", "`r`n"), $utf8Bom)
+  [IO.File]::WriteAllText((Join-Path $kit 'uninstall-windows.cmd'), ((& $read 'uninstall-windows.cmd') -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
+  [IO.File]::WriteAllText((Join-Path $kit 'uninstall-windows.ps1'), ((& $read 'uninstall-windows.ps1') -replace "`n", "`r`n"), $utf8Bom)
   [IO.File]::WriteAllText((Join-Path $kit 'install-linux.sh'), (& $read 'install-linux.sh'), $utf8)
+  [IO.File]::WriteAllText((Join-Path $kit 'uninstall-linux.sh'), (& $read 'uninstall-linux.sh'), $utf8)
   [IO.File]::WriteAllText((Join-Path $kit 'README-TH.txt'), ((& $read 'README-TH.txt') -replace "`n", "`r`n"), $utf8Bom)
 
   Remove-Item $stage -Recurse -Force
@@ -257,14 +217,14 @@ try {
     New-Item -ItemType Directory -Force $kitDir | Out-Null
     $kits = @()
     foreach ($p in $Platforms) {
-      $name = "GW-Edge-$p-$build"
+      $name = "Edge-$p-$build"
       $tmp = Join-Path $Out "pack-$name"
       if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
       New-Item -ItemType Directory -Force (Join-Path $tmp $name) | Out-Null
       $inner = Join-Path $tmp $name
       robocopy (Join-Path $kit $p) (Join-Path $inner $p) /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
       # @(...) ครอบ — if ที่คืน array ตัวเดียวถูก PowerShell คลายเป็นข้อความ แล้ว + ต่อข้อความแทนการต่อ array
-      $installers = @(if ($p -eq 'windows-x64') { 'install-windows.cmd', 'install-windows.ps1' } else { 'install-linux.sh' })
+      $installers = @(if ($p -eq 'windows-x64') { 'install-windows.cmd', 'install-windows.ps1', 'uninstall-windows.cmd', 'uninstall-windows.ps1' } else { 'install-linux.sh', 'uninstall-linux.sh' })
       foreach ($f in $installers + @('README-TH.txt')) { Copy-Item (Join-Path $kit $f) $inner }
       $file = if ($p -eq 'windows-x64') { "$name.zip" } else { "$name.tar.gz" }
       $archive = Join-Path $kitDir $file
@@ -277,7 +237,9 @@ try {
     }
     # รุ่นเก่าของแพลตฟอร์มที่เพิ่งสร้างลบทิ้ง · แพลตฟอร์มที่ไม่ได้สร้างรอบนี้เก็บรายการเดิมไว้
     $old = @()
-    try { $old = @(Get-Content (Join-Path $kitDir 'kits.json') -Raw -Encoding UTF8 | ConvertFrom-Json) } catch { }
+    # PowerShell 5.1: ConvertFrom-Json ส่ง array ทั้งก้อนเป็นค่าเดียว — @(...) ตรง ๆ ได้ array ซ้อน 1 ตัว
+    # แล้ว $o.platform กลายเป็นรายการทุกแพลตฟอร์ม ไม่ตรง -contains → ไม่เคยลบรุ่นเก่า · คลายด้วย ForEach-Object
+    try { $parsed = Get-Content (Join-Path $kitDir 'kits.json') -Raw -Encoding UTF8 | ConvertFrom-Json; $old = @($parsed | ForEach-Object { $_ }) } catch { }
     foreach ($o in $old) {
       if ($Platforms -contains $o.platform) {
         if ($o.file -and ($kits.file -notcontains $o.file)) { Remove-Item (Join-Path $kitDir $o.file) -Force -ErrorAction SilentlyContinue }

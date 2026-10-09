@@ -1,7 +1,7 @@
 # ปล่อยเวอร์ชันใหม่ของ Windows client
 
 สคริปต์เดียวจบ ไม่ต้องอัปโหลด ไม่ต้อง restart server — central เสิร์ฟโฟลเดอร์ `client-updates/` ของ repo นี้ที่ `/client-updates`
-และ client ที่ติดตั้งแล้วอ่าน feed นั้นเอง · อัปเดต 2026-09-29 (เวอร์ชันที่ release ล่าสุด 1.8.5)
+และ client ที่ติดตั้งแล้วอ่าน feed นั้นเอง · อัปเดต 2026-10-07 (release ล่าสุด 1.9.5 · 2026-10-06)
 รุ่นที่ release จริงดูจาก `client-updates/releases.win.json` เสมอ — ตัวเลขในเอกสารนี้อาจตามไม่ทัน
 
 **เวอร์ชัน 1.8.5 (release 2026-09-29):** แก้ตามผลตรวจทั้งระบบ — Playback ขอภาพเป็นก้อนที่ไม่เกินปลายช่วงบันทึกและเที่ยงคืน
@@ -27,7 +27,13 @@ GET /api/v1/cameras/:id/download.mp4?start=<ISO-8601>&duration=<1–1800> (ต�
 · ตรวจโครงสร้าง fragmented MP4 ก่อนย้ายไฟล์ .part เป็น MP4 · ต้อง deploy backend ที่ส่ง failure ของแหล่งภาพผ่านทุก relay และตรวจช่วงดาวน์โหลดคร่อมไฟล์บันทึกก่อน release
 · ช่วงที่อุปกรณ์ส่งไม่ครบจากคลิปเดียวจะตอบ 416 พร้อมความยาวสูงสุดให้เลือกใหม่ แทนส่งไฟล์สั้นแล้วแจ้งสำเร็จ
 · ตรวจ build และ regression จำลองแล้ว ยังต้องยืนยัน WPF/กล้องจริง และเลือกช่วงบันทึกจริงผ่าน Central/Regional
-## สถานะ UI ที่ตกลงแล้ว (1.8.2)
+## รุ่นปัจจุบัน (1.9.5)
+
+- **1.9.3:** รับ AI event จากกล้อง/NVR/VMS/API ผ่าน Edge → Regional/Central พร้อมภาพ; กรอง Edge/กลุ่ม/ที่มาและเปิดรายละเอียดภาพเต็ม
+- **1.9.4:** คลิกหัว Camera Library เพื่อหุบ/เปิดส่วนตัวกรอง; คง Search, Group, Status, Favorites และไม่ซ่อนรายชื่อกล้องหรือ layout/stream
+- **1.9.5 (release 2026-10-06 พร้อม Gateway d645ed9):** เสียงจากกล้องที่ Edge เปิด `audio_enabled` — ปุ่มลำโพงต่อ tile เริ่มปิดเสียงเสมอ; กล้องไม่มีเสียงและ Playback ใส่ `:no-audio` ต่อ media แทน `--no-audio` ทั้งแอป · full/delta อยู่ใน feed แล้ว · dotnet build ผ่าน ยังไม่ได้ทดสอบหน้าต่าง/เสียงจริง ([CAMERA-AUDIO.md](CAMERA-AUDIO.md))
+
+## ประวัติ UI ที่ตกลงแล้ว (1.8.2)
 
 - หน้า Home ใช้การ์ด Live Wall เด่นที่สุด ตามด้วย Map และ Camera details พร้อมแผง Total / Online / Offline / Other
 - แถบบนสีเข้มมีปุ่มย่อ/ขยาย/ปิด; ปุ่มขยายใช้ work area เหนือ taskbar ส่วน F11 ซ่อนแถบบนและวางหน้าต่างทับขอบจอจริงเหนือ taskbar
@@ -43,7 +49,7 @@ GET /api/v1/cameras/:id/download.mp4?start=<ISO-8601>&duration=<1–1800> (ต�
 1. แก้โค้ดใน `client-windows/SurveillanceGateway.Client/`
 2. **ขึ้น `<Version>`** ใน `client-windows/SurveillanceGateway.Client/SurveillanceGateway.Client.csproj` — ไม่ขึ้น = ไม่มีใครได้อัปเดต
    (Velopack เทียบเลขเวอร์ชัน ไม่ได้เทียบเนื้อไฟล์) · `-Version` ใช้ build เลขที่ระบุครั้งเดียวได้ แต่ครั้งต่อไปจะอ่านจาก csproj อีก
-3. build และเผยแพร่ (หรือ `scriptsdeploy.ps1 -ReleaseClient` ที่ทำพร้อม deploy):
+3. build และเผยแพร่ (หรือ `scripts\deploy.ps1 -ReleaseClient` ที่ทำพร้อม deploy):
    ```bash
    powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\build-client-release.ps1
    ```
@@ -87,7 +93,7 @@ build เป็น self-contained (มี .NET runtime ในตัว) เค�
 ```
 
 ถอนการติดตั้ง (Settings → Apps หรือ `Update.exe --uninstall`) จะไม่ลบ `SurveillanceGateway.Client\` เพราะ key มักเป็นสำเนาเดียวบนเครื่องนั้น
-ลบเองเมื่อปลดเครื่องถาวร · ชื่อแอปคือ "Surveillance Gateway Client" ทั้งหน้าต่างและตอนติดตั้ง (`--packTitle` ใน `scripts/build-client-release.ps1`)
+ลบเองเมื่อปลดเครื่องถาวร · ชื่อแอปคือ "Surveillance Gateway Client" ทั้งหน้าต่างและตอนติดตั้ง (ถึง 1.9.7 ชื่อ "Surveillance Gateway Client" · `--packId SurveillanceGateway` คงเดิม เครื่องเก่าจึงอัปเดตต่อได้) (`--packTitle` ใน `scripts/build-client-release.ps1`)
 
 ## กฎ
 

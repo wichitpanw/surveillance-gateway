@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Power,
   Download,
+  Volume2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ import { useLanguage } from "@/lib/i18n";
 import SnapshotModal from "@/components/modals/SnapshotModal";
 import LiveModal from "@/components/modals/LiveModal";
 import BulkCameraRegionModal from "@/components/modals/BulkCameraRegionModal";
+import CameraAudioModal from "@/components/modals/CameraAudioModal";
 
 /**
  * Camera Management Component - Monochrome Shadcn Style
@@ -63,6 +65,8 @@ const CameraManagement = ({
   const [snapshotCamera, setSnapshotCamera] = useState(null);
   /* กล้องที่กำลังเปิดดูภาพสด + PTZ */
   const [liveCamera, setLiveCamera] = useState(null);
+  /* กล้องที่กำลังตั้งค่าเสียง (edge เท่านั้น) */
+  const [audioCamera, setAudioCamera] = useState(null);
   // state สำหรับ search filter
   const [areaSelection, setAreaSelection] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -384,6 +388,11 @@ const CameraManagement = ({
                           <Badge variant="outline" className="text-[9px] font-mono font-semibold tracking-widest bg-muted/30">
                              {cam.type === 'edge_relay' ? 'EDGE' : cam.type?.replace('_', ' ').toUpperCase() || 'RTSP'}
                           </Badge>
+                          {Number(cam.audio_enabled) === 1 && (
+                            <Badge variant="outline" className="ml-1.5 gap-1 text-[9px] font-mono font-semibold tracking-widest" title="เปิดรับเสียงจากกล้องนี้ (ตั้งที่ edge)">
+                              <Volume2 className="size-3" />AUDIO
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           {(() => {
@@ -505,6 +514,21 @@ const CameraManagement = ({
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                setAudioCamera(cam);
+                              }}
+                              className="h-8 text-[10px] font-bold tracking-wide gap-1.5 hover:bg-primary hover:text-primary-foreground"
+                              title="ตรวจและเปิด/ปิดรับเสียงจากกล้อง"
+                            >
+                              <Volume2 className="size-3.5" />
+                              เสียง
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 if (typeof openMapPinEdit !== 'function') {
                                   console.error('[Cameras] openMapPinEdit missing');
                                   return;
@@ -579,6 +603,7 @@ const CameraManagement = ({
         onClose={() => setSnapshotCamera(null)}
       />
       <LiveModal camera={liveCamera} open={Boolean(liveCamera)} onClose={() => setLiveCamera(null)} />
+      <CameraAudioModal camera={audioCamera} open={Boolean(audioCamera)} onClose={() => setAudioCamera(null)} onSaved={onCamerasChanged} />
     </div>
   );
 };

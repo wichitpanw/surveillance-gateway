@@ -82,36 +82,10 @@ install -m 755 "$ROOT/bin/go2rtc" "$STATE/bin/go2rtc"
 chown -R "$RUN_USER": "$STATE" && chmod 700 "$STATE"
 BUILD="$(head -1 "$ROOT/app/BUILD" 2>/dev/null || true)"
 
-# ── 2b. ai-worker (เฉพาะชุด -WithAi และเครื่องที่มีการ์ด NVIDIA + driver) ────────────────────────
-# Python แบบพกพา → venv ที่ $ROOT/ai/venv → wheels จากชุด (ไม่ใช้ internet) · สร้างใหม่เมื่อ requirements เปลี่ยน
-AI_READY=0
-if [[ -f "$SRC/ai/python.tar.gz" ]]; then
-  if ! command -v nvidia-smi >/dev/null 2>&1; then
-    echo "ชุดนี้มี ai-worker แต่เครื่องนี้ไม่มีการ์ด NVIDIA (nvidia-smi) — ข้าม ใช้ได้แค่ AI ที่หัวกล้อง"
-  else
-    AI="$ROOT/ai"
-    REQ_HASH="$(sha256sum "$SRC/ai/requirements.txt" | cut -d' ' -f1)"
-    if [[ -x "$AI/venv/bin/python" && "$(cat "$AI/venv/.requirements" 2>/dev/null)" == "$REQ_HASH" ]]; then
-      echo "ai-worker: venv เดิมตรงกับ requirements — ไม่ต้องติดตั้งใหม่"
-    else
-      echo "ai-worker: ติดตั้ง Python + ไลบรารี GPU (ใช้เวลาหลายนาที)…"
-      rm -rf "$AI/python" "$AI/venv" && mkdir -p "$AI"
-      tar -xzf "$SRC/ai/python.tar.gz" -C "$AI" || fail "แตก Python ของ ai-worker ไม่สำเร็จ"
-      "$AI/python/bin/python3" -m venv "$AI/venv" || fail "สร้าง venv ของ ai-worker ไม่สำเร็จ"
-      "$AI/venv/bin/python" -m pip install -q --no-index --find-links "$SRC/ai/wheels" -r "$SRC/ai/requirements.txt" \
-        || fail "ติดตั้งไลบรารีของ ai-worker ไม่สำเร็จ"
-      echo "$REQ_HASH" > "$AI/venv/.requirements"
-    fi
-    mkdir -p "$AI/models" && cp -a "$SRC/ai/models/." "$AI/models/"
-    chmod -R a+rX "$AI"
-    AI_READY=1
-  fi
-fi
-
 # ── 3. edge.json ของเครื่องนี้ (ค่าเดิม → ค่าจาก central → ค่าที่ขึ้นกับเครื่องนี้) ─
 PUBLIC_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' | head -1)"
 FROM="$PICK" OUT="$STATE/edge.json" STATE_DIR="$STATE" PORT="$PORT" API="$GO2RTC_API" RTSP="$GO2RTC_RTSP" \
-FFMPEG="$ROOT/bin/ffmpeg" PUBLIC_IP="$PUBLIC_IP" AI_READY="$AI_READY" AI_ROOT="$ROOT/ai" "$NODE" -e '
+FFMPEG="$ROOT/bin/ffmpeg" PUBLIC_IP="$PUBLIC_IP" "$NODE" -e '
   const fs = require("fs");
   const e = process.env;
   let cur = {};
@@ -129,13 +103,8 @@ FFMPEG="$ROOT/bin/ffmpeg" PUBLIC_IP="$PUBLIC_IP" AI_READY="$AI_READY" AI_ROOT="$
   }
   if (!cur.publicHost) cur.publicHost = e.PUBLIC_IP || "";
   Object.assign(cur, { stateDir: e.STATE_DIR, port: +e.PORT, go2rtcApi: +e.API, go2rtcRtsp: +e.RTSP, ffmpeg: e.FFMPEG });
-  if (cur.role === "regional") cur.aiWorker = false;
-  if (e.AI_READY === "1" && cur.role !== "regional") {
-    // ติดตั้งครั้งแรกเปิด ai-worker ให้เลย · ผู้ดูแลปิดเองไว้ (false) = คงไว้ตอนอัปเดต
-    if (cur.aiWorker === undefined) cur.aiWorker = true;
-    Object.assign(cur, { aiPython: e.AI_ROOT + "/venv/bin/python", aiModel: e.AI_ROOT + "/models/yolox_s.onnx" });
-    if (cur.aiGpu === undefined) cur.aiGpu = 0;
-  }
+  // ถอดค่าของ inference เดิมโดยคงค่าแหล่งรับและกล้องไว้
+  for (const k of ["aiWorker", "aiPython", "aiModel", "aiGpu"]) delete cur[k];
   delete cur.go2rtcBin;
   fs.writeFileSync(e.OUT, JSON.stringify(cur, null, 2) + "\n", { mode: 0o600 });
   console.log(`edge.json: edge ${cur.node} · เว็บ :${cur.port} · go2rtc :${cur.go2rtcApi}/:${cur.go2rtcRtsp} · publicHost ${cur.publicHost}`);

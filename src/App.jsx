@@ -15,6 +15,7 @@ import Dashboard from './components/Dashboard'
 import EdgeNodes from './components/EdgeNodes'
 import EdgeUpdateBanner from './components/EdgeUpdateBanner'
 import CameraMap from './components/CameraMap'
+import PublicCamMap from './components/PublicCamMap'
 import LiveWall from './components/LiveWall'
 import Playback from './components/Playback'
 import AiEvents from './components/AiEvents'
@@ -147,12 +148,20 @@ function App({ role = 'central' }) {
     return loggedInUser.deviceIds.includes(c.id);
   });
 
-  const groupedCameras = visibleCameras.reduce((acc, cam) => {
+  const groupBy = (list) => list.reduce((acc, cam) => {
     const group = cam.group_name || 'Default';
     if (!acc[group]) acc[group] = [];
     acc[group].push(cam);
     return acc;
   }, Object.create(null));
+  const groupedCameras = groupBy(visibleCameras);
+  /*
+    กล้องของเราเท่านั้น — ไม่รวมกล้อง Public ที่ Central ดึงเอง (server/vms/public-cams.js)
+    ใช้กับ Dashboard, Camera Map, Cameras และตัวเลือกกลุ่มของ API key (กล้อง Public คุมด้วยช่อง "กล้อง Public" แยก)
+    Live ยังเห็นกล้อง Public ตามขอบเขตของ role · ดูทั้งชุดที่หน้า Public Cam Map
+  */
+  const ownCameras = visibleCameras.filter((c) => c.type !== 'public_hls');
+  const ownGroupedCameras = groupBy(ownCameras);
 
 
   // --- HANDLERS ---
@@ -978,18 +987,19 @@ function App({ role = 'central' }) {
         )}
         {app.role !== 'central' && <EdgeUpdateBanner gatewayRole={app.role} canInstall={can(loggedInUser, 'system.maintain')} />}
         {app.role !== 'edge' && <EdgeAlertBanner gatewayRole={app.role} onOpenEdges={() => setCurrentTab('edges')} />}
-        {currentTab === 'dashboard' && <Dashboard app={app} cameras={visibleCameras} cameraStatus={cameraStatus} systemStats={systemStats} logs={can(loggedInUser, 'menu.logs') ? logs : []} onOpen={setCurrentTab} />}
+        {currentTab === 'dashboard' && <Dashboard app={app} cameras={ownCameras}cameraStatus={cameraStatus} systemStats={systemStats} logs={can(loggedInUser, 'menu.logs') ? logs : []} onOpen={setCurrentTab} />}
         {currentTab === 'edges' && app.role !== 'edge' && can(loggedInUser, 'menu.cameras') && <EdgeNodes gatewayRole={app.role} canManage={can(loggedInUser, 'device.manage')} centralBuild={instanceInfo?.build} onCamerasChanged={async () => { const updated = await fetchList(`/api/cameras`); if (updated) setCameras(updated); }} />}
-        {currentTab === 'cameras' && can(loggedInUser, 'menu.cameras') && <CameraManagement onCamerasChanged={async () => { const updated = await fetchList('/api/cameras'); if (updated) setCameras(updated); }} readOnly={app.role !== 'edge'} canLive={app.role !== 'edge'} theme={theme} handleBulkDelete={handleBulkDelete} selectedCamerasForDelete={selectedCamerasForDelete} handleStartScan={handleStartScan} openAddModal={openAddModal} groupedCameras={groupedCameras} expandedAssetGroups={expandedAssetGroups} setExpandedAssetGroups={setExpandedAssetGroups} handleDeleteGroup={handleDeleteGroup} handleToggleSelectCamera={handleToggleSelectCamera} cameraStatus={cameraStatus} openEditModal={openEditModal} openMapPinEdit={openMapPinEdit} handleRenameGroup={triggerRenameGroup} vmsSourceCount={vmsSources.length} handleVmsResync={handleVmsResync} isLoading={isLoading} unpinnedCount={cameras.filter(c => !Number.isFinite(parseFloat(c.lat)) || !Number.isFinite(parseFloat(c.lng))).length} onGoToMapPins={() => setCurrentTab('map-pins')} />}
+        {currentTab === 'cameras' && can(loggedInUser, 'menu.cameras') && <CameraManagement onCamerasChanged={async () => { const updated = await fetchList('/api/cameras'); if (updated) setCameras(updated); }} readOnly={app.role !== 'edge'} canLive={app.role !== 'edge'} theme={theme} handleBulkDelete={handleBulkDelete} selectedCamerasForDelete={selectedCamerasForDelete} handleStartScan={handleStartScan} openAddModal={openAddModal} groupedCameras={ownGroupedCameras}expandedAssetGroups={expandedAssetGroups} setExpandedAssetGroups={setExpandedAssetGroups} handleDeleteGroup={handleDeleteGroup} handleToggleSelectCamera={handleToggleSelectCamera} cameraStatus={cameraStatus} openEditModal={openEditModal} openMapPinEdit={openMapPinEdit} handleRenameGroup={triggerRenameGroup} vmsSourceCount={vmsSources.length} handleVmsResync={handleVmsResync} isLoading={isLoading} unpinnedCount={ownCameras.filter(c => !Number.isFinite(parseFloat(c.lat)) || !Number.isFinite(parseFloat(c.lng))).length} onGoToMapPins={() => setCurrentTab('map-pins')} />}
         {currentTab === 'live' && app.role !== 'edge' && can(loggedInUser, 'menu.live') && <LiveWall cameras={visibleCameras} cameraStatus={cameraStatus} />}
-        {currentTab === 'playback' && app.role !== 'edge' && can(loggedInUser, 'playback.view') && <Playback cameras={visibleCameras} target={playbackTarget} onTargetUsed={() => setPlaybackTarget(null)} />}
+        {currentTab === 'playback' && app.role !== 'edge' && can(loggedInUser, 'playback.view') && <Playback cameras={ownCameras}target={playbackTarget} onTargetUsed={() => setPlaybackTarget(null)} />}
         {currentTab === 'ai-events' && app.role !== 'edge' && can(loggedInUser, 'menu.ai') && <AiEvents cameras={visibleCameras} onOpenPlayback={can(loggedInUser, 'playback.view') ? (cameraId, ms) => { setPlaybackTarget({ cameraId, ms }); setCurrentTab('playback') } : null} />}
         {currentTab === 'ai-sources' && app.role === 'edge' && can(loggedInUser, 'menu.cameras') && <AiSources canManage={can(loggedInUser, 'device.manage')} />}
-        {currentTab === 'camera-map' && app.role !== 'edge' && can(loggedInUser, 'menu.cameras') && <CameraMap cameras={visibleCameras} cameraStatus={cameraStatus} theme={theme} />}
+        {currentTab === 'public-cam-map' && app.role === 'central' && can(loggedInUser, 'menu.publiccam') && <PublicCamMap theme={theme} canSync={can(loggedInUser, 'device.manage')} />}
+        {currentTab === 'camera-map' && app.role !== 'edge' && can(loggedInUser, 'menu.cameras') && <CameraMap cameras={ownCameras} cameraStatus={cameraStatus} theme={theme} />}
         {currentTab === 'map-pins' && app.role === 'edge' && can(loggedInUser, 'menu.cameras') && <MapPins cameras={cameras} theme={theme} onCamerasChanged={async () => { const updated = await fetchList(`/api/cameras`); if (updated) setCameras(updated); }} />}
         {currentTab === 'logs' && can(loggedInUser, 'menu.logs') && <EventLogs canPurgeLogs={can(loggedInUser, 'log.purge')} theme={theme} logFilters={logFilters} setLogFilters={setLogFilters} handleClearLogs={handleClearLogs} logs={logs} serverIP={serverIP} setSelectedEventImage={setSelectedEventImage} />}
         {currentTab === 'settings' && can(loggedInUser, 'menu.settings') && <SystemSettings theme={theme} systemSettings={systemSettings} setSystemSettings={setSystemSettings} cameras={cameras} isLoading={isLoading} setIsLoading={setIsLoading} serverIP={serverIP} />}
-        {currentTab === 'api-clients' && can(loggedInUser, 'menu.apiclients') && <ApiClients groupedCameras={groupedCameras} />}
+        {currentTab === 'api-clients' && can(loggedInUser, 'menu.apiclients') && <ApiClients groupedCameras={ownGroupedCameras} showPublic={app.role === 'central' && can(loggedInUser, 'menu.publiccam')} />}
         {currentTab === 'users' && can(loggedInUser, 'menu.users') && <AccessControl theme={theme} users={users} loggedInUser={loggedInUser} setUserModalMode={setUserModalMode} setUserFormData={setUserFormData} setIsUserModalOpen={setIsUserModalOpen} handleDeleteUser={handleDeleteUser} roles={roles} onOpenRoleModal={openRoleModal} onDeleteRole={handleDeleteRole} />}
       </AppShell>
 

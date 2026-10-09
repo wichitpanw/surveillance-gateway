@@ -18,7 +18,7 @@ const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { NODE_NUMBER, BUILD, HTTP_PORT, GO2RTC_RTSP_PORT, ROLE, REGION } = require('../shared/instance');
+const { NODE_NUMBER, BUILD, HTTP_PORT, GO2RTC_RTSP_PORT, ROLE, REGION, DEFAULT_PROVINCE } = require('../shared/instance');
 const { withRtspCredentials } = require('../gateway/rtsp-auth');
 const { resolveCore, streamPathName, rawStreamPathName, rawStreamsEnabled } = require('../gateway/streams');
 const { publicState } = require('../shared/camera-state');
@@ -82,7 +82,7 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
   /** รายการกล้องในรูปที่ central ใช้ (ตรงกับฟิลด์ที่ edge-source.js baseFields อ่าน) — ไม่มีรหัสผ่านหรือ RTSP */
   async function catalog() {
     const rows = await all(
-      `SELECT id, name, group_name, brand, lat, lng, enabled, global_id, province_code, district_code,
+      `SELECT id, name, group_name, brand, lat, lng, enabled, audio_enabled, global_id, province_code, district_code,
               CASE WHEN rtsp IS NOT NULL AND rtsp != '' THEN 1 ELSE 0 END AS has_stream
        FROM cameras`,
     );
@@ -100,6 +100,8 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
       },
       globalId: r.global_id || null,
       enabled: Number(r.enabled ?? 1) !== 0,
+      // ส่งเสียงต่อไหม — edge เป็นเจ้าของเหมือน enabled · ชั้นบนใช้ตัดสินว่าเติม #audio=aac หรือไม่
+      audio: Number(r.audio_enabled) === 1,
       hasStream: Boolean(r.has_stream),
       hasSub: live.has(streamPathName(r.id, 'sub')),
       state: publicState(cameraState.get(r.id)),
@@ -114,6 +116,7 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
         try { deleted = (await listDeleted()).map((d) => d.id); } catch { /* ไม่มีรายการ = central ไม่ลบอะไรเพิ่ม */ }
       }
       send({ type: 'catalog', cameras: await catalog(), deleted });
+      reconcilePushAudio();
     } catch (err) {
       console.warn(`[Edge link] ส่งรายการกล้องไม่ได้: ${err.message}`);
     }
@@ -130,15 +133,19 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
     const via = endpoints[current];
     const port = via.rtspPort || Number(dst.port) || 8555;
     const output = `rtsp://${auth}${via.host}:${port}/${encodeURIComponent(dst.path)}`;
-    const entry = { proc: null, stopped: false };
+    const entry = { proc: null, stopped: false, audio: false };
     pushes.set(key, entry);
 
-    const run = () => {
+    const run = async () => {
+      if (entry.stopped) return;
+      // อ่านค่าเสียงใหม่ทุกครั้งที่เริ่ม ffmpeg — reconcilePushAudio() ฆ่า process ที่ค่าไม่ตรงแล้วให้ทางนี้เริ่มใหม่
+      entry.audio = await audioEnabled(cameraId);
       if (entry.stopped) return;
       const proc = spawn(String(ffmpegPath || 'ffmpeg').replace(/\\\\/g, '\\'), [
         '-hide_banner', '-loglevel', 'error',
         '-rtsp_transport', 'tcp', '-i', input,
-        '-c', 'copy', '-an',
+        // เสียง: -c copy ส่ง codec เดิมของกล้อง (pcm_alaw/aac) ขึ้นไป ชั้นบนแปลงเป็น AAC เองตอนมีคนดูผ่านเว็บ
+        ...(entry.audio ? ['-map', '0:v:0', '-map', '0:a:0?', '-c', 'copy'] : ['-c', 'copy', '-an']),
         '-f', 'rtsp', '-rtsp_transport', 'tcp', output,
       ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
       entry.proc = proc;
@@ -162,6 +169,30 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
       proc.on('error', (err) => { lastErr = err.message; onEnd(err.code || 'error'); });
     };
     run();
+  }
+
+  /** กล้องนี้เปิดส่งเสียงไหม — อ่านจากแถวทุกครั้ง อ่านไม่ได้ = ไม่ส่ง (ทางเดิม) */
+  async function audioEnabled(cameraId) {
+    try {
+      const row = await getCameraRow(cameraId);
+      return Number(row?.audio_enabled) === 1;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ffmpeg ที่ push อยู่ใช้ค่าเสียงตอนเริ่ม — เปิด/ปิดเสียงทีหลังต้องเริ่มใหม่ ไม่งั้นค้างค่าเดิมจนสายหลุด
+   * ฆ่าแค่ process (entry ยังอยู่) แล้ว onEnd เริ่มใหม่ใน 3 วิด้วยค่าใหม่ · เรียกหลังส่งรายการกล้องทุกครั้ง
+   */
+  async function reconcilePushAudio() {
+    for (const [key, entry] of pushes) {
+      if (!entry.proc || entry.stopped) continue;
+      const cameraId = key.slice(0, key.lastIndexOf(':'));
+      if ((await audioEnabled(cameraId)) === entry.audio) continue;
+      console.log(`[Edge link] push ${key}: ค่าเสียงเปลี่ยน — เริ่ม ffmpeg ใหม่`);
+      try { entry.proc.kill(); } catch { /* ออกไปแล้ว */ }
+    }
   }
 
   function closePush(cameraId, which) {
@@ -330,8 +361,9 @@ function startEdgeLink({ db, cameraState, ptz, getCameraRow, ffmpegPath, name, u
       alive();
       // via = ที่อยู่ที่ edge ใช้ต่อจริง — central แสดงในหน้า Edge Nodes ให้รู้ว่า edge นี้มาทางไหน
       // platform/runner: central ใช้เลือกแพ็กเกจอัปเดตให้ตรงเครื่อง (docs/EDGE-KIT.md)
+      // province: จังหวัดของ edge ให้ Regional เตือนเมื่อ edge อยู่นอกภาค (Regional รุ่นเก่าไม่สนใจ field นี้)
       send({ type: 'hello', protocol: 2, node: NODE_NUMBER, role: ROLE, region: REGION || null, build: BUILD, name: name || null, via: target.url,
-        platform: currentPlatform(), runner: process.env.GW_EDGE_RUNNER || 'pm2' });
+        province: ROLE === 'edge' ? DEFAULT_PROVINCE : null, platform: currentPlatform(), runner: process.env.GW_EDGE_RUNNER || 'pm2' });
     });
 
     sock.on('message', async (raw) => {

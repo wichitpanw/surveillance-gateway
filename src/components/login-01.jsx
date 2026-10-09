@@ -69,15 +69,6 @@ export default function Login01({ loginForm, setLoginForm, handleLogin, isLoadin
       <div className="relative flex flex-1 flex-col justify-center px-4 py-10 lg:px-6 animate-fade-in">
         <div className="sm:mx-auto sm:w-full sm:max-w-sm">
           <div className="flex flex-col items-center mb-6">
-            {/*
-              ไม่มีพื้นไล่สีรองโลโก้แล้ว — โลโก้ องค์กร มีสีของตัวเองครบและพื้นหลังโปร่ง
-              การวางบนพื้นสี primary ทำให้สีเหลืองของโลโก้ชนกับพื้นจนแยกไม่ออก
-            */}
-            <img
-              src="/gw-logo.png"
-              alt="Surveillance Gateway"
-              className="mb-4 h-12 w-auto rounded dark:bg-foreground dark:px-3 dark:py-2"
-            />
             <h2 className="text-balance text-center text-xl font-semibold text-foreground">
               {appName}
             </h2>

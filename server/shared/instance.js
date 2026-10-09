@@ -56,27 +56,20 @@ const DEFAULT_PROVINCE = (() => {
   return ROLE === 'central' ? '10' : '00';
 })();
 
-/**
- * AI ที่หัวกล้อง (ตัวค้นหากฎ, poller ยอดนับ, ตัวเก็บ metadata บน RTSP) — ปิดตั้งแต่ 2026-09-23 และ
- * ตัดสินใจ 2026-09-28 ว่า "ไม่รวมเข้าระบบ" (agents.md ข้อ 1): ห้ามเปิด GATEWAY_AI=1 บนเครื่องจริง
- * และห้ามต่อ server/gateway/analytics/ กลับเข้าระบบจนกว่าจะตกลงกันใหม่ · AI ของระบบคือ ai-worker ที่ edge เท่านั้น
- * สวิตช์ยังอยู่เพื่อไม่เปลี่ยนพฤติกรรมของโค้ดที่ค้างไว้ (โค้ดใน analytics/ ห้ามลบ)
- *
- * ปิดอยู่ = ไม่มีการเปิดสาย RTSP metadata ค้างไปที่กล้อง และไม่ยิง ONVIF ถามกฎทุก 24 ชม.
- */
+/** สวิตช์ analytics เดิมยังปิดอยู่; การรับ event จากต้นทางใช้ AI Sources */
 const AI_ENABLED = String(process.env.GATEWAY_AI || '') === '1';
 
 /**
  * รายการ path ที่นับเป็น "build" — ที่เดียวที่เป็นต้นฉบับ (canonical) ของนิยามนี้
  *
- * คือทุกอย่างที่แพ็กเกจอัปเดตของ edge พกไป (scripts/build-edge-kit.ps1: server, scripts, ai-worker,
+ * คือทุกอย่างที่แพ็กเกจอัปเดตของ edge พกไป (scripts/build-edge-kit.ps1: server, scripts,
  * ecosystem.edge.config.cjs, package.json + dist ที่ build จาก src/) — เดิมนับแค่ server/ ทำให้แก้ src/ scripts/
- * หรือ ai-worker/ แล้วเลข build ไม่ขยับ central จึงไม่ส่งข้อเสนออัปเดตให้ edge (audit 2026-09-29)
+ * แล้วเลข build ไม่ขยับ central จึงไม่ส่งข้อเสนออัปเดตให้ edge (audit 2026-09-29)
  * ไม่รวม client-windows/ และ docs/ — commit ที่แก้แค่สองอย่างนั้นไม่ต้องทำให้ edge ขึ้น "ไม่ตรง central"
  *
  * ต้องตรงกันทุกที่ (แก้ตรงนี้แล้วแก้ที่อื่นด้วย): scripts/deploy.ps1, scripts/build-edge-kit.ps1, scripts/deploy-edge.sh
  */
-const BUILD_PATHS = ['server', 'src', 'ai-worker', 'scripts', 'package.json', 'ecosystem.edge.config.cjs'];
+const BUILD_PATHS = ['server', 'src', 'scripts', 'package.json', 'ecosystem.edge.config.cjs'];
 
 /**
  * build ของโค้ดที่เครื่องนี้รันอยู่ — หน้า Edge Nodes และ client เทียบค่านี้ระหว่าง central กับ edge

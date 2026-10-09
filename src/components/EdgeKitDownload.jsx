@@ -12,8 +12,8 @@ import { cn } from '@/lib/utils';
 */
 const OS = [
   { platform: 'windows-x64', label: 'Windows (x64)', hint: 'mini PC / PC ทั่วไป', steps: ['แตก .zip ลง flash drive', 'วาง edge-<เลข>.json ไว้ข้าง install-windows.cmd', 'ที่เครื่อง edge ดับเบิลคลิก install-windows.cmd'] },
-  { platform: 'linux-arm64', label: 'Raspberry Pi 5 (Linux arm64)', hint: 'Raspberry Pi OS / Ubuntu arm64', steps: ['ก๊อป .tar.gz ลง flash drive แล้วแตก: tar -xzf GW-Edge-linux-arm64-….tar.gz', 'วาง edge-<เลข>.json ไว้ข้าง install-linux.sh', 'sudo bash install-linux.sh'] },
-  { platform: 'linux-x64', label: 'Linux (x64)', hint: 'Ubuntu 22/24 บน PC', steps: ['ก๊อป .tar.gz ลงเครื่องแล้วแตก: tar -xzf GW-Edge-linux-x64-….tar.gz', 'วาง edge-<เลข>.json ไว้ข้าง install-linux.sh', 'sudo bash install-linux.sh'] },
+  { platform: 'linux-arm64', label: 'Raspberry Pi 5 (Linux arm64)', hint: 'Raspberry Pi OS / Ubuntu arm64', steps: ['ก๊อป .tar.gz ลง flash drive แล้วแตก: tar -xzf Edge-linux-arm64-….tar.gz', 'วาง edge-<เลข>.json ไว้ข้าง install-linux.sh', 'sudo bash install-linux.sh'] },
+  { platform: 'linux-x64', label: 'Linux (x64)', hint: 'Ubuntu 22/24 บน PC', steps: ['ก๊อป .tar.gz ลงเครื่องแล้วแตก: tar -xzf Edge-linux-x64-….tar.gz', 'วาง edge-<เลข>.json ไว้ข้าง install-linux.sh', 'sudo bash install-linux.sh'] },
 ];
 
 const mb = (n) => `${Math.round(n / 1024 / 1024)} MB`;

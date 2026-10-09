@@ -506,8 +506,15 @@ export default function EdgeNodes({ gatewayRole = 'central', canManage, centralB
                     {e.remote_role === 'regional' && <Button variant="outline" size="sm" aria-expanded={!!expanded[e.id]} title="ดู Edge ลูก" onClick={() => setExpanded((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}>{expanded[e.id] ? '▾' : '▸'}</Button>}
                     <Server className="size-4 text-muted-foreground" />
                     <div>
-                      <div className="flex items-center gap-2 font-medium">{e.label}<Badge variant="outline">{e.remote_role === 'regional' ? 'Regional' : 'Edge'}</Badge></div>
-                      <div className="font-mono text-[11px] text-muted-foreground">node {e.remote_node || '—'}{e.remote_region ? ` · ${e.remote_region}` : ''}</div>
+                      <div className="flex items-center gap-2 font-medium">
+                        {e.label}<Badge variant="outline">{e.remote_role === 'regional' ? 'Regional' : 'Edge'}</Badge>
+                        {e.edgeOutsideRegion && (
+                          <Badge variant="outline" className="border-status-warn/50 text-[10px] text-status-warn" title={`Edge ตั้งจังหวัด${e.remoteProvinceName || e.remote_province} ซึ่งอยู่นอกภาคของ Regional นี้ — รับสายแล้ว แจ้งเตือนเท่านั้น`}>
+                            Edge นอกภาค
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground">node {e.remote_node || '—'}{e.remote_region ? ` · ${e.remote_region}` : ''}{e.remote_province ? ` · ${e.remoteProvinceName || `จังหวัด ${e.remote_province}`}` : ''}</div>
                       {e.remark && <div className="mt-1 max-w-md whitespace-pre-wrap break-words text-xs text-muted-foreground">{e.remark}</div>}
                     </div>
                   </div>
@@ -540,6 +547,15 @@ export default function EdgeNodes({ gatewayRole = 'central', canManage, centralB
                         {e.missingCount} หาย <Trash2 className="size-3" />
                       </button>
                     ) : <Badge variant="outline" className="ml-2 text-[10px]" title="หายจาก edge แล้ว — ยังไม่ลบ">{e.missingCount} หาย</Badge>
+                  )}
+                  {e.outOfRegionCount > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="ml-2 border-status-warn/50 text-[10px] text-status-warn"
+                      title={`จังหวัดอยู่นอกภาคของ Regional นี้ — รับเข้าแล้ว แจ้งเตือนเท่านั้น\n${e.outOfRegionNames.join('\n')}${e.outOfRegionCount > e.outOfRegionNames.length ? '\n…' : ''}`}
+                    >
+                      {e.outOfRegionCount} นอกภาค
+                    </Badge>
                   )}
                 </TableCell>
                 <TableCell>

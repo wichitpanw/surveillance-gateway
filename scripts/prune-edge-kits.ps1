@@ -3,15 +3,15 @@
   เก็บกวาดชุดติดตั้ง/แพ็กเกจ edge รุ่นเก่า — ค่าเริ่มต้นแค่แสดงรายการ (dry-run) ลบจริงเมื่อส่ง -Apply เท่านั้น
 
 .DESCRIPTION
-  build-edge-kit.ps1 สร้างโฟลเดอร์ใหม่ทุกรอบ (D:\gw-edge-kits\GW-Edge-Kit-<build>, GW-Edge-Update-<build>, staging-*, pack-*)
-  และชุดให้ดาวน์โหลดใน server\edge-kits\ — ไม่มีอะไรลบรุ่นเก่าใน D:\gw-edge-kits จึงโตขึ้นเรื่อย ๆ (~1.5 GB ต่อชุด -WithAi)
+  build-edge-kit.ps1 สร้างโฟลเดอร์ใหม่ทุกรอบ (D:\gw-edge-kits\Edge-Kit-<build>, Edge-Update-<build> — ก่อน 2026-10-09 มี GW- นำหน้า, staging-*, pack-*)
+  และชุดให้ดาวน์โหลดใน server\edge-kits\ — ไม่มีอะไรลบรุ่นเก่าใน D:\gw-edge-kits จึงโตขึ้นเรื่อย ๆ
 
   เก็บเสมอ (ไม่แตะไม่ว่ากรณีใด):
     - D:\gw-edge-kits\signing   กุญแจเซ็นแพ็กเกจอัปเดต — หาย = edge ทุกตัวต้องอัปเดตด้วย flash drive (agents.md ข้อ 4)
     - D:\gw-edge-kits\cache     ไฟล์ node/ffmpeg/go2rtc/wheels ที่โหลดไว้ (ลบแล้วรอบหน้าต้องโหลดใหม่)
     - ไฟล์ .pem ทุกไฟล์
     - ชุดใน server\edge-kits ที่ kits.json ยังอ้างถึง (central กำลังเสิร์ฟให้ดาวน์โหลด) และตัว kits.json
-  เก็บรุ่นใหม่สุด -Keep รุ่น (ค่าเริ่มต้น 2) ต่อกลุ่ม: GW-Edge-Kit-*, GW-Edge-Update-*, และต่อแพลตฟอร์มใน server\edge-kits
+  เก็บรุ่นใหม่สุด -Keep รุ่น (ค่าเริ่มต้น 2) ต่อกลุ่ม: Edge-Kit-*, Edge-Update-* (รวมชื่อเดิม GW-…), และต่อแพลตฟอร์มใน server\edge-kits
   staging-* / pack-* / app-*.tar.gz ที่ค้างจากรอบที่ล้มกลางทาง ลบได้ทั้งหมด
 
   รันจาก PowerShell แบบ Run as Administrator — server\edge-kits ถูกสร้างโดย shell admin (context.md)
@@ -56,7 +56,7 @@ $doomed = New-Object System.Collections.ArrayList
 # ── D:\gw-edge-kits ────────────────────────────────────────────────────────────
 if (Test-Path $KitRoot) {
   $items = @(Get-ChildItem $KitRoot -Force | Where-Object { -not (Test-Protected $_) })
-  foreach ($prefix in 'GW-Edge-Kit-', 'GW-Edge-Update-') {
+  foreach ($prefix in 'Edge-Kit-', 'Edge-Update-', 'GW-Edge-Kit-', 'GW-Edge-Update-') {
     $group = @($items | Where-Object { $_.PSIsContainer -and $_.Name.StartsWith($prefix) } | Sort-Object LastWriteTime -Descending)
     foreach ($old in @($group | Select-Object -Skip $Keep)) { [void]$doomed.Add($old) }
   }
@@ -76,9 +76,9 @@ if (Test-Path $ServerKits) {
     try { $served = @(@(Get-Content $kitsJson -Raw -Encoding UTF8 | ConvertFrom-Json) | ForEach-Object { $_.file } | Where-Object { $_ }) }
     catch { throw "อ่าน $kitsJson ไม่ได้ ($($_.Exception.Message)) — ไม่ลบอะไรใน server\edge-kits" }
   }
-  $files = @(Get-ChildItem $ServerKits -File -Force | Where-Object { -not (Test-Protected $_) -and $served -notcontains $_.Name -and $_.Name -match '^GW-Edge-(.+)-[0-9a-f]{7,}\.(zip|tar\.gz)$' })
-  foreach ($platform in @($files | ForEach-Object { if ($_.Name -match '^GW-Edge-(.+)-[0-9a-f]{7,}\.(zip|tar\.gz)$') { $Matches[1] } } | Sort-Object -Unique)) {
-    $group = @($files | Where-Object { $_.Name -match "^GW-Edge-$([regex]::Escape($platform))-[0-9a-f]{7,}\." } | Sort-Object LastWriteTime -Descending)
+  $files = @(Get-ChildItem $ServerKits -File -Force | Where-Object { -not (Test-Protected $_) -and $served -notcontains $_.Name -and $_.Name -match '^(?:GW-)?Edge-(.+)-[0-9a-f]{7,}\.(zip|tar\.gz)$' })
+  foreach ($platform in @($files | ForEach-Object { if ($_.Name -match '^(?:GW-)?Edge-(.+)-[0-9a-f]{7,}\.(zip|tar\.gz)$') { $Matches[1] } } | Sort-Object -Unique)) {
+    $group = @($files | Where-Object { $_.Name -match "^(?:GW-)?Edge-$([regex]::Escape($platform))-[0-9a-f]{7,}\." } | Sort-Object LastWriteTime -Descending)
     # ชุดที่ kits.json อ้างถึงนับเป็นรุ่นที่เก็บอยู่แล้ว — จึงเก็บเพิ่มอีก Keep-1 รุ่น
     foreach ($old in @($group | Select-Object -Skip ([Math]::Max(0, $Keep - 1)))) { [void]$doomed.Add($old) }
   }

@@ -4,7 +4,7 @@ import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
- * Toaster — แจ้งเตือนสไตล์ Surveillance Gateway (แทน browser alert)
+ * Toaster — แจ้งเตือนสไตล์ของระบบ (แทน browser alert)
  */
 export function Toaster() {
   const [items, setItems] = useState([]);

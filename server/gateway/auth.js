@@ -111,6 +111,14 @@ function ensureSchema(db) {
     ให้เฉพาะแหล่งส่ง AI ที่เชื่อถือได้และจำกัดกลุ่มกล้อง · key ของผู้ดู/parent ไม่ต้องมีสิทธิ์ส่ง
   */
   db.run('ALTER TABLE api_clients ADD COLUMN allow_event_write INTEGER NOT NULL DEFAULT 0', () => {});
+  /*
+    allow_public — key ใบนี้เห็นกล้องสาธารณะที่ Central ดึงมาเอง (vms/public-cams.js) ได้ไหม
+    แยกจาก scope_groups: กลุ่มคุมกล้องของเรา ส่วนกล้อง public เปิดทั้งชุดด้วยธงนี้ · ค่าเริ่มต้น 0
+    key ที่ออกไปแล้ว (รวมใบที่เห็นทุกกลุ่ม) จึงไม่เห็นกล้อง public จนกว่าผู้ดูแลจะติ๊ก
+  */
+  db.run('ALTER TABLE api_clients ADD COLUMN allow_public INTEGER NOT NULL DEFAULT 0', () => {});
+  // เพิกถอน key ของ inference ที่เลิกใช้ โดยไม่แตะ key ของแหล่งรับภายนอก
+  db.run("UPDATE api_clients SET enabled = 0, allow_event_write = 0 WHERE id = 'apic_ai_worker_local'");
   });
 }
 
@@ -238,11 +246,11 @@ function createApiKeyAuth(db) {
     }
 
     db.get(
-      'SELECT id, name, scope_groups, enabled, allow_ptz, allow_playback, allow_event_write FROM api_clients WHERE key_hash = ?',
+      'SELECT id, name, scope_groups, enabled, allow_ptz, allow_playback, allow_event_write, allow_public FROM api_clients WHERE key_hash = ?',
       [keyHash],
       (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!row || !row.enabled) {
+        if (!row || !row.enabled || row.id === 'apic_ai_worker_local') {
           // แคชผลลบด้วย เพื่อไม่ให้การยิง key มั่วรัวๆ กลายเป็นการยิง query รัวๆ
           remember(keyHash, null);
           return res.status(401).json({ error: 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน' });
@@ -260,7 +268,7 @@ function createApiKeyAuth(db) {
           }
         }
 
-        const client = { id: row.id, name: row.name, scopeGroups, allowPtz: Boolean(row.allow_ptz), allowPlayback: Boolean(row.allow_playback), allowEventWrite: Boolean(row.allow_event_write) };
+        const client = { id: row.id, name: row.name, scopeGroups, allowPtz: Boolean(row.allow_ptz), allowPlayback: Boolean(row.allow_playback), allowEventWrite: Boolean(row.allow_event_write), allowPublic: Boolean(row.allow_public) };
         remember(keyHash, client);
         req.apiClient = client;
         touch(client.id);

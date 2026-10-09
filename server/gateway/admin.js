@@ -64,7 +64,7 @@ function createGatewayAdminRouter({
 
   /** โหลด key หนึ่งใบแล้วตรวจว่าผู้เรียกจัดการใบนี้ได้ไหม — ใช้กับเปิดดู/แก้/ลบ · ไม่พบหรือไม่ผ่าน ตอบแทนให้แล้ว */
   const loadManageableKey = (req, res, cb, { checkPrivileges = false, effectiveFlags = null } = {}) => {
-    db.get('SELECT id, name, key_hint, key_cipher, scope_groups, allow_ptz, allow_playback, allow_event_write FROM api_clients WHERE id = ?', [req.params.id], (err, row) => {
+    db.get('SELECT id, name, key_hint, key_cipher, scope_groups, allow_ptz, allow_playback, allow_event_write, allow_public FROM api_clients WHERE id = ?', [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'ไม่พบ key นี้' });
       checkScopeWithinCaller(req, parseScope(row.scope_groups), (scopeErr) => {
@@ -72,6 +72,7 @@ function createGatewayAdminRouter({
         if (checkPrivileges) {
           const flags = effectiveFlags ? effectiveFlags(row) : {
             allowPtz: Boolean(row.allow_ptz), allowPlayback: Boolean(row.allow_playback), allowEventWrite: Boolean(row.allow_event_write),
+            allowPublic: Boolean(row.allow_public),
           };
           const denied = flagsCallerCannotGrant(req, flags);
           if (denied.length) return res.status(403).json({ error: 'ให้หรือเปิดดูสิทธิ์ที่ตัวเองไม่มีไม่ได้: ' + denied.join(', ') });
@@ -84,8 +85,9 @@ function createGatewayAdminRouter({
   /*
     สิทธิ์พิเศษของ key ที่ต้องถืออยู่เองก่อนจะติ๊กให้ระบบอื่น — มอบสิ่งที่ตัวเองไม่มีไม่ได้ (กฎเดียวกับ role)
     allowEventWrite ไม่มีสิทธิ์ของคนที่ตรงกัน ให้เฉพาะผู้เรียกที่เห็นทุกกล้อง (event ปลอมกระทบทุกกล้อง)
+    allowPublic = เห็นกล้องสาธารณะของ Central — ให้ได้เฉพาะคนที่เห็นเมนู Public Cam Map
   */
-  const FLAG_PERMS = { allowPtz: 'device.ptz', allowPlayback: 'playback.view' };
+  const FLAG_PERMS = { allowPtz: 'device.ptz', allowPlayback: 'playback.view', allowPublic: 'menu.publiccam' };
   const flagsCallerCannotGrant = (req, body) => Object.keys(FLAG_PERMS)
     .filter((f) => body && body[f] && !(req.perms && req.perms.has(FLAG_PERMS[f])))
     .concat(body && body.allowEventWrite && req.deviceIds instanceof Set ? ['allowEventWrite'] : []);
@@ -93,7 +95,7 @@ function createGatewayAdminRouter({
   /** รายการ key ทั้งหมด — ไม่มีตัว key ติดมาด้วย ต้องขอทีละใบที่ /:id/key */
   router.get('/', (req, res) => {
     db.all(
-      `SELECT id, name, key_hint, scope_groups, enabled, allow_ptz, allow_playback, allow_event_write, created_at, created_by, last_seen_at
+      `SELECT id, name, key_hint, scope_groups, enabled, allow_ptz, allow_playback, allow_event_write, allow_public, created_at, created_by, last_seen_at
        , (key_cipher IS NOT NULL) AS recoverable
        FROM api_clients ORDER BY created_at DESC`,
       (err, rows) => {
@@ -108,6 +110,7 @@ function createGatewayAdminRouter({
             allowPtz: Boolean(row.allow_ptz),
             allowPlayback: Boolean(row.allow_playback),
             allowEventWrite: Boolean(row.allow_event_write),
+            allowPublic: Boolean(row.allow_public),
             createdAt: row.created_at,
             createdBy: row.created_by,
             lastSeenAt: row.last_seen_at,
@@ -287,6 +290,7 @@ function createGatewayAdminRouter({
         allowPtz: req.body && 'allowPtz' in req.body ? req.body.allowPtz : Boolean(row.allow_ptz),
         allowPlayback: req.body && 'allowPlayback' in req.body ? req.body.allowPlayback : Boolean(row.allow_playback),
         allowEventWrite: req.body && 'allowEventWrite' in req.body ? req.body.allowEventWrite : Boolean(row.allow_event_write),
+        allowPublic: req.body && 'allowPublic' in req.body ? req.body.allowPublic : Boolean(row.allow_public),
       }),
     });
   });
@@ -320,7 +324,13 @@ function createGatewayAdminRouter({
       params.push(allowEventWrite);
       notes.push(`${allowEventWrite ? 'อนุญาต' : 'ห้าม'}ส่ง event ของ AI`);
     }
-    if (!sets.length) return res.status(400).json({ error: 'ไม่มีอะไรให้แก้ — ส่ง enabled, allowPtz, allowPlayback หรือ allowEventWrite' });
+    if (req.body && 'allowPublic' in req.body) {
+      const allowPublic = req.body.allowPublic ? 1 : 0;
+      sets.push('allow_public = ?');
+      params.push(allowPublic);
+      notes.push(`${allowPublic ? 'อนุญาต' : 'ห้าม'}ดูกล้อง Public`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'ไม่มีอะไรให้แก้ — ส่ง enabled, allowPtz, allowPlayback, allowEventWrite หรือ allowPublic' });
 
     db.run(`UPDATE api_clients SET ${sets.join(', ')} WHERE id = ?`, [...params, req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });

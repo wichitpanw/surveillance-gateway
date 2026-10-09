@@ -309,6 +309,8 @@ public partial class PlaybackView : UserControl, IDisposable
             if (_disposed || ct.IsCancellationRequested || _selected?.Id != cameraId) return;
             using var media = new Media(_libVlc, new Uri(url));
             media.AddOption(":network-caching=1000");
+            // Playback stays picture-only, as it was under the old global --no-audio.
+            media.AddOption(":no-audio");
             _playStart = at;
             _playDuration = duration;
             _player.Play(media);

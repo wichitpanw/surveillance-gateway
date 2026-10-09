@@ -1,9 +1,14 @@
 # Windows client (SurveillanceGateway)
 
+สถานะ release 2026-10-07: Client **1.9.5** (release 2026-10-06) · Gateway **d645ed9**
+1.9.5 เพิ่มปุ่มลำโพงต่อ tile สำหรับกล้องที่ Edge เปิดเสียง เริ่มปิดเสียงเสมอ — ดู [docs/CAMERA-AUDIO.md](../docs/CAMERA-AUDIO.md)
+AI Events รองรับภาพย่อ/เต็ม และตัวกรอง Edge/Group/ที่มา (1.9.3) · Camera Library หุบแผงตัวกรองได้ (1.9.4)
+ตรวจ build และ render WPF แบบ offscreen ผ่าน; ยังไม่ได้ยืนยันหน้าต่าง Client จริง/เสียงจริงหลังติดตั้งรุ่นนี้
+
 โปรแกรมดูกล้องของผู้ใช้ — ต่อ **Surveillance Gateway Regional** หรือ **Surveillance Gateway Central** ด้วย API key ของเครื่องปลายทาง แล้วเล่นภาพ, ทำ video wall, ดูแผนที่, สั่ง PTZ
 
 Client ภายในภาคควรตั้ง URL และ API key ของ Regional ภาคนั้นโดยตรง เพื่อให้ดูภาพในภาคต่อได้เมื่อสาย Regional–Central ขาด; ผู้ดูระดับประเทศใช้ Central และ key ที่ Central ออกให้
-เป็น "ผู้บริโภค" ของ `/api/v1` ตัวอ้างอิง ไม่ใช่ทางเข้ากล้องอีกทาง · .NET 8 / WPF · อัปเดต 2026-09-28 (v1.8.2)
+เป็น "ผู้บริโภค" ของ `/api/v1` ตัวอ้างอิง ไม่ใช่ทางเข้ากล้องอีกทาง · .NET 8 / WPF · อัปเดต 2026-10-07 (v1.9.5)
 
 ## ทำไมมีโปรแกรมนี้
 
@@ -50,6 +55,8 @@ bin\Release\net8.0-windows\win-x64\SurveillanceGateway.exe [--server=203.0.113.8
 | Map | หมุดกล้องบนแผนที่ 3 มิติใน WebView2 จาก `/client-map.html` ของ central (หน้านั้นไม่ถือ key) |
 | Camera details | ข้อมูลกล้อง สตรีม แทร็ก |
 | Player window | หนึ่งหน้าต่างต่อกล้อง ลากไปจออื่นได้ · แผง PTZ ข้างภาพ (กดค้าง = หมุน) |
+| Playback | เส้นเวลาการบันทึกหนึ่งวันแบบ VMS (`Views/PlaybackTimeline.cs`, 1.8.4) · ดาวน์โหลด MP4 ≤ 30 นาที (`PlaybackDownloadWindow`, 1.9.1) · key ต้องมี `allow_playback` · ภาพดึงจากอุปกรณ์ที่ edge |
+| AI events | event จากกล้อง/NVR/VMS/API ผ่าน Edge → Regional/Central 24 ชม.ล่าสุด (`GET /api/v1/ai/events`) + event ใหม่ทาง SSE · ภาพย่อโหลดทีละภาพ · คลิกแถว = `EventDetailWindow` (ภาพเต็ม, รายละเอียด, ←/→ เลื่อน, Esc ปิด) |
 
 หน้า Home และ Camera details เลื่อนเข้าแบบ fade-transform ส่วน wall และ map ไม่ animate เพราะ **วิดีโอ (libVLC) และ WebView2 เป็น HWND —
 WPF วาดทับหรือขยับ/จางไม่ได้** ด้วยเหตุผลเดียวกัน host ของเนื้อหามีได้ทีละหน้า และ view ถูกเพิ่ม/ถอดออก ไม่ใช่ซ่อนด้วย Visibility
@@ -97,5 +104,7 @@ decoder GPU 13%, **encoder 0%** (ถ้าผ่านเบราว์เซ�
 ## ยังไม่มี
 
 - ปุ่มสลับแผนที่ดาวเทียมในหน้า Map ของ client (หน้าเว็บมีแล้ว)
-- แสดงชื่อ edge ต้นทาง / global ID ของกล้องในหน้า Camera details
-- ดูภาพย้อนหลัง (รอแหล่งภาพจากอุปกรณ์ที่ central)
+- แสดงชื่อ edge ต้นทาง / global ID ของกล้องในหน้า Camera details (ค้นหาด้วย global ID ใน Video wall ได้แล้ว)
+- สลับ Gateway อัตโนมัติ (Central → Regional) เมื่อสายขาด — ต้องเลือก Gateway ที่บันทึกไว้เอง
+- เสียงใน Playback (ภาพอย่างเดียวโดยตั้งใจ)
+- client บน Linux (Avalonia) — ตกลงแล้วแต่พักไว้

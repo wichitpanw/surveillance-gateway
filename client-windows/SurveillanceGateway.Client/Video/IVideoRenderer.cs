@@ -44,6 +44,15 @@ public interface IVideoRenderer : IDisposable
 
     long LostPictures { get; }
 
+    /// <summary>
+    /// Whether the camera sends sound (set at the edge). False keeps the old picture-only path -
+    /// no audio track is decoded and no audio output is opened. Takes effect on the next Play.
+    /// </summary>
+    bool AudioAvailable { get; set; }
+
+    /// <summary>Starts true for every cell: a wall must never start talking on its own.</summary>
+    bool Muted { get; set; }
+
     event EventHandler<VideoStateChangedEventArgs>? StateChanged;
 
     /// <summary>

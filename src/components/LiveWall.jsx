@@ -198,7 +198,7 @@ export default function LiveWall({ cameras = [], cameraStatus = {} }) {
                   selected === i ? 'border-primary' : 'border-white/10')}>
                 {cam ? (
                   <>
-                    <LivePlayer key={cam.id} cameraId={cam.id} type="sub" fit={layout === 1 ? 'contain' : 'cover'} className="absolute inset-0" />
+                    <LivePlayer key={cam.id} cameraId={cam.id} type="sub" audio={Number(cam.audio_enabled) === 1} fit={layout === 1 ? 'contain' : 'cover'} className="absolute inset-0" />
                     <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/70 to-transparent px-2 py-1.5">
                       <span className={cn('size-1.5 shrink-0 rounded-full', cameraStatus[cam.id] === 'online' ? 'bg-status-ok' : 'bg-status-crit')} />
                       <span className="truncate text-[11px] text-white">{cam.name}</span>

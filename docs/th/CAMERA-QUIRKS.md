@@ -1,7 +1,7 @@
 # CAMERA-QUIRKS — ปัญหาเฉพาะยี่ห้อ/รุ่นที่เจอแล้ว
 
 กล้องในระบบนี้คือ "ชุด firmware" ไม่ใช่ชุดกล้อง — Tiandy, Uniview, Dahua, Hikvision และ NVR ยี่ห้อทั่วไปต่างอ้างว่ารองรับ
-ONVIF/RTSP และต่างก็ทำผิดสเปกคนละมุม ไฟล์นี้บันทึกปัญหาที่เจอจริง วิธีแก้ และวิธีไล่ปัญหาตัวถัดไป · อัปเดต 2026-09-28
+ONVIF/RTSP และต่างก็ทำผิดสเปกคนละมุม ไฟล์นี้บันทึกปัญหาที่เจอจริง วิธีแก้ และวิธีไล่ปัญหาตัวถัดไป · อัปเดต 2026-10-02
 
 ## หลักคิดก่อนดูรายการ
 
@@ -21,6 +21,23 @@ central ที่ดึงจาก edge ก็ใช้เส้น `_raw` ข�
 
 ของที่ใช้หลักเดียวกัน: `server/codec_cache.json` จำว่าแต่ละ RTSP เป็น codec อะไรจริง (ไม่เชื่อยี่ห้อ)
 และตัวค้นหา AI (`server/gateway/analytics/discovery.js`, ปิดอยู่) ถาม ONVIF ทีละกล้อง ใช้ยี่ห้อแค่เป็นคำใบ้
+
+## Checklist: แอดยี่ห้อ / VMS / NVR ใหม่
+
+ใช้กับทั้งภาพสด ย้อนหลัง และ PTZ — สรุปจากที่ DSS จังหวัดทดสอบพังสองรอบ (2026-10-08/09)
+
+1. **แยกโมดูลต่อยี่ห้อ** ใน `server/vms/` (client + sessions + playback) แล้วให้ `device-playback.js` เลือก — ห้ามใส่เงื่อนไขยี่ห้อในโค้ดกลาง
+2. **ส่งแบบมาตรฐานก่อน ถอยเมื่ออุปกรณ์บอกชัด** — error code/ข้อความที่ระบุว่าขาดอะไร ไม่เดาล่วงหน้า ไม่ทำให้รุ่นที่ใช้ได้อยู่พัง
+   (ตัวอย่าง: `StartPlaybackByFile` ส่งไม่มี `playbackType` ก่อน ได้ 1004 ที่เอ่ยชื่อฟิลด์ค่อยส่งใหม่)
+3. **จำผลต่ออุปกรณ์แต่ละเครื่อง** ไว้ใน client/instance — ครั้งถัดไปไปทางที่ใช้ได้เลย อุปกรณ์อยู่ไกลทุกรอบที่เสียไปคือความช้า
+   (`needsPlaybackType` ใน `DssClient`, `workedVia` ใน `dss-rtsp-relay.js`)
+4. **ทุกทางถอยต้องมี log และทุกความล้มเหลวต้องบอก host:port/สาเหตุ** — ผ่าน `hideToken`/`shared/redact.js` ห้ามมี token หรือรหัส
+   ปิด socket เงียบ ๆ ทำให้ปลายทางเห็นแค่ `404`/`i/o timeout` แล้วไล่ไม่ได้ (DSS relay เดิม)
+5. **อุปกรณ์ส่ง URL มาเอง = คิดเรื่อง NAT เสมอ** — ลอง URL ที่ได้ก่อน แล้วสำรองด้วย host ที่ผู้ใช้กรอก พอร์ตเดิม
+   (`onvif_patch.js`, `mediaCandidates()` ใน `dss.js`) · token ใช้ครั้งเดียวให้ทดสอบแค่ TCP ก่อนส่งคำขอจริง
+6. **login ผิดให้หยุด ห้ามลองซ้ำอัตโนมัติ** — DSS, Digifort, Tiandy ล็อกบัญชี
+7. **ทดสอบกับอุปกรณ์จริงอย่างน้อยสองแบบถ้ามี** (ในวง LAN และหลัง NAT / คนละเวอร์ชัน) แล้วยืนยันว่าได้ภาพจริง ไม่ใช่แค่ต่อได้
+8. **จดลงไฟล์นี้** — อาการ, รุ่น/เวอร์ชัน, ไซต์, วันที่, สาเหตุ, ที่แก้ และสิ่งที่ยังไม่ได้ยืนยัน
 
 ## ปัญหาที่เจอแล้ว
 
@@ -80,6 +97,16 @@ segment ออกมาเป็นเสียง mp3 ล้วนแม้ pro
 `server/onvif_patch.js`: `patchOnvifSoapHttps` เลือก http/https ตาม xaddr (library ใช้ http อย่างเดียว) และ
 `patchOnvifNatAddressing` สร้าง URI ใหม่ด้วย host ที่ต่อได้จริงแทน address ภายในที่ NVR รายงาน
 
+### Dahua DSS หลัง NAT ให้ URL ภาพที่ชี้ IP ภายใน (Edge 103 จังหวัดทดสอบ, 2026-10-08)
+
+- **อาการ:** แอด DSS ด้วย IP สาธารณะ → login/รายชื่อ/สถานะปกติ แต่ภาพสดไม่มา go2rtc ขึ้น `read tcp …->127.0.0.1:<relay>: i/o timeout` ทุก 10 วิ
+- **สาเหตุ:** `StartVideo` / `StartPlaybackByFile` ตอบ URL ของ media server ที่เป็น address ภายใน (อาจหลายทางคั่น `|`) — TCP ค้างจน go2rtc ตัด
+- **ทำแล้ว:** `mediaCandidates()` (`server/vms/dss.js`) ลองทางที่ DSS ให้ก่อน แล้วทางเดียวกันที่เปลี่ยน host เป็นที่อยู่ที่แอดไว้ (พอร์ตเดิม)
+  ภาพสดเลือกใน `dss-rtsp-relay.js`, ย้อนหลังใน `firstReachable()` · log `[DSS relay]` / `[DSS]` บอกทางที่ใช้หรือ host:port ที่ต่อไม่ได้
+- ต้อง forward พอร์ต media (มักเป็น 9100/9320) ไว้ที่ address เดียวกับ API — พอร์ตภายนอกต่างจากภายในยังไม่รองรับ
+- **DSS จังหวัดทดสอบต้องมี `playbackType`** ใน `StartPlaybackByFile` (1004 `Argument [data.playbackType] can not be empty`) — DSS Pro V8.5.0 ของเราไม่ต้อง
+  ส่ง `'0'` แล้วภาพย้อนหลังขึ้น (ยืนยัน 2026-10-09) · ค่าอื่นไม่มีเอกสาร · `DssClient` จำไว้หลังโดนครั้งแรก
+
 ### NVR ช่องที่ออฟไลน์ตอนสแกน (Uniview NVR ที่ SITE-1-3)
 
 - **อาการ:** ช่องที่กล้องหลุดตอนสแกนหายจาก `GetProfiles` ทั้งก้อน (ไม่ใช่แค่ไม่มี RTSP) — SITE-3 ได้ 20 จาก 28 ช่อง
@@ -122,13 +149,24 @@ segment ออกมาเป็นเสียง mp3 ล้วนแม้ pro
 ### Axis (P1488-LE, AXIS OS 12.11) — บัญชี ONVIF แยก, มีแค่ profile 4K
 
 - **ONVIF ต้องใช้บัญชี ONVIF** ที่สร้างในกล้อง (System → Accounts → ONVIF accounts) — บัญชีเว็บ (root) ได้ `400 Sender not authorized`
-  - **RTSP ใช้ได้ทั้งบัญชีเว็บและบัญชี ONVIF** · **CGI ของ VAPIX** (`/axis-cgi/jpg/image.cgi`) ใช้ได้เฉพาะบัญชีเว็บ (บัญชี ONVIF ได้ 401)
+  - **RTSP แยก path ตามบัญชี** (ทดสอบ P1488-LE 203.0.113.11 ที่ Edge 102, 2026-10-06): `onvif-media/media.amp?profile=…` รับบัญชี ONVIF
+    · `axis-media/media.amp` รับบัญชีเว็บ (บัญชี ONVIF ได้ 401) · **CGI ของ VAPIX** (`/axis-cgi/jpg/image.cgi`) ใช้ได้เฉพาะบัญชีเว็บ
+  - ONVIF ตอบ stream URI เป็น `127.0.0.3` — `server/onvif_patch.js` แทนด้วย IP ที่ต่อจริงแล้ว · media service อยู่ที่ `/onvif/services`
   - ยี่ห้อ `axis` ในระบบ: ONVIF ล้ม → ใช้ `axis-media/media.amp` แทนการเดา `/onvif1` · ภาพนิ่งสำรองผ่าน VAPIX (digest MD5)
 - ตรวจยี่ห้อได้โดยไม่ต้องใช้รหัส: `POST /axis-cgi/basicdeviceinfo.cgi` `{"apiVersion":"1.0","method":"getAllUnrestrictedProperties"}`
   → สแกนแบบระบุวงตั้ง `brand: axis` และชื่อรุ่นให้เอง
 - profile ONVIF มีแค่ `profile_1_h264` กับ `profile_1_jpeg` ที่ 3840×2160 ทั้งคู่ → ระบบข้าม JPEG และทำ sub เองด้วย `&resolution=640x360`
   (VAPIX ย่อขนาดตาม parameter ได้ ทั้ง `axis-media/media.amp` และ `onvif-media/media.amp`)
 - keyframe ถี่ — ภาพแรกผ่านสาย link: sub 2.3 วิ, main 4.7 วิ
+
+### AXIS S30 recorder (S30, 203.0.113.10 ที่ Edge 102) — ใช้บัญชีเว็บเท่านั้น
+
+- แอดทาง API → AXIS S30 (VAPIX) ด้วยบัญชีเว็บ (`root`): ค้นกล้อง `/axis-cgi/externalipdeviceinfo/list.cgi` แล้วดูภาพ
+  `rtsp://<user>:<pass>@<S30>:554/axis-media/media.amp?device=<Device ID>`
+- **บัญชี ONVIF ใช้กับ S30 ไม่ได้** (ทดสอบ 2026-10-06): ONVIF device service ตอบ 401 แม้คำสั่งที่ไม่ต้อง login, media service 404,
+  `onvif-media` login ผ่านแต่ตอบ 400 (ไม่มี media profile) · `axis-media` ด้วยบัญชี ONVIF = 401
+- ไม่มี stream 2 ต่อกล้อง — sub คือ main + `&resolution=640x360` (`axisS30SubRtsp` ใน `server/vms/axis-s30.js`; ก่อน 2026-10-06 sub = main 1080p
+  และ server แก้แถวเดิมให้ตอนเริ่ม) · ขอเสียง `&audio=1` ได้ 503 เมื่อกล้องไม่ส่งเสียงให้ S30
 - สแกนหลาย host ตอบ 401 กับทุกคำสั่ง ONVIF ยกเว้น `GetSystemDateAndTime` → การสแกนใช้คำสั่งนั้นตรวจว่าเป็น ONVIF
 
 ### Dahua init ONVIF ไม่ผ่าน
@@ -178,3 +216,11 @@ segment ออกมาเป็นเสียง mp3 ล้วนแม้ pro
 - [ONVIF Streaming Specification](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) — สิ่งที่ DESCRIBE แบบ backchannel ต้องตอบ
 - [scrypted issue 1989](https://github.com/koush/scrypted/issues/1989) — ปัญหาเดียวกันบน Axis (ตอบ 551)
 - [Multi-vendor camera integration pattern](https://www.forasoft.com/learn/video-surveillance/articles-vms/multi-vendor-interoperability-reference-pattern)
+
+## AI event และภาพ — ยืนยัน 2026-10-02
+
+- Tiandy MODEL-A firmware FW-A: ONVIF services มีอยู่แต่ไม่พบ Perimeter topic/metadata ที่ใช้แทน AlarmInfo ได้ ใช้ภาพ Alarm บน SD จับคู่ช่อง/วินาที ไม่จับภาพสดแทนเหตุเก่า
+- UNV MODEL-B firmware FW-B: รับ LineCrossing จาก ONVIF RTSP metadata แล้ว trigger GetSnapshotUri; /media/flv/picture ตอบ HTTP JPEG Stream is full แต่ URI snapshot ที่ ONVIF คืนตอบ JPEG ได้
+- Profile M ไม่ได้แนบ JPEG ให้โดยอัตโนมัติ และการมี ONVIF ไม่รับประกันว่า AI กฎเดียวกันรองรับทุกยี่ห้อ
+- UNV ต้องชดเชยเวลาเครื่อง; เหตุช้ากว่า 3 วินาทีหรือภาพโหลดเกิน 5 วินาทีไม่เผยแพร่เป็นเหตุพร้อมภาพ; ไม่รีบูตกล้องเพื่อแก้ช่อง JPEG ค้างตามคำสั่งผู้ใช้
+- ขอบเขตที่รองรับและหลักฐานสามชั้น: [EXTERNAL-AI.md](EXTERNAL-AI.md)

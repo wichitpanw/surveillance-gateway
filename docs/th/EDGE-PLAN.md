@@ -1,10 +1,14 @@
+> สถานะปัจจุบัน 2026-10-07: Gateway d645ed9 / Client 1.9.5; รับ AI ภายนอก ไม่มี inference worker ดู [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> เอกสารนี้เขียนตอนระบบสองชั้น คำว่า "central" ในหัวข้อการทำงาน/link หมายถึง **parent ของ edge** — ปัจจุบันคือ Regional (และ Regional เป็นลูกของ Central แบบเดียวกัน) ดู [REGIONAL-PLAN.md](REGIONAL-PLAN.md)
+
 # Edge ↔ Central — การทำงาน ข้อตกลง และงานที่เหลือ
 
 > AI ตั้งแต่ 2026-10-02 เปลี่ยนเป็นรับผลจากกล้อง/NVR/VMS/API ภายนอก ไม่มี inference ทั้งสามชั้น
-> ข้อ B–D ในเฟส 5 ด้านล่างเป็นประวัติเดิม; สถานะล่าสุดและข้อจำกัดดู [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> เฟส 5 ข้อ D อธิบาย receiver ปัจจุบัน; ข้อ A/C และผลทดสอบตามวันที่เดิมเป็นประวัติ
 
 
-อัปเดต 2026-09-28 · เฟส 0–3 ใช้งานจริงแล้ว (edge `001` กับ central อยู่เครื่องเดียวกัน) · เฟส 4 (link) ใช้จริงกับ edge `002` (Ubuntu, Tailscale) ยังไม่มี TLS
+อัปเดต 2026-10-07 · Central → Regional ภาคกลาง (100) → Edge 101/102 ใช้จริงแล้ว (Edge 103 จองแล้ว ยังไม่ต่อ); สาย link ไม่มี TLS ใช้ LAN/VPN
+· ติดตั้ง edge ใหม่จากชุด offline และอัปเดตผ่านสายด้วยปุ่มในหน้า Edge Nodes ([EDGE-KIT.md](EDGE-KIT.md)) · เฟส 5: รับ AI event พร้อม JPEG จากต้นทางผ่าน AI Sources; ลบ inference worker แล้ว · ดูย้อนหลังดึงจากอุปกรณ์ (AXIS S30 / Uniview ใช้จริง · Hikvision / Dahua / ONVIF Profile G รอทดสอบ)
 
 ## ภาพรวม
 
@@ -88,7 +92,7 @@ edge: ใส่ `centralUrl` (`ws://<central>:5173/api/edge-link`) + `centralTok
 
 | ทิศ | ข้อความ |
 |---|---|
-| edge → central | `hello {node, build, name, via, platform, runner}` → `heartbeat` ทุก 20 วิ · `catalog {cameras}` ตอนต่อ, ทุก 5 นาที และเมื่อถูกขอ · `camera_state` ทันทีที่เปลี่ยน · `update_status {state, build, error}` · `reply {id, ok, data \| error}` |
+| edge → central | `hello {node, build, name, via, platform, runner, province}` → `heartbeat` ทุก 20 วิ · `catalog {cameras}` ตอนต่อ, ทุก 5 นาที และเมื่อถูกขอ · `camera_state` ทันทีที่เปลี่ยน · `update_status {state, build, error}` · `reply {id, ok, data \| error}` |
 | central → edge | `welcome` · `rpc {id, method, params}`: `catalog.push`, `stream.open`, `stream.close`, `ptz.info`, `ptz.cmd`, `update.apply` (หมดเวลา 10 วิ) · `update {build, platform, file, size, sha256, signature, path}` · `error` |
 
 เงียบเกิน 60 วิ = สายตาย · เลขเครื่องซ้ำกับ central หรือ edge อื่น = ปฏิเสธ · edge ต่อซ้ำด้วย token เดิม = ปิดสายเก่า
@@ -136,9 +140,9 @@ edge ตรวจลายเซ็น โหลดทาง HTTP ด้วย t
 |---|---|
 | เครือข่ายข้ามไซต์ | Tailscale (ยังไม่มี TLS — ห้ามวิ่งบน internet ตรง) |
 | Central | `203.0.113.80` / Tailscale `203.0.113.112` · gateway 5173 · go2rtc RTSP 8555 |
-| เลขเครื่อง (`GATEWAY_NODE_NUMBER`) | central `000` · edge บนเครื่อง central `001` · edge จริงเครื่องถัดไป `002` เป็นต้นไป · `998`/`999` สงวนไว้ทดสอบ |
+| เลขเครื่อง (`GATEWAY_NODE_NUMBER`) | central `000` · Regional ต้นบล็อก `100`/`200`/…/`600` · Edge ในภาค +1 ถึง +99 (ภาคกลางใช้ `101`–`103` แล้ว) · `001`–`099` สงวนของเดิม (`001`/`002` ยุติแล้ว) · `997`–`999` ใช้ทดสอบ |
 | จังหวัดใน global ID ของกล้องที่ยังไม่ตั้งจังหวัด | central `10` (ฝังในโค้ด) · edge ตั้ง `GATEWAY_DEFAULT_PROVINCE` ไม่ตั้ง = `00` |
-| พอร์ต edge | เครื่องแยก: 5173 / 1984 / 8555 ได้ · อยู่ร่วมกับ central: 5273 / 1994 / 8565 / 8566 |
+| พอร์ต edge | เครื่องแยก: 5173 / 1984 / 8555 / 8556 · (5273 / 1994 / 8565 / 8566 บน HOST เป็นของ Regional ตั้งแต่ 2026-09-30) |
 | `GATEWAY_PUBLIC_HOST` ของ edge | IP ที่ central ต่อถึงได้จริง — ห้าม `127.0.0.1` (ฝังอยู่ใน URL สตรีมที่ส่งให้ central) |
 | Firewall ของ edge | พอร์ต gateway และ RTSP ของ go2rtc เปิดให้ IP ของ central เท่านั้น |
 | Health / sync | 60 วินาที / 10 นาที |
@@ -150,11 +154,12 @@ edge ตรวจลายเซ็น โหลดทาง HTTP ด้วย t
 | งาน | ทำไม / รายละเอียด |
 |---|---|
 | **TLS ของสาย link** | `wss://` ที่ central + RTSPS สำหรับ push — ต้องมีโดเมนและ cert ก่อน จนกว่าจะมี link ใช้ได้เฉพาะ Tailscale/LAN |
-| **ดูย้อนหลังจากอุปกรณ์** | AXIS S30 (ทดสอบ S30/edge 002 แล้ว) · Uniview NVR (ทดสอบ SITE-1 ถึง SITE-3/edge 002 แล้ว) · **เขียนแล้ว รอเครื่องทดสอบ**: Hikvision, Dahua, ONVIF Profile G (กล้อง SD card ทุกยี่ห้อ, NVR ยี่ห้ออื่น, Milestone Bridge) · Digifort รอเอกสาร API ส่วน playback |
+| **AI จากยี่ห้ออื่น (ถัดไป)** | ทดสอบ topic/metadata และภาพประกอบต่อรุ่น; เพิ่ม native adapter เมื่อยืนยันได้ หรือรับผ่าน API ภายนอก |
+| **ดูย้อนหลังจากอุปกรณ์** | ใช้จริง: AXIS S30, Uniview NVR, Tiandy SD (Profile G), Milestone Bridge (2026-09-30), Dahua DSS Pro · **เขียนแล้ว รอเครื่องทดสอบ**: Hikvision, Dahua (กล้อง/NVR), Profile G ของ NVR ยี่ห้ออื่น · Digifort รอเอกสาร API ส่วน playback |
 
-## เฟส 5 — ภาพย้อนหลังและ AI จากต้นทาง (ตกลง 2026-09-27 · การบันทึกภาพถอดออก 2026-09-28)
+## เฟส 5 — AI event จากต้นทาง (ปรับ 2026-10-02)
 
-หลัก: **edge รัน AI · central รวม event และส่งต่อ ไม่รัน inference ไม่เก็บภาพ**
+หลัก: **ต้นทางรัน AI · Edge รับผล · Regional/Central รวม event พร้อมภาพประกอบ; ไม่มี inference ทั้งสามชั้น**
 
 **A. บันทึกภาพ — ถอดออก 2026-09-28** · เคยทำตัวบันทึกที่ edge (`gateway/recorder.js`, หน้า Recording, ffmpeg ต่อกล้อง ไฟล์ละ 60 วิ,
 retention ตามวัน/quota/ดิสก์ว่าง) แล้วผู้ใช้ตัดสินใจถอดออก เปลี่ยนไปดึงย้อนหลังจากอุปกรณ์ (AXIS S30 และ Uniview NVR ใช้จริง;
@@ -183,7 +188,7 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
 | Uniview NVR (`onvif_nvr`) | LAPI ค้น + RTSP `/cN/b<epoch>/e<epoch>/replay/` | ใช้จริง |
 | Hikvision กล้อง SD card / NVR | ISAPI `ContentMgmt/search` + RTSP `/Streaming/tracks/<ช่อง>01?starttime=` | เขียนแล้ว รอเครื่องทดสอบ |
 | Dahua กล้อง SD card / NVR | `mediaFileFind.cgi` + RTSP `/cam/playback?channel=&starttime=` | เขียนแล้ว รอเครื่องทดสอบ |
-| `onvif_cam` / `onvif_nvr` อื่นทั้งหมด (Tiandy, Hi-View, generic, Milestone Bridge, กล้อง SD card ของ AXIS/Uniview) | ONVIF Profile G: FindRecordings + FindEvents + GetReplayUri | กล้อง Tiandy + SD card ใช้ได้ (Office 2026-09-29) · ยี่ห้ออื่น/NVR/Milestone รอทดสอบ |
+| `onvif_cam` / `onvif_nvr` อื่นทั้งหมด (Tiandy, Hi-View, generic, Milestone Bridge, กล้อง SD card ของ AXIS/Uniview) | ONVIF Profile G: FindRecordings + FindEvents + GetReplayUri (Milestone ใช้ทางเฉพาะ ดูข้างล่าง) | กล้อง Tiandy + SD card ใช้ได้ (Office 2026-09-29) · Milestone Bridge ใช้จริง 2026-09-30 · ยี่ห้ออื่น/NVR รอทดสอบ |
 | Digifort | — | 501 รอเอกสาร API ส่วน playback · ห้ามเดา endpoint (รหัสผิด 3 ครั้ง บัญชีโดนบล็อก กล้องทั้งชุดดับ) |
 | RTSP ที่กรอกเอง (`manual`) | — | 501 ไม่มีทางถามบันทึก |
 - Profile G: ffmpeg ส่ง `Range: clock=` / `Require: onvif-replay` เองไม่ได้ → `vms/onvif-replay-proxy.js` เปิดตัวกลางที่ 127.0.0.1 ต่อคำขอ
@@ -210,7 +215,8 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
     PTZ `DMS/Ptz/OperateDirect` (4 ขวา, 3 ซ้าย) / `OperateCamera` (ซูม) command 1/0
   - ทดสอบ (edge + central จำลอง, DSS จริง): สแกน 187 ช่อง · ภาพสดทุกเส้นผ่าน go2rtc · ranges 0.2–0.6 วิ · ภาพนิ่ง/วิดีโอย้อนหลังทั้งที่ edge และผ่าน central ·
     PTZ ผ่าน central → edge → DSS ตอบ 200 · ยังไม่รองรับ preset/home ของ DSS · ทุกช่องแสดงแผง PTZ (ยังไม่มีฟิลด์ยืนยันว่าช่องไหนเป็น PTZ)
-- **Milestone Open Network Bridge (2026-09-29, พักไว้ — SAN ของ XProtect ออฟไลน์)** · Bridge `203.0.113.21:580` (XProtect 2022 R3):
+- **Milestone Open Network Bridge** · Bridge `203.0.113.21:580` (XProtect 2022 R3) · **ใช้จริงแล้ว 2026-09-30 (`a36a2d8`)** หลังผู้ใช้แก้ storage ของ Recording Server
+  — ผลและวิธีที่ใช้จริง (ค้นด้วย GUID + เงื่อนไขเวลา, `Rate-Control: no`) ดู [REGIONAL-PLAN.md](REGIONAL-PLAN.md) "ปิดงาน Milestone Playback" · ข้อด้านล่างคือบันทึกตอนวินิจฉัย 2026-09-29:
   - `FindRecordings` แบบ ONVIF ทั่วไป (`<Scope/>`) = `InvalidArgs` · **ต้องใช้รูปแบบของ Milestone**: `Scope/IncludedSources/Token` = GUID กล้อง
     + `RecordingInformationFilter` = `boolean(//Track[TrackType = "Video"]),<เวลา UTC>,<ms ก่อน>,<จำนวนก่อน>,<ms หลัง>,<จำนวนหลัง>` → ได้ SearchToken
   - `FindEvents` = `ActionNotSupported` (ใช้ track จาก FindRecordings เป็นช่วงบันทึกแทน) · `GetRecordingInformation` ตอบ Earliest=Latest=ตอนนี้ (ใช้ไม่ได้)
@@ -220,9 +226,10 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
     `onvif-profile-g-playback.js` (brand `milestone`: FindRecordings แบบข้างบน, ไม่เรียก FindEvents, token = GUID)
   - อ้างอิง: doc.milestonesys.com → Milestone Open Network Bridge → "Manage video playback"
 
-**B. Event backbone (ทำแล้ว 2026-09-28)** — `server/shared/ai-events.js` ตาราง `ai_events` เดียวกันทั้งสองบทบาท
+**B. Event backbone (ทำแล้ว 2026-09-28)** — `server/shared/ai-events.js` ตาราง `ai_events` ทั้งสามบทบาท; ส่งสำเนาผลและภาพตามสาย Edge → Regional → Central
 - event: `type` (a-z 0-9 _ . -), `label`, `rule`, `ts` (+07:00), `trackId`, `attrs` (≤ 8 KB), `origin` camera|edge-ai, ภาพ JPEG ≤ 300 KB
   เก็บ `<stateDir>/ai-snapshots/<YYYYMMDD>/<id>.jpg` · ลบเมื่อเก่ากว่า `AI_EVENT_DAYS` (90)
+- edge: `POST /api/v1/ai/events` (event เดียวหรือ `{events:[…]}` ≤ 100, key ต้องมี **allow_event_write** = ติ๊ก "ส่ง event" — ให้ API ต้นทางที่เชื่อถือได้และเปิด source ต่อกล้อง)
 - ทั้งสอง: `GET /api/v1/ai/events?since=|from&to&cameraId&type&label&origin&limit` (ตอบ `nextSince`), `GET /api/v1/ai/events/:seq/snapshot.jpg`,
   SSE `/api/v1/events` ส่ง `{type:'ai_event', event:{…}}` · ขอบเขตกล้องตาม key
 - central ไล่ตามเองด้วยเคอร์เซอร์ `remote_seq` (unique `source_id + remote_seq`) — สายสดเป็นแค่สัญญาณ:
@@ -231,7 +238,7 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
   SSE `edge_state` ถึงทุก client, แถบแดงบนทุกหน้าของเว็บ central (`GET /api/edge-alerts`) · นับ edge แบบ link ที่ไม่เคยต่อเข้ามาด้วย
 - เว็บ central: หน้า **AI Events** (สิทธิ์ `menu.ai`) กรองวัน/กล้อง/ชนิด/ที่มา มีภาพประกอบ กด "ย้อนหลัง" เปิด Playback ก่อนเกิดเหตุ 10 วิ
 
-**C. AI ที่หัวกล้อง — ถอดออก 2026-09-28 (ยังไม่เอามารวมระบบ)** · เคยทำและขึ้น production ได้ครึ่งวัน (ONVIF metadata และยอดนับ Tiandy
+**C. ประวัติ poller AI หัวกล้องเดิม — ยกเลิก 2026-09-28; ไม่ใช่ receiver ภายนอกปัจจุบัน** · เคยทำและขึ้น production ได้ครึ่งวัน (ONVIF metadata และยอดนับ Tiandy
 ส่งเป็น event) แล้วผู้ใช้ตัดสินใจถอดออก: ไม่มีตัวเลือก `ai` ใน edge.json, poller/metadata-collector ไม่ส่งเข้า `ai_events`,
 `POST /api/v1/ai/events` รับเฉพาะ `origin: edge-ai`, หน้า AI Events ไม่มีตัวกรองที่มา · โค้ด `server/gateway/analytics/` ยังเก็บไว้
 - ที่ยังคงไว้: แก้บั๊กติดตั้งสดที่พบระหว่างทดสอบ: `camera_analytics` บน DB ใหม่ได้ PK `(camera_id, ts)` แต่โค้ดเขียน `ON CONFLICT(camera_id, rule, ts)`
@@ -241,14 +248,13 @@ Hikvision / Dahua / ONVIF Profile G เขียนแล้วรอทดส�
 → กลับมาได้ครบ ไม่ซ้ำ · ภาพข้ามทั้ง pull และ link ตรงทุกไบต์ · key ไม่มีสิทธิ์ = 403, ชนิด/กล้องผิด = 400/404 · edge หลุด → แถบแดง + `EDGE_DOWN`
 แล้วกลับมา → `EDGE_UP` · Tiandy จริง: ย้าย PK สำเร็จ, ยอดที่เพิ่มขึ้นกลายเป็น `people_count` ถึง central
 
-  (sha256 `c5c2d13e…998063`) · edge Linux: `<stateDir>/ai/venv`, `<stateDir>/ai/models`
-- ทางเดิน: `GET /api/v1/ai/config` (ทุก 30 วิ) → RTSP เส้น sub raw ของ go2rtc บนเครื่อง → ffmpeg ถอดบน GPU 5 fps กว้าง 640
-  → `line_cross` (ทิศ ab/ba) / `intrusion` / `loitering` + `object` หนึ่งแถวต่อวัตถุ (ประเภท เวลา ภาพชัดสุด) → `POST /api/v1/ai/events`
-- กฎ (ตาราง `ai_rules`, `gateway/ai-config.js`): เส้น 2 จุด / โซน 3–20 จุด พิกัด 0–1, คลาสจาก COCO, โซนตั้งเวลาอยู่นานได้
-- central: หน้า AI Events กรองประเภทวัตถุ (คน / จักรยาน / รถยนต์ / จักรยานยนต์ / รถบัส / รถบรรทุก) · ปุ่ม "ย้อนหลัง" เปิดภาพจากอุปกรณ์ (ตามตาราง "แหล่งภาพตามอุปกรณ์")
-- **ไม่แยกสี** (ตัดสินใจ 2026-09-28) — แยกแค่ประเภทคน/รถ งานถัดไปเน้นกฎ perimeter (เส้น / โซนบุกรุก / อยู่นาน) ก่อน
-- ความเร็วที่วัด (GPU, 640x360): inference ล้วน 126 fps · รวม postprocess 88 fps ต่อการ์ด → ~17 กล้องที่ 5 fps ต่อการ์ด
-  · GPU เฉลี่ย ~5–10% และ 490 MB ต่อกล้องแรก · ปรับเพิ่มได้ด้วย FP16/TensorRT ภายหลัง
+**D. รับ AI ภายนอก (ขึ้น production 2026-10-02, Gateway 10ea98f)**
+
+- Edge ตั้ง AI Sources ต่อกล้อง (อุปกรณ์/API), ปิด receiver เป็นค่าเริ่มต้น และกรอง Group ได้
+- Tiandy MODEL-A: Perimeter ผ่าน AlarmInfo + ภาพ Alarm บน SD ที่ตรงช่อง/วินาที; รอภาพแบบ durable pending
+- UNV IPC2325SB: ONVIF RTSP metadata LineCrossing ช่อง 1 → GetSnapshotUri ทันที; ไม่ใช้ภาพสดแทนเหตุเก่า
+- Regional/Central รับสำเนา event + JPEG และกรอง Edge/Group ภายใต้สิทธิ์; Client 1.9.4 ดูภาพประกอบและรายละเอียดได้
+- ขอบเขต native adapter และผลจริง: [EXTERNAL-AI.md](EXTERNAL-AI.md); ONVIF/Profile M ไม่รับประกันทุก AI/รุ่น
 
 **ทดสอบ A (2026-09-27)** — instance จำลอง edge 999 / central 000 (5283/5383, DB ใหม่) + Tiandy 203.0.113.12:
 ไฟล์ 60 วิ ลงดัชนี · ranges/playback (hevc copy และ h264)/frame ผ่าน central ได้ · ไม่มี token / token ของชื่ออื่น = 401 ·

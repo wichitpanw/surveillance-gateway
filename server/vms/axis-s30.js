@@ -70,4 +70,14 @@ async function listAxisS30Recordings(config) {
   return recordings ? (Array.isArray(recordings) ? recordings : [recordings]) : [];
 }
 
-module.exports = { readAxisS30Devices, listAxisS30Recordings, axisS30Rtsp };
+/**
+ * sub ของช่อง AXIS S30 — S30 ส่งภาพกล้องตัวเดียวต่อ Device ID ไม่มี stream 2 แต่ย่อขนาดให้ได้ด้วยพารามิเตอร์ VAPIX
+ * ทดสอบแล้ว 2026-10-06 ที่ 203.0.113.10 (Edge 102): `&resolution=640x360` ได้ h264 640×360 · เดิม sub = main (1080p)
+ */
+function axisS30SubRtsp(mainRtsp) {
+  const url = String(mainRtsp || '');
+  if (!url || /[?&]resolution=/i.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}resolution=640x360`;
+}
+
+module.exports = { readAxisS30Devices, listAxisS30Recordings, axisS30Rtsp, axisS30SubRtsp };

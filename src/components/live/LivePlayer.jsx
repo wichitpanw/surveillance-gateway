@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, VideoOff } from 'lucide-react';
+import { Loader2, VideoOff, Volume2, VolumeX } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -26,9 +26,13 @@ const MAX_RETRY_MS = 30_000;
 
   ภาพค้าง/หลุด (error, ended, ไม่มีเฟรมใหม่เกิน 10 วิ) = ขอ token ใหม่แล้วต่อใหม่เอง backoff 2 → 30 วิ
   การถอด src ตอน unmount คือสิ่งที่ปิดสายไป go2rtc — ไม่ถอดแล้ว go2rtc จะดึงภาพค้างไว้ต่อ
+
+  audio = กล้องเปิดส่งเสียงที่ edge (audio_enabled) — แสดงปุ่มลำโพง เริ่มแบบปิดเสียงเสมอ
+  (autoplay ของเบราว์เซอร์ผ่านเฉพาะ <video muted> และ wall หลายช่องห้ามดังพร้อมกันเอง)
 */
-export default function LivePlayer({ cameraId, type = 'sub', className, fit = 'contain', onState }) {
+export default function LivePlayer({ cameraId, type = 'sub', className, fit = 'contain', onState, audio = false }) {
   const videoRef = useRef(null);
+  const [muted, setMuted] = useState(true);
   const [status, setStatus] = useState('loading'); // loading | playing | error
   const [error, setError] = useState(null);
   const [attempt, setAttempt] = useState(0);
@@ -107,12 +111,28 @@ export default function LivePlayer({ cameraId, type = 'sub', className, fit = 'c
     <div className={cn('relative size-full overflow-hidden bg-black', className)}>
       <video
         ref={videoRef}
-        muted
+        muted={muted}
         autoPlay
         playsInline
         disablePictureInPicture
         className={cn('size-full', fit === 'cover' ? 'object-cover' : 'object-contain')}
       />
+      {audio && status === 'playing' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const next = !muted;
+            setMuted(next);
+            // ตั้งที่ element ตรง ๆ ด้วย — React ไม่ sync prop muted หลัง mount
+            if (videoRef.current) videoRef.current.muted = next;
+          }}
+          title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}
+          className="absolute bottom-2 right-2 z-10 flex size-8 items-center justify-center rounded-md bg-black/60 text-white/90 transition-colors hover:bg-black/80"
+        >
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </button>
+      )}
       {status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="size-6 animate-spin text-white/70" />

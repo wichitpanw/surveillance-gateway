@@ -29,7 +29,7 @@
     <Color x:Key="PrimaryColor">#B68C20</Color>
     <Color x:Key="PrimaryForegroundColor">#FFFFFF</Color>
 
-    <!-- brand yellow. Spent in one place at a time - the selected cell, the primary action - so it
+    <!-- Accent yellow. Spent in one place at a time - the selected cell, the primary action - so it
          keeps meaning "this one". -->
     <Color x:Key="BrandYellowColor">#FDD20A</Color>
     <Color x:Key="BrandYellowTextColor">#FDD20A</Color>

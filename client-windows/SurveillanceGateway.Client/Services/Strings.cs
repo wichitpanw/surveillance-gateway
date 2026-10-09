@@ -134,7 +134,7 @@ public sealed class Strings : INotifyPropertyChanged
             "รุ่นนี้ไม่ได้ติดตั้งผ่านตัวติดตั้ง จึงอัปเดตตัวเองไม่ได้"),
 
         // Connect
-        ["connect.workspace"] = ("SURVEILLANCE GATEWAY", "SURVEILLANCE GATEWAY"),
+        ["connect.workspace"] = ("SURVEILLANCE", "SURVEILLANCE"),
         ["connect.welcome"] = ("Your cameras, one clear workspace.", "กล้องของคุณ ในพื้นที่ทำงานเดียว"),
         ["connect.welcomeSub"] = ("Connect to a Regional or Central gateway to see live status, video walls and the camera map.", "เชื่อมต่อ Regional หรือ Central เพื่อดูสถานะสด ผังภาพ และแผนที่กล้อง"),
         ["connect.secure"] = ("SECURE OPERATOR ACCESS", "สิทธิ์ผู้ปฏิบัติงาน"),
@@ -237,6 +237,8 @@ public sealed class Strings : INotifyPropertyChanged
         ["cell.streamMain"] = ("Main stream", "สตรีมหลัก (main)"),
         ["cell.streamToggle"] = ("Switch this cell between sub and main", "สลับช่องนี้ระหว่างสตรีมรองกับหลัก"),
         ["cell.clear"] = ("Clear this cell", "ล้างช่องนี้"),
+        ["cell.unmute"] = ("Turn on sound for this cell", "เปิดเสียงช่องนี้"),
+        ["cell.mute"] = ("Mute this cell", "ปิดเสียงช่องนี้"),
         ["cell.empty"] = ("empty", "ว่าง"),
 
         ["codec.direct"] = ("direct", "ไม่ transcode"),

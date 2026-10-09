@@ -23,10 +23,13 @@ function Sidebar({ app, user, currentTab, onOpen, collapsed }) {
         collapsed ? 'w-16' : 'w-[220px]',
       )}
     >
-      {/* โลโก้ + ชื่อโปรแกรม — ชื่อคือสิ่งที่บอกว่ากำลังอยู่ในเครื่อง central หรือ edge */}
+      {/*
+        ชื่อโปรแกรม — ชื่อคือสิ่งที่บอกว่ากำลังอยู่ในเครื่อง central หรือ edge
+        ไม่มีโลโก้แบรนด์ (ระบบกลาง) — ช่องสี่เหลี่ยมใส่อักษรแรกไว้ให้เห็นชั้นของโปรแกรมตอนพับเมนู
+      */}
       <div className="flex h-[50px] items-center gap-2.5 overflow-hidden border-b border-white/5 px-3">
-        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded bg-white">
-          <img src="/gw-logo.png" alt="Surveillance Gateway" className="size-7" />
+        <div className="flex size-9 shrink-0 items-center justify-center rounded bg-primary text-sm font-bold text-primary-foreground">
+          {app.short.charAt(0)}
         </div>
         {!collapsed && (
           <div className="flex min-w-0 flex-col leading-tight animate-fade-in">

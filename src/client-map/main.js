@@ -48,6 +48,8 @@ const STRINGS = {
     noPins: 'No camera has coordinates yet',
     placed: (n) => `<strong>${n}</strong> cameras on the map`,
     skipped: (n) => `${n} without coordinates`,
+    legendOwn: 'Our cameras',
+    legendPublic: (n) => `Public cameras (${n})`,
   },
   th: {
     layers: 'ชั้นข้อมูล',
@@ -59,6 +61,8 @@ const STRINGS = {
     noPins: 'ยังไม่มีกล้องตัวไหนถูกกำหนดพิกัด',
     placed: (n) => `<strong>${n}</strong> กล้องบนแผนที่`,
     skipped: (n) => `${n} ตัวยังไม่มีพิกัด`,
+    legendOwn: 'กล้องของเรา',
+    legendPublic: (n) => `กล้อง Public (${n})`,
   },
 }[params.get('lang') === 'th' ? 'th' : 'en'];
 
@@ -200,6 +204,7 @@ function render(cameras) {
 
   const placed = [];
   let skipped = 0;
+  let publicCount = 0;
 
   for (const cam of cameras) {
     const lat = cam?.location?.lat;
@@ -211,9 +216,13 @@ function render(cameras) {
 
     const node = document.createElement('button');
     const status = cam.availability || (cam.online === false ? 'offline' : cam.online === true ? 'online' : 'unknown');
-    node.className = `pin ${status}`;
+    // กล้องสาธารณะที่ Central ดึงเอง (origin.kind = public) — หมุดโทนม่วง แยกจากกล้องของเรา · setCameraStatus ต้องคง class นี้
+    const isPublic = cam?.origin?.kind === 'public';
+    if (isPublic) publicCount += 1;
+    node.className = `pin ${status}${isPublic ? ' public' : ''}`;
     node.type = 'button';
     node.dataset.cameraId = cam.id;
+    node.dataset.public = isPublic ? '1' : '';
     node.title = cam.name || cam.id;
     node.innerHTML = '<span class="dot"></span><span class="label"></span>';
     node.querySelector('.label').textContent = cam.name || cam.id;
@@ -238,7 +247,11 @@ function render(cameras) {
   }
 
   el('summary').innerHTML = STRINGS.placed(placed.length)
-    + (skipped > 0 ? `<br>${STRINGS.skipped(skipped)}` : '');
+    + (skipped > 0 ? `<br>${STRINGS.skipped(skipped)}` : '')
+    // คำอธิบายสีเฉพาะตอนมีกล้อง Public ปนอยู่ — key ที่ไม่ได้ติ๊ก "กล้อง Public" ไม่ต้องเห็นบรรทัดนี้
+    + (publicCount > 0
+      ? `<div class="legend"><span><i class="dot"></i>${STRINGS.legendOwn}</span><span><i class="dot public"></i>${STRINGS.legendPublic(publicCount)}</span></div>`
+      : '');
 
   post({ type: 'rendered', placed: placed.length, skipped });
   setHint(placed.length === 0 ? STRINGS.noPins : '');
@@ -266,11 +279,19 @@ window.setCameras = (cameras) => {
  * ทุกครั้งที่กล้องตัวหนึ่งเปลี่ยนจะรื้อหมุดทั้งหมดแล้วดึงมุมมองกลับไป fitBounds — คนที่กำลังซูมดู
  * จุดหนึ่งอยู่จะโดนกระชากออกทุกครั้งที่กล้องตัวไหนก็ได้ในระบบเปลี่ยนสถานะ
  */
+/** ค่า availability ทั้งหมดที่ฝั่งโปรแกรมส่งมาได้ (Models/V1.cs) — ใช้ถอด class สถานะเดิมก่อนใส่ค่าใหม่ */
+const STATUS_CLASSES = ['online', 'offline', 'disabled', 'edgeUnavailable', 'missing', 'awaitingStream', 'unknown'];
+
 window.setCameraStatus = (cameraId, status) => {
   const marker = markers.find((m) => m.getElement().dataset.cameraId === cameraId);
   if (!marker) return;
   const node = marker.getElement();
-  node.className = `pin ${status}`;
+  /*
+    สลับเฉพาะ class สถานะ — เดิมเขียนทับ className ทั้งก้อน ซึ่งลบ `maplibregl-marker` ที่ MapLibre ใส่ไว้จัดตำแหน่งหมุดทิ้งไปด้วย
+    หมุดที่เปลี่ยนสถานะจึงหลุดจากพิกัด · class `public` (กล้อง Public) ต้องอยู่ต่อเช่นกัน
+  */
+  node.classList.remove(...STATUS_CLASSES);
+  node.classList.add(status);
 };
 
 /** ให้โปรแกรมสั่งบินไปที่กล้องตัวหนึ่งได้ เช่นเมื่อผู้ใช้เลือกจากรายการข้าง ๆ */

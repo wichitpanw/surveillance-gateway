@@ -147,6 +147,7 @@ public partial class VideoTile : UserControl, IDisposable
         };
 
         StreamButton.Click += (_, _) => RequestStream(StreamType == "main" ? "sub" : "main");
+        AudioButton.Click += (_, _) => SetMuted(!(_renderer?.Muted ?? true));
         ExpandButton.Click += (_, _) => Activated?.Invoke(this, EventArgs.Empty);
         ClearButton.Click += (_, _) => ClearRequested?.Invoke(this, EventArgs.Empty);
 
@@ -221,6 +222,7 @@ public partial class VideoTile : UserControl, IDisposable
     private void SyncCellControls()
     {
         HasCamera = Camera is not null;
+        AudioButton.Visibility = Camera?.Audio == true ? Visibility.Visible : Visibility.Collapsed;
         StreamButton.Content = Strings.T(StreamType == "main" ? "wall.streamMain" : "wall.streamSub");
     }
 
@@ -330,6 +332,9 @@ public partial class VideoTile : UserControl, IDisposable
             return;
         }
 
+        // A different camera starts muted again; switching sub/main on the same one keeps the choice.
+        if (Camera?.Id != camera.Id) SetMuted(true);
+        _renderer.AudioAvailable = camera.Audio;
         Camera = camera;
         StreamType = streamType;
         _fallbackProvider = fallbackProvider;
@@ -404,9 +409,25 @@ public partial class VideoTile : UserControl, IDisposable
             $"[VideoTile] {Camera.Id}: {reason} - falling back to the transcoded path");
     }
 
+    private const string SpeakerMuted = "M3 9 H7 L12 5 V19 L7 15 H3 Z M16 9 L21 15 M21 9 L16 15";
+    private const string SpeakerOn = "M3 9 H7 L12 5 V19 L7 15 H3 Z M16 8.5 C17.5 10 17.5 14 16 15.5 M19 6 C22 9 22 15 19 18";
+
+    /// <summary>
+    /// Mutes or unmutes this cell only. Sound is per cell because a wall plays many cameras at
+    /// once, and the operator picks the one to listen to - every cell starts muted.
+    /// </summary>
+    private void SetMuted(bool muted)
+    {
+        if (_renderer is not null) _renderer.Muted = muted;
+        AudioIcon.Data = Geometry.Parse(muted ? SpeakerMuted : SpeakerOn);
+        AudioButton.ToolTip = Strings.T(muted ? "cell.unmute" : "cell.mute");
+    }
+
     /// <summary>Empties the cell. Used when a camera is removed and when the layout shrinks.</summary>
     public void Clear()
     {
+        SetMuted(true);
+        AudioButton.Visibility = Visibility.Collapsed;
         Camera = null;
         _streamNote = null;
         _fallbackProvider = null;

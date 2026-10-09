@@ -1,5 +1,5 @@
 <#
-  Prepare the state folder of an Surveillance Gateway Edge (run once per edge machine, before
+  Prepare the state folder of an Edge API Gateway (run once per edge machine, before
   `pm2 start ecosystem.edge.config.cjs`). Reads the ports and folder from that file's EDGE block.
 
   Creates, if missing:
@@ -34,7 +34,7 @@ $yamlFile = Join-Path $dir 'go2rtc.yaml'
 if (-not (Test-Path $yamlFile)) {
     $webrtc = [int]$cfg.GO2RTC_RTSP_PORT + 1
     $yaml = @"
-# go2rtc of the Surveillance Gateway Edge - streams are synced in by the gateway over REST
+# go2rtc of the Edge API Gateway - streams are synced in by the gateway over REST
 # API has no auth: bind to loopback only - the gateway proxies what users need (scripts/lock-go2rtc-api.cjs)
 api:
   listen: "127.0.0.1:$($cfg.GO2RTC_API_PORT)"

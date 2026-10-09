@@ -152,6 +152,22 @@
                         </Style>
                     </StackPanel.Style>
 
+                    <Button x:Name="AudioButton"
+                            Style="{StaticResource TileButton}"
+                            Margin="0,0,6,0"
+                            Visibility="Collapsed"
+                            ToolTip="{svc:T cell.unmute}">
+                        <Path x:Name="AudioIcon"
+                              Width="11" Height="11"
+                              Stretch="Uniform"
+                              Fill="{x:Null}"
+                              StrokeThickness="1.7"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}"
+                              Data="M3 9 H7 L12 5 V19 L7 15 H3 Z M16 9 L21 15 M21 9 L16 15" />
+                    </Button>
                     <Button x:Name="StreamButton"
                             Style="{StaticResource TileButton}"
                             ToolTip="{svc:T cell.streamToggle}"

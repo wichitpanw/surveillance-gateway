@@ -18,6 +18,7 @@ const { hideToken } = require('./dss');
 
 const PATH_RE = /^\/dss\/([^/]+)\/(main|sub)(?:\/.*)?$/;
 const FIRST_REQUEST_MS = 10_000;
+const CONNECT_MS = 4_000;
 
 function headerOf(headers, name) {
   const found = headers.find(([key]) => key.toLowerCase() === name);
@@ -25,13 +26,51 @@ function headerOf(headers, name) {
 }
 
 /**
- * @param {{ port: number, resolve: (cameraId: string, stream: 'main'|'sub') => Promise<string>, log?: Console }} opts
- *   resolve คืน URL ภาพสดของ DSS (ใช้ครั้งเดียว มี token) · error ของ resolve = ปิดการเชื่อมต่อ (go2rtc ต่อใหม่เอง)
+ * @param {{ port: number, resolve: (cameraId: string, stream: 'main'|'sub') => Promise<string|string[]>, log?: Console }} opts
+ *   resolve คืน URL ภาพสดของ DSS (ใช้ครั้งเดียว มี token) หรือหลายทางเรียงตามลำดับที่ควรลอง
+ *   · error ของ resolve = ปิดการเชื่อมต่อ (go2rtc ต่อใหม่เอง)
  */
 function startDssRelay({ port, resolve, log = console }) {
   const server = net.createServer((client) => handle(client));
   server.on('error', (err) => log.warn(`[DSS relay] ฟังพอร์ต ${port} ไม่ได้: ${err.message}`));
   server.listen(port, '127.0.0.1', () => log.log(`[DSS relay] พร้อมที่ rtsp://127.0.0.1:${port}/dss/<camera>/<main|sub>`));
+
+  // host:port ที่ DSS บอก → host:port ที่ต่อได้จริงครั้งล่าสุด — ทางที่เคยใช้ได้ลองก่อน ไม่ต้องรอ timeout ทุกครั้ง
+  const workedVia = new Map();
+  const endpoint = (url) => {
+    const u = new URL(url);
+    return { host: u.hostname, port: Number(u.port) || 554, key: `${u.hostname}:${Number(u.port) || 554}` };
+  };
+
+  /**
+   * ลอง URL ของ DSS ตามลำดับจนกว่า TCP จะต่อติด (token ยังไม่ถูกใช้จนกว่าจะส่ง DESCRIBE จึงลองหลายทางได้)
+   * ทุกทางต่อไม่ได้ = throw พร้อม host:port ที่ลอง (ไม่มี token) ให้เห็นใน log ว่าต้องเปิด route/forward ไปที่ไหน
+   */
+  async function connectFirst(urls) {
+    const first = urls[0] ? endpoint(urls[0]).key : '';
+    const known = workedVia.get(first);
+    const ordered = known ? [...urls].sort((a, b) => (endpoint(b).key === known) - (endpoint(a).key === known)) : urls;
+    const failed = [];
+    for (const url of ordered) {
+      const ep = endpoint(url);
+      try {
+        const socket = await new Promise((ok, fail) => {
+          const s = net.connect({ host: ep.host, port: ep.port });
+          const timer = setTimeout(() => { s.destroy(); fail(new Error('timeout')); }, CONNECT_MS);
+          s.once('connect', () => { clearTimeout(timer); ok(s); });
+          s.once('error', (err) => { clearTimeout(timer); fail(err); });
+        });
+        if (first && workedVia.get(first) !== ep.key) {
+          workedVia.set(first, ep.key);
+          if (ep.key !== first) log.log(`[DSS relay] DSS ให้ต่อ ${first} ไม่ถึง — ใช้ ${ep.key} แทน`);
+        }
+        return { url, socket };
+      } catch (err) {
+        failed.push(`${ep.key} (${err.code || err.message})`);
+      }
+    }
+    throw new Error(`ต่อ media ของ DSS ไม่ได้ทุกทาง: ${failed.join(', ')}`);
+  }
 
   function handle(client) {
     client.setNoDelay(true);
@@ -81,12 +120,14 @@ function startDssRelay({ port, resolve, log = console }) {
       const stream = m[2];
       const localBase = `rtsp://${local.host}/dss/${m[1]}/${stream}`;
 
-      const targetUrl = await resolve(cameraId, stream);
+      const resolved = await resolve(cameraId, stream);
       if (closed) return;
-      const target = new URL(targetUrl);
+      const picked = await connectFirst(Array.isArray(resolved) ? resolved : [resolved]);
+      if (closed) { picked.socket.destroy(); return; }
+      const targetUrl = picked.url;
       let contentBase = null;
 
-      upstream = net.connect({ host: target.hostname, port: Number(target.port) || 554 });
+      upstream = picked.socket;
       upstream.setNoDelay(true);
       upstream.on('error', close);
       upstream.on('close', close);

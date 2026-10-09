@@ -17,6 +17,7 @@
 const https = require('node:https');
 const http = require('node:http');
 const crypto = require('node:crypto');
+const net = require('node:net');
 
 /** รหัสผิด / สิทธิ์ไม่พอ — ห้าม retry */
 class DssAuthError extends Error {}
@@ -34,6 +35,68 @@ function buildSignature(user, password, realm, randomKey) {
 /** ตัด token ออกจากข้อความก่อน log */
 const hideToken = (s) => String(s || '').replace(/([?&](?:token|session)=)[^&\s]+/gi, '$1***');
 const withToken = (url, token) => (token ? `${url}${url.includes('?') ? '&' : '?'}token=${token}` : url);
+
+/**
+ * แตก URL ภาพจาก DSS (อาจมีหลายทางคั่นด้วย `|`) แล้วเพิ่มทางที่เปลี่ยน host เป็น apiHost (พอร์ตเดิม)
+ * ต่อท้าย — ทางเดิมมาก่อนเสมอ DSS ที่แยก media server ไว้คนละเครื่องจึงยังใช้ทางที่ DSS บอก
+ */
+function mediaCandidates(raw, apiHost) {
+  const given = String(raw || '').split('|').map((s) => s.trim()).filter(Boolean);
+  const out = [];
+  const add = (u) => { if (!out.includes(u)) out.push(u); };
+  for (const u of given) add(u);
+  if (apiHost) {
+    for (const u of given) {
+      try {
+        const parsed = new URL(u);
+        if (parsed.hostname === apiHost) continue;
+        parsed.hostname = apiHost;
+        add(parsed.toString());
+      } catch { /* URL เพี้ยน — ข้าม */ }
+    }
+  }
+  return out;
+}
+
+// host:port ที่ DSS บอก → host:port ที่ต่อได้จริงครั้งล่าสุด (ร่วมกันทั้งโปรเซส)
+const reachableVia = new Map();
+const endpointOf = (url) => {
+  const u = new URL(url);
+  const port = Number(u.port) || 554;
+  return { host: u.hostname, port, key: `${u.hostname}:${port}` };
+};
+
+/**
+ * URL แรกใน urls ที่เปิด TCP ได้ (แค่ต่อแล้วปิด — ยังไม่ส่ง RTSP token จึงยังใช้ได้)
+ * สำหรับทางที่ ffmpeg ต่อเอง (ภาพย้อนหลัง) · ทางภาพสดใช้ socket จริงใน dss-rtsp-relay.js
+ * ต่อไม่ได้ทุกทาง = throw พร้อม host:port ที่ลอง (ไม่มี token)
+ */
+async function firstReachable(urls, { timeoutMs = 4000, log = console } = {}) {
+  const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+  const first = list[0] ? endpointOf(list[0]).key : '';
+  const known = reachableVia.get(first);
+  const ordered = known ? [...list].sort((a, b) => (endpointOf(b).key === known) - (endpointOf(a).key === known)) : list;
+  const failed = [];
+  for (const url of ordered) {
+    const ep = endpointOf(url);
+    try {
+      await new Promise((ok, fail) => {
+        const s = net.connect({ host: ep.host, port: ep.port });
+        const timer = setTimeout(() => { s.destroy(); fail(new Error('timeout')); }, timeoutMs);
+        s.once('connect', () => { clearTimeout(timer); s.destroy(); ok(); });
+        s.once('error', (err) => { clearTimeout(timer); fail(err); });
+      });
+      if (first && reachableVia.get(first) !== ep.key) {
+        reachableVia.set(first, ep.key);
+        if (ep.key !== first) log.log(`[DSS] DSS ให้ต่อ ${first} ไม่ถึง — ใช้ ${ep.key} แทน`);
+      }
+      return url;
+    } catch (err) {
+      failed.push(`${ep.key} (${err.code || err.message})`);
+    }
+  }
+  throw new DssUnavailable(`ต่อ media ของ DSS ไม่ได้ทุกทาง: ${failed.join(', ')}`);
+}
 
 const KEEPALIVE_MS = 20_000;
 const SCAN_START = 1000000;
@@ -182,11 +245,22 @@ class DssClient {
 
   /** URL ภาพสดใช้ครั้งเดียว (รวม token แล้ว) · stream = 'main' | 'sub' */
   async liveUrl(channelId, stream = 'main') {
+    return (await this.liveUrls(channelId, stream))[0];
+  }
+
+  /**
+   * URL ภาพสดทุกทางที่น่าจะต่อได้ เรียงตามลำดับที่ควรลอง (token เดียวกัน ใช้ได้ครั้งเดียว — ต่อสำเร็จทางเดียว)
+   *
+   * DSS ที่อยู่หลัง NAT ตอบ URL ที่ชี้ IP ภายในของ media server (หรือหลายทางคั่นด้วย `|`)
+   * ซึ่ง edge นอกวงต่อไม่ถึง ทั้งที่พอร์ต media (9100/9320) ถูก forward ไว้ที่ host เดียวกับ API
+   * จึงเพิ่มทางเดียวกันแต่เปลี่ยน host เป็นที่อยู่ที่แอดไว้ต่อท้าย (พบที่ edge 103 จังหวัดทดสอบ 2026-10-08)
+   */
+  async liveUrls(channelId, stream = 'main') {
     const data = await this.api('/brms/api/v1.0/MTS/Video/StartVideo', {
       data: { channelId, dataType: '1', streamType: stream === 'sub' ? '2' : '1' },
     });
     if (!data?.url) throw new DssUnavailable('DSS ไม่ส่ง URL ภาพสด');
-    return withToken(data.url, data.token);
+    return mediaCandidates(data.url, this.host).map((u) => withToken(u, data.token));
   }
 
   /** ไฟล์บันทึกในช่วง [fromMs, toMs] */
@@ -201,18 +275,33 @@ class DssClient {
       .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start);
   }
 
-  /** URL ภาพย้อนหลังใช้ครั้งเดียว เริ่มที่ atMs ภายในไฟล์ rec */
+  /** URL ภาพย้อนหลังใช้ครั้งเดียว เริ่มที่ atMs ภายในไฟล์ rec — หลายทางเหมือน liveUrls() เลือกด้วย firstReachable() */
   async playbackUrl(channelId, rec, atMs) {
-    const data = await this.api('/brms/api/v1.0/SS/Playback/StartPlaybackByFile', {
-      data: {
-        ssId: rec.ssId, optional: '/admin/API/SS/Playback/StartPlaybackByFile',
-        startTime: String(Math.floor(atMs / 1000)), endTime: String(rec.endTime),
-        fileName: rec.recordName, diskId: rec.diskId, nvrId: '', recordSource: rec.recordSource || '3',
-        channelId, playbackMode: '0', streamId: rec.streamId || '',
-      },
-    });
+    const path = '/brms/api/v1.0/SS/Playback/StartPlaybackByFile';
+    const fields = {
+      ssId: rec.ssId, optional: '/admin/API/SS/Playback/StartPlaybackByFile',
+      startTime: String(Math.floor(atMs / 1000)), endTime: String(rec.endTime),
+      fileName: rec.recordName, diskId: rec.diskId, nvrId: '', recordSource: rec.recordSource || '3',
+      channelId, playbackMode: '0', streamId: rec.streamId || '',
+    };
+    /*
+      DSS ของ Edge 103 จังหวัดทดสอบ (2026-10-09) ตอบ 1004 "Argument [data.playbackType] can not be empty"
+      ส่วน DSS Pro V8.5.0 ของเราใช้ได้โดยไม่มีฟิลด์นี้ — ส่งแบบเดิมก่อน แล้วลองใหม่พร้อม playbackType เมื่อ DSS ขอ
+      ไม่มีเอกสารบอกค่า: ใช้ '0' คู่กับ playbackMode (ยังไม่ยืนยันกับเครื่องจริง — ผิดจะเห็น desc ใหม่ใน error)
+    */
+    // DSS เครื่องนี้เคยขอ playbackType แล้ว — ส่งไปเลย ไม่เสียรอบไปกลับกับ DSS ที่อยู่ไกล
+    if (this.needsPlaybackType) fields.playbackType = '0';
+    let data;
+    try {
+      data = await this.api(path, { data: fields });
+    } catch (err) {
+      if (this.needsPlaybackType || !(err instanceof DssUnavailable) || err.code !== 1004 || !/playbackType/i.test(err.message)) throw err;
+      data = await this.api(path, { data: { ...fields, playbackType: '0' } });
+      this.needsPlaybackType = true;
+      console.log(`[DSS] ${this.host}: StartPlaybackByFile ต้องมี playbackType — จำไว้ใช้ครั้งถัดไป`);
+    }
     if (!data?.url) throw new DssUnavailable('DSS ไม่ส่ง URL ภาพย้อนหลัง');
-    return withToken(data.url, data.token);
+    return mediaCandidates(data.url, this.host).map((u) => withToken(u, data.token));
   }
 
   /** หัน: direct 1–8 (บน ล่าง ซ้าย ขวา ซ้ายบน ขวาบน ซ้ายล่าง ขวาล่าง) · step 1–8 · start true/false */
@@ -243,4 +332,4 @@ class DssClient {
   }
 }
 
-module.exports = { DssClient, DssAuthError, DssUnavailable, buildSignature, hideToken, withToken };
+module.exports = { DssClient, DssAuthError, DssUnavailable, buildSignature, hideToken, withToken, mediaCandidates, firstReachable };

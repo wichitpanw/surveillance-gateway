@@ -3,13 +3,15 @@
 สำหรับ edge ใหม่ที่หน้างานไม่มี internet — ก๊อปโฟลเดอร์เดียวลง flash drive ไปเสียบ ดับเบิลคลิก จบ
 รองรับ **Windows x64** (mini PC) และ **Linux arm64** (Raspberry Pi 5) · มี **Linux x64** ด้วยสำหรับเครื่อง Ubuntu ทั่วไป
 
-edge ที่ติดตั้งด้วยชุดนี้ต่อ central แบบ **link** (edge ต่อขึ้นมาเอง — [EDGE-PLAN.md](EDGE-PLAN.md)) เสมอ
+edge ที่ติดตั้งด้วยชุดนี้ต่อ parent แบบ **link** (edge ต่อขึ้นมาเอง — [EDGE-PLAN.md](EDGE-PLAN.md)) เสมอ
+ตั้งแต่ระบบสามชั้น (2026-09-30) parent ของ edge คือ **Regional ของภาค** — ขั้น "ที่ central" ในเอกสารนี้ทำที่หน้า Edge Nodes ของ Regional
+(ดาวน์โหลดชุดติดตั้งได้จากทั้ง Central และ Regional ซึ่ง mirror ไว้)
 
 ## ภาพรวม
 
 ```
 HOST (มี internet)                    central (หน้าเว็บ)                  หน้างาน (ไม่มี internet)
-build-edge-kit.ps1 ──► GW-Edge-Kit-<build>   Edge Nodes → ออก token ──► edge-<เลข>.json
+build-edge-kit.ps1 ──► Edge-Kit-<build>      Edge Nodes → ออก token ──► edge-<เลข>.json
                               └──────────── flash drive ─────────────┘
                                                   └──► install-windows.cmd / install-linux.sh
 ```
@@ -19,17 +21,16 @@ build-edge-kit.ps1 ──► GW-Edge-Kit-<build>   Edge Nodes → ออก toke
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\build-edge-kit.ps1
 ```
-- ผลลัพธ์ `D:\gw-edge-kits\GW-Edge-Kit-<build>\` ~1 GB (ทั้งสามแพลตฟอร์ม) · เลือกเฉพาะที่ใช้: `-Platforms windows-x64,linux-arm64`
+- ผลลัพธ์ `D:\gw-edge-kits\Edge-Kit-<build>\` ~1 GB (ทั้งสามแพลตฟอร์ม) · เลือกเฉพาะที่ใช้: `-Platforms windows-x64,linux-arm64`
 - ไฟล์ที่โหลดเก็บใน `D:\gw-edge-kits\cache\` รอบหน้าไม่โหลดซ้ำ
-- โค้ดมาจาก **commit** ปัจจุบัน (ไม่ใช่ไฟล์ที่ยังไม่ commit) · `build` = commit ล่าสุดที่แก้ `server/` เท่ากับที่ central แสดง
+- โค้ดมาจาก **commit** ปัจจุบัน (ไม่ใช่ไฟล์ที่ยังไม่ commit) · `build` = commit ล่าสุดที่แก้ `server src scripts package.json ecosystem.edge.config.cjs` ตรงกับ BUILD_PATHS ใน server/shared/instance.js
 - ข้างในแต่ละแพลตฟอร์ม: `app\` (server, scripts, ecosystem, dist, node_modules, BUILD) และ `bin\` (node 22, ffmpeg 8.1 static, go2rtc 1.9.14)
 - `sqlite3` เป็น native — สคริปต์สลับ `node_sqlite3.node` ให้ตรงแพลตฟอร์มจาก prebuilt ทางการ
 - **`-Publish`** (ใช้ทุกครั้งที่ออกเวอร์ชันจริง) เพิ่มสองอย่างให้ central:
   - `server\edge-updates\<platform>\` แพ็กเกจอัปเดต `app-<platform>-<build>.tar.gz` (~12 MB) + `manifest.json` ที่เซ็นแล้ว — ข้อ 5
   - `server\edge-kits\` ชุดติดตั้งแยกต่อ OS (`.zip` Windows, `.tar.gz` Linux ~120 MB) + `kits.json` — ให้ดาวน์โหลดจากหน้า Edge Nodes (ข้อ 2)
   - มีผลทันทีไม่ต้อง restart · ต้องมีกุญแจเซ็น (ข้อ 6)
-  - ชุดใหญ่ขึ้นเป็น ~1.7 GB ต่อแพลตฟอร์ม · wheels เก็บใน cache แยกตาม requirements (`cache\wheels-<แพลตฟอร์ม>-<hash>`)
-  - ตัวติดตั้งเจอ `ai\` + `nvidia-smi` → สร้าง venv ที่ `<Root>\ai\venv` แบบออฟไลน์ (ครั้งแรก ~40 วิ, ครั้งหลังข้ามถ้า requirements ไม่เปลี่ยน)
+- ชุดติดตั้งมีเฉพาะ gateway และเครื่องมือรับผล AI จากต้นทาง ไม่มี Python/GPU inference
 
 ## 2. ดาวน์โหลดชุดติดตั้ง + ออกไฟล์ตั้งค่าที่ central
 
@@ -93,7 +94,7 @@ build-edge-kit.ps1 -Publish ──► central เก็บแพ็กเกจ�
     (ของเดิมไป `.update-prev/`) แล้วปิดตัวให้ pm2 เปิดรุ่นใหม่ · ตัวเฝ้า `scripts/edge-update-watchdog.cjs` (ก๊อปไป `<state>/updates/`
     รันแยกโปรเซส) รอ `link-ok.json` ของรุ่นใหม่ 5 นาที ไม่ติด = คืนไฟล์เดิมแล้วปิด gateway ให้ pm2 เปิดรุ่นเดิม · log: `<state>/updates/watchdog.log`
     แพ็กเกจที่ไม่มีตัวเฝ้า (รุ่นก่อน `c6ecab4`) ไม่รับตั้งแต่ตอนโหลด
-  - **edge 001 (pm2 บน Windows)** แจ้งอย่างเดียว — repo นั้นคือ central production ห้ามสลับไฟล์เอง
+  - **edge 001 (pm2 บน Windows)** แจ้งอย่างเดียว — repo นั้นคือ central production ห้ามสลับไฟล์เอง (edge 001 ยุติแล้ว 2026-09-30)
 - central ไม่เสนอแพ็กเกจที่เก่ากว่า build ของ edge (ถาม git: แพ็กเกจเป็นบรรพบุรุษของ build ของ edge = ไม่เสนอ)
   — เช่น deploy-edge.sh ไปก่อนแล้วยังไม่ได้ `-Publish`
 - **รัน `-Publish` จาก PowerShell แบบ admin เสมอ** — ไฟล์ใน `server\edge-updates\` เป็นของผู้ที่สร้างครั้งแรก shell ธรรมดาลบรุ่นเก่าไม่ได้
@@ -122,7 +123,18 @@ build-edge-kit.ps1 -Publish ──► central เก็บแพ็กเกจ�
 - แอปตายเปิดใหม่ใน 2 วิ (ตายเร็วติดกันหน่วงถึง 30 วิ) · log แยกไฟล์ต่อแอป หมุนที่ 20 MB · ข้อความของตัวคุมเองอยู่ใน `logs/edge-run.log`
 - ปิดโปรเซสที่ค้างจากรอบก่อนตาม `edge-run.pids`
 
-edge 001 (pm2 บน HOST) และ edge 002 (pm2-runtime บน Ubuntu) ยังใช้วิธีเดิม
+Edge 102 (Ubuntu เดิม, systemd `gw-edge` → pm2-runtime) ยังใช้วิธีเดิม · edge 001 (pm2 บน HOST) ยุติแล้ว
+
+## ถอนการติดตั้ง (Windows)
+
+1. ถอด edge ที่หน้า Edge Nodes ของ Regional ก่อน — token ใช้ไม่ได้ทันที กล้องหายจาก Regional/Central
+2. ที่เครื่อง edge ดับเบิลคลิก `uninstall-windows.cmd` (ในชุดติดตั้ง) → หยุด/ลบ Scheduled Task `Gateway Edge` + `Gateway Edge Backup`, ปิดโปรเซสใน `C:\GW-Edge`, ลบ firewall `Gateway Edge*`, ลบ `app\` `bin\`
+3. ค่าตั้งต้น **เก็บ `state\`** (vms.db, token, รหัสกล้อง, backups) — ติดตั้งซ้ำได้กล้องและ Global ID เดิม
+   · `uninstall-windows.cmd -RemoveData` ลบทั้งโฟลเดอร์ (ถามให้พิมพ์เลข edge ยืนยัน) · ติดตั้งที่อื่นใช้ `-Root`
+4. ลบ `edge-<เลข>.json` ที่ยังเหลือ (มี token)
+
+Linux: `sudo bash uninstall-linux.sh` — ลบ service `gw-edge`, cron backup, ufw rule `Gateway Edge*`, `/opt/gw-edge` · เก็บ `/var/lib/gw-edge` ไว้ (`--remove-data` ลบพร้อมผู้ใช้ `gw-edge`)
+· ปฏิเสธเครื่องที่ unit ไม่ได้สร้างจาก install-linux.sh — **Edge 102 (Ubuntu เดิม, pm2-runtime) ถอนเอง**
 
 ## ข้อจำกัด / ยังไม่ได้ทดสอบ
 
@@ -131,3 +143,12 @@ edge 001 (pm2 บน HOST) และ edge 002 (pm2-runtime บน Ubuntu) ยั
 - ยังไม่มี TLS บนสาย link (ใช้ผ่าน LAN/VPN) — แพ็กเกจอัปเดตกันด้วยลายเซ็น แต่ token และภาพยังวิ่งแบบไม่เข้ารหัส
 - ffmpeg ในชุดเป็น build GPL ใช้ภายในองค์กร
 - Surveillance Gateway Client ยังมีแค่ Windows — บน Linux ใช้เว็บ Live ของ central (client Linux พักไว้ก่อน)
+
+## รุ่นที่เผยแพร่ตอนนี้ (2026-10-07)
+
+- แพ็กเกจอัปเดตผ่านสาย (`server/edge-updates/`): `d645ed9` ทั้งสามแพลตฟอร์ม — Edge 101/102 ติดตั้งแล้ว
+- **ชุดติดตั้ง offline (`server/edge-kits/kits.json`): ยังเป็น `e12f958` (2026-09-30)** — `deploy.ps1` publish เฉพาะแพ็กเกจอัปเดต (`-UpdatesOnly`) ไม่สร้างชุดใหม่
+  ก่อนติดตั้ง edge ใหม่ (เช่น 103) ให้รัน `build-edge-kit.ps1 -Publish` จาก shell admin หรือติดตั้งชุดเดิมแล้วกดอัปเดตทันทีหลังต่อสาย
+## AI ในชุดปัจจุบัน (ตั้งแต่ 2026-10-02)
+
+หลังติดตั้งแอดกล้อง แล้วเปิด receiver ใน AI Sources ต่อกล้อง

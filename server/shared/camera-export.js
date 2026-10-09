@@ -7,7 +7,7 @@ const CAMERA_FIELDS = [
   'onvifPort', 'rtspPort', 'lat', 'lng', 'province_code', 'district_code',
   'stream_type', 'always_on', 'enabled', 'nvr_channel',
   'source_id', 'source_ref',
-  'source_missing_at', 'analytics_kind', 'analytics_probed_at', 'ai_enabled', 'ai_objects',
+  'source_missing_at', 'analytics_kind', 'analytics_probed_at',
 ];
 const SOURCE_FIELDS = [
   'kind', 'label', 'host', 'port', 'rtsp_port', 'mode', 'remark',

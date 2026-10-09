@@ -24,7 +24,8 @@ import ScopeGroupPicker from '@/components/ScopeGroupPicker';
  * หนึ่ง (กุญแจอยู่นอกฐานข้อมูล ดู server/gateway/key-vault.js) จึงเปิดดูซ้ำได้จากปุ่มรูปตา
  * ในตาราง — ใบที่ออกก่อนมีระบบนี้เปิดดูไม่ได้ตลอดไป และปุ่มจะถูกปิดพร้อมบอกเหตุผล
  */
-export default function ApiClients({ groupedCameras = {} }) {
+// showPublic: คอลัมน์ "กล้อง Public" — เฉพาะ Central และผู้ที่มี menu.publiccam (กล้อง Public มีที่ Central เท่านั้น)
+export default function ApiClients({ groupedCameras = {}, showPublic = false }) {
   const [clients, setClients] = useState([]);
   const [name, setName] = useState('');
   /*
@@ -83,7 +84,7 @@ export default function ApiClients({ groupedCameras = {} }) {
     }
   };
 
-  // field = 'enabled', 'allowPtz', 'allowPlayback' หรือ 'allowEventWrite' — ส่งไปแค่ field เดียว ฝั่งเซิร์ฟเวอร์แก้เฉพาะที่ส่งมา
+  // field = 'enabled', 'allowPtz', 'allowPlayback', 'allowEventWrite' หรือ 'allowPublic' — ส่งไปแค่ field เดียว ฝั่งเซิร์ฟเวอร์แก้เฉพาะที่ส่งมา
   const handleToggle = async (client, field = 'enabled') => {
     try {
       const res = await apiFetch(`/api/gateway/clients/${client.id}`, {
@@ -243,7 +244,10 @@ export default function ApiClients({ groupedCameras = {} }) {
                 <TableHead>ใช้งานล่าสุด</TableHead>
                 <TableHead className="w-24" title="อนุญาตให้ key ใบนี้หมุน/ซูม/เรียก preset ของกล้องใน scope">คุม PTZ</TableHead>
                 <TableHead className="w-24" title="อนุญาตให้ key ใบนี้ดูภาพบันทึกย้อนหลัง (บันทึกที่ edge) — key ที่ central ถือไว้กับ edge ต้องติ๊กที่ edge">ย้อนหลัง</TableHead>
-                <TableHead className="w-24" title="อนุญาตให้ key ใบนี้ส่ง event ของ AI เข้ามา (edge) — ให้เฉพาะ ai-worker ของเครื่องนี้ ห้ามให้ key ที่แจกออกไป">ส่ง event</TableHead>
+                <TableHead className="w-24" title="อนุญาตให้ key ใบนี้ส่งผล AI จาก API ภายนอกเข้ามาที่ Edge">ส่ง event</TableHead>
+                {showPublic && (
+                  <TableHead className="w-24" title="อนุญาตให้ key ใบนี้เห็นกล้องสาธารณะทั้งหมด (หน้า Public Cam Map) — ไม่ขึ้นกับขอบเขตกลุ่ม · ค่าตั้งต้นปิด">กล้อง Public</TableHead>
+                )}
                 <TableHead className="w-24">เปิดใช้</TableHead>
                 <TableHead className="w-16" />
               </TableRow>
@@ -251,7 +255,7 @@ export default function ApiClients({ groupedCameras = {} }) {
             <TableBody>
               {clients.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={showPublic ? 11 : 10}className="text-center text-sm text-muted-foreground py-8">
                     ยังไม่มี client — ออก key ใบแรกได้จากฟอร์มด้านบน
                   </TableCell>
                 </TableRow>
@@ -302,6 +306,11 @@ export default function ApiClients({ groupedCameras = {} }) {
                   <TableCell>
                     <Checkbox checked={client.allowEventWrite} onCheckedChange={() => handleToggle(client, 'allowEventWrite')} />
                   </TableCell>
+                  {showPublic && (
+                    <TableCell>
+                      <Checkbox checked={client.allowPublic} onCheckedChange={() => handleToggle(client, 'allowPublic')} />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Checkbox checked={client.enabled} onCheckedChange={() => handleToggle(client)} />
                   </TableCell>

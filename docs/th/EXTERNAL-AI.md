@@ -4,7 +4,14 @@
 Edge รับและแปลง event → Regional รวมภายในภาค → Central รวมทุกภาค
 ทั้งสามบทบาทไม่รัน inference; ไม่มีการบันทึกวิดีโอเพิ่ม
 
-สถานะ: พัฒนาใน D:\gateway-dev ยังไม่ commit/deploy/publish ให้ production
+สถานะปัจจุบัน (2026-10-07): Gateway d645ed9 ใช้งานทั้ง Central/Regional/Edge 101/102; Client 1.9.5 เผยแพร่แล้ว · โค้ดรับ AI เปลี่ยนล่าสุดที่ 10ea98f (ถอด worker) รายละเอียดการตรวจแต่ละรุ่นอยู่ท้ายเอกสาร
+
+## แหล่งรับหลักสองแบบ
+
+- **อุปกรณ์ต้นทาง:** Edge เป็นฝ่ายเชื่อมต่อกล้อง/NVR โดยใช้ native adapter เพื่อรับ event และดึง JPEG; ปัจจุบันทดสอบ Tiandy และ UNV ตามรุ่น/กฎด้านล่าง
+- **API ภายนอก:** VMS หรือระบบ AI อื่นเป็นฝ่ายส่ง normalized event พร้อมภาพมาที่ Edge ด้วย API key ที่มีสิทธิ์; ไม่เปิดการเชื่อมต่อกล้องอัตโนมัติ
+- ทั้งสองแบบให้ต้นทางประมวลผล AI; ตัวเลือกนี้กำหนดวิธีรับผล ไม่ได้เปิดกฎ AI ในกล้อง
+- กล้องใหม่แสดง API ภายนอกเป็นค่าเริ่มต้นและปิดรับอยู่ ไม่ได้หมายความว่ามีระบบภายนอกส่ง event แล้ว
 
 ## รอบแรก
 
@@ -38,7 +45,10 @@ auth 401/403 พัก 15 นาที; error อื่นพัก 15 วิน
 2. ออก API key ที่ Edge มี allow_event_write และจำกัด scopeGroups ตามกลุ่มกล้อง
 3. ส่ง Authorization: Bearer <api-key> ไป POST /api/v1/ai/events ของ Edge
 
-ตัวอย่าง payload (ใช้ Global ID เดิมหรือ local cameraId ของ Edge):
+ตัวอย่างการทำงาน: VMS ตรวจรถข้ามเส้น → โปรแกรมเชื่อมต่อของ VMS แปลงผลและ JPEG เป็น payload ของเรา → ส่ง HTTP POST พร้อม API key ไป Edge → Edge ตรวจสิทธิ์/บันทึก → Regional → Central → AI Events
+ถ้า VMS ส่งรูปแบบนี้ไม่ได้ ต้องเขียนตัวเชื่อมก่อน; การเลือก API ภายนอกอย่างเดียวไม่สร้างตัวเชื่อมหรือดึง event อัตโนมัติ
+
+ตัวอย่าง payload (ใช้ Global ID เดิมหรือ local cameraId ของ Edge; ตัวอย่างนี้แสดงเฉพาะข้อมูล event ผู้ส่งต้องเติม snapshot เป็น JPEG base64 เมื่อต้องการภาพประกอบ):
 
 ~~~json
 {
@@ -218,3 +228,15 @@ update Edge 101 → เปิด receiver ของกล้องแถวเ�
 - หน้า AI Sources จริงเลือก site office แล้วเหลือ 3 กล้อง และ UNV event test แล้วเหลือ UNV TEST ตัวเดียว
 - ตัวรับ Tiandy และ UNV เปิดอยู่/เชื่อมต่อหลังอัปเดต; Tiandy ส่งภาพเหตุถึง Central แล้ว
 - UNV รอเหตุรถผ่านรอบใหม่ใน production; ผล LineCrossing พร้อมภาพก่อน release ตรวจกล้องจริงในระบบจำลองแล้ว
+## ถอด inference เดิม (2026-10-02)
+
+- API ตั้ง inference เดิมคืน 410; ตั้ง receiver ที่ AI Sources ต่อกล้อง
+- คงฐานข้อมูล, event/ภาพย้อนหลัง และ backup/secret เก่าไว้; ไม่ลบ D:\gateway-ai
+- แพ็กเกจใหม่ไม่บรรจุ worker; Edge แบบสลับโฟลเดอร์ใช้เฉพาะโค้ดใหม่ ส่วน Edge แบบ in-place อาจมีโฟลเดอร์เก่าที่ไม่ถูกใช้งาน
+
+## ยืนยันหลังถอด worker — Gateway 10ea98f / Client 1.9.4
+
+2026-10-02: backup D:\gateway-backups\daily\20261002-220011 แล้ว deploy Central/Regional และอัปเดต Edge 101/102 ผ่าน Regional UI; /api/instance ทั้งสี่ตรงกันและ Edge Online
+แพ็กเกจทั้งสามแพลตฟอร์มผ่าน signature/size/SHA-256; หน้า AI Sources จริงแสดง Tiandy/UNV เชื่อมต่อหลังอัปเดต
+ตรวจ external AI 12 ชุด + UNV 4 ชุด, DB ใหม่/startup, เพิกถอนเฉพาะ key worker โดยคง key ภายนอก, syntax/ESLint และ build หน้าเว็บผ่าน
+Client 1.9.4 release แล้ว หุบตัวกรอง Camera Library ได้ (render offscreen; ไม่ใช่การยืนยันหน้าต่างจริง)

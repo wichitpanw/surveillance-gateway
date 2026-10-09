@@ -138,6 +138,10 @@ function createPtz({ initOnvifDevice, edgeClientFor, dssPtz = null }) {
     if (String(camera.type || '').startsWith('digifort')) {
       throw new PtzError(409, 'กล้องที่มาผ่าน VMS สั่ง PTZ ผ่าน Gateway ไม่ได้');
     }
+    // กล้องสาธารณะ (vms/public-cams.js) — ต้นทางให้แค่ภาพ ห้ามเดา IP จาก URL ของ HLS แล้วยิง ONVIF ไปที่เครื่องหน่วยงาน
+    if (camera.type === 'public_hls') {
+      throw new PtzError(409, 'กล้อง Public ไม่รองรับ PTZ');
+    }
     const target = targetOf(camera);
     if (!target.ip || !target.user) {
       throw new PtzError(409, 'กล้องตัวนี้ไม่มี IP หรือบัญชี ONVIF ให้สั่ง PTZ');

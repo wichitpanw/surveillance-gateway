@@ -67,6 +67,10 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
         _player.EncounteredError += (_, _) => Dispatch(() => OnFailure(Strings.T("video.streamError")));
         _player.EndReached += (_, _) => Dispatch(() => OnFailure(Strings.T("video.streamEnded")));
         _player.Playing += (_, _) => Dispatch(OnPlaying);
+        _player.ESAdded += (_, e) =>
+        {
+            if (e.Type == TrackType.Audio) Dispatch(() => _player.Mute = _muted);
+        };
 
         _watchdog = new DispatcherTimer { Interval = Watchdog };
         _watchdog.Tick += (_, _) =>
@@ -94,6 +98,25 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
     public double Fps { get; private set; }
 
     public long LostPictures { get; private set; }
+
+    public bool AudioAvailable { get; set; }
+
+    private bool _muted = true;
+
+    /*
+      Mute is applied to the player again whenever playback (re)starts, not only here: libvlc
+      ignores a mute set before the audio output exists, and every reconnect builds a new one.
+      A cell that came back from a dropped stream would otherwise start talking by itself.
+    */
+    public bool Muted
+    {
+        get => _muted;
+        set
+        {
+            _muted = value;
+            _player.Mute = value;
+        }
+    }
 
     public event EventHandler<VideoStateChangedEventArgs>? StateChanged;
 
@@ -243,6 +266,9 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
             media.AddOption(":rtsp-tcp");
             media.AddOption(":network-caching=500");
             media.AddOption(":live-caching=500");
+            // Cameras without sound keep the picture-only path: no audio decoder, no audio device.
+            if (!AudioAvailable) media.AddOption(":no-audio");
+            _player.Mute = _muted;
             _player.Play(media);
         }
         catch (Exception ex) when (ex is VLCException or UriFormatException)
@@ -269,6 +295,7 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
         if (_disposed || _urlProvider is null) return;
         // ได้ frame จริงจึงคืน retry budget ใน Poll — Playing อย่างเดียวอาจเป็นเสียงหรือภาพค้าง
         _framelessSeconds = 0;
+        _player.Mute = _muted;
         SetState(VideoState.Playing, null);
     }
 

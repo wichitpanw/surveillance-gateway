@@ -10,5 +10,9 @@ Surveillance Gateway Edge — ชุดติดตั้งจาก flash driv
 5. เปิดเว็บตามที่อยู่ที่ขึ้นบนจอ → login superadmin / superadmin → เปลี่ยนรหัสผ่านทันที → แอดกล้อง
    ที่ central หน้า Edge Nodes ต้องขึ้น edge นี้เป็น Online
 
+ถอนการติดตั้ง (Windows): ถอด edge นี้ที่หน้า Edge Nodes ของ Regional ก่อน แล้วดับเบิลคลิก uninstall-windows.cmd
+   เก็บข้อมูลกล้อง/Global ID ไว้ที่ C:\GW-Edge\state (ติดตั้งซ้ำได้ ID เดิม) · ลบข้อมูลด้วย: uninstall-windows.cmd -RemoveData
+ถอนการติดตั้ง (Linux)  : sudo bash uninstall-linux.sh  (เก็บ /var/lib/gw-edge ไว้ · ลบข้อมูลด้วย --remove-data)
+
 อัปเดตเวอร์ชัน: ก๊อปชุดติดตั้งใหม่ลง flash drive แล้วรันไฟล์เดิมซ้ำ (ไม่ต้องใช้ edge-<เลข>.json) — ข้อมูลและกล้องยังอยู่ครบ
 รายละเอียด: docs/EDGE-KIT.md ใน repo ของโครงการ

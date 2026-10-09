@@ -27,7 +27,7 @@ done
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 # นิยามเดียวกับ BUILD_PATHS ใน server/shared/instance.js (ต้นฉบับ) — ไม่ใช่ HEAD
-BUILD_PATHS=(server src ai-worker scripts package.json ecosystem.edge.config.cjs)
+BUILD_PATHS=(server src scripts package.json ecosystem.edge.config.cjs)
 COMMIT="$(git log -1 --format=%h -- "${BUILD_PATHS[@]}")"
 if ! git diff --quiet HEAD -- . ':(exclude)BUILD'; then
   echo "คำเตือน: มีไฟล์ที่ยังไม่ commit — ส่งไปเฉพาะของใน $COMMIT" >&2

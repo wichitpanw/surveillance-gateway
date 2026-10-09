@@ -17,6 +17,7 @@ const { nowIso } = require('../shared/time');
 const crypto = require('crypto');
 const { NODE_NUMBER, HTTP_PORT, GO2RTC_RTSP_PORT, ROLE, REGION } = require('../shared/instance');
 const { CODES: REGION_CODES, regionForProvince } = require('../shared/region-groups');
+const { lookup: lookupArea } = require('../shared/regions');
 const { rtspCredentials, withRtspCredentials } = require('../gateway/rtsp-auth');
 const { resolveCore } = require('../gateway/streams');
 
@@ -54,7 +55,7 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
 
   const ensureSchema = async () => {
     // mode: NULL/'pull' = central ต่อเข้า edge (ของเดิม) · 'link' = edge ต่อขึ้นมาเอง · link_token_hash: token ของ link
-    for (const col of ['status TEXT', 'status_at TEXT', 'remote_node TEXT', 'remote_build TEXT', 'status_error TEXT', 'mode TEXT', 'link_token_hash TEXT', 'link_via TEXT', 'link_remote TEXT', 'remote_role TEXT', 'remote_region TEXT', 'node_block TEXT', 'remark TEXT']) {
+    for (const col of ['status TEXT', 'status_at TEXT', 'remote_node TEXT', 'remote_build TEXT', 'status_error TEXT', 'mode TEXT', 'link_token_hash TEXT', 'link_via TEXT', 'link_remote TEXT', 'remote_role TEXT', 'remote_region TEXT', 'node_block TEXT', 'remark TEXT', 'remote_province TEXT']) {
       await run(`ALTER TABLE camera_sources ADD COLUMN ${col}`).catch(() => {});
     }
     // กล้องที่หายจากต้นทาง — ติดเวลาไว้ ไม่ลบ (wall, สิทธิ์, log อาจยังอ้างถึงอยู่)
@@ -66,6 +67,17 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
   /** edge ที่ถูกถอดใน process นี้ — รอบซิงก์ที่ค้างอยู่ห้ามใส่กล้องของมันกลับ (แอดใหม่ = ลบออกจากชุดนี้) */
   const removedSources = new Set();
   const warnedInsert = new Set(); // กล้องที่เพิ่มไม่ได้เพราะชน — เตือนแล้ว
+  const warnedOutside = new Map(); // source id → รายชื่อกล้องนอกภาคที่เตือนล่าสุด (เตือนซ้ำเมื่อชุดเปลี่ยน)
+  /** จังหวัดนี้อยู่นอกภาคของ Regional ไหม — จังหวัดว่าง/ไม่รู้จัก = ไม่นับ */
+  const isOutsideRegion = (provinceCode) => {
+    const region = regionForProvince(provinceCode);
+    return Boolean(region) && region !== REGION;
+  };
+  /** จังหวัดที่ edge รายงานใน hello/health — 2 หลักที่รู้จักเท่านั้น (00 = edge ไม่ได้ตั้ง, รุ่นเก่า = ไม่ส่ง) */
+  const reportedProvince = (value) => {
+    const code = String(value ?? '').replace(/\D/g, '');
+    return code.length === 2 && regionForProvince(code) ? code : null;
+  };
 
   const clientForSource = (source) => new EdgeClient({ host: source.host, port: source.port, key: unseal(source.password_sealed),
     recorderTimeoutMs: ROLE === 'central' && source.remote_role === 'regional' ? RECORDER_TIMEOUT_MS * 2 + 10_000 : RECORDER_TIMEOUT_MS });
@@ -206,6 +218,8 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
     globalId: cam.globalId || null,
     // ปิดใช้งานที่ edge = ปิดที่ central ด้วย (edge เป็นเจ้าของ) — edge รุ่นเก่าไม่มีฟิลด์นี้ ถือว่าเปิด
     enabled: cam.enabled === false ? 0 : 1,
+    // ส่งเสียงต่อ — edge เป็นเจ้าของ · edge รุ่นเก่าไม่มีฟิลด์นี้ = ไม่มีเสียง (ทางเดิม)
+    audio: cam.audio === true ? 1 : 0,
   });
 
   /** pull: ที่อยู่สตรีมมาจาก /cameras/:id/streams ของ edge (go2rtc ของเราดึงจาก edge) */
@@ -322,10 +336,10 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
     const result = await run(
       `INSERT OR IGNORE INTO cameras
          (id, name, group_name, brand, type, rtsp, rtsp_sub, ip, onvifPort, rtspPort, onvifUser, onvifPass,
-          lat, lng, stream_type, source_id, source_ref, global_id, province_code, district_code, enabled)
-       VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,?,?,'sub',?,?,?,?,?,?)`,
+          lat, lng, stream_type, source_id, source_ref, global_id, province_code, district_code, enabled, audio_enabled)
+       VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,?,?,'sub',?,?,?,?,?,?,?)`,
       [id, f.name, group || cam.group || 'Default', f.brand, EDGE_TYPE,
-        f.rtsp, f.rtspSub, f.lat, f.lng, sourceId, cam.id, f.globalId, f.province, f.district, f.enabled],
+        f.rtsp, f.rtspSub, f.lat, f.lng, sourceId, cam.id, f.globalId, f.province, f.district, f.enabled, f.audio],
     );
     if (result.changes > 0) return true;
     const mine = await get('SELECT id FROM cameras WHERE source_id = ? AND source_ref = ?', [sourceId, cam.id]).catch(() => null);
@@ -365,19 +379,24 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
    * อยู่ที่ central จึงไม่กินแบนด์วิดท์ข้ามไซต์
    */
   async function syncRows(source, node, available, fieldsFor, deletedRefs = []) {
+    /*
+      กล้องจังหวัดนอกภาคของ Regional รับเข้าตามปกติ (ผู้ใช้ตัดสินใจ 2026-10-07 — เช่น Edge ทดสอบที่ต่อข้ามภาค)
+      เดิมปฏิเสธทั้งชุด (409) ซึ่งเงียบในสาย link: กล้องทุกตัวของ edge นั้นหยุด sync โดยหน้าเว็บไม่บอก
+      ตอนนี้แค่เตือนใน log เมื่อรายชื่อเปลี่ยน และหน้า Edge Nodes แสดงจำนวนจาก listEdges()
+    */
     if (ROLE === 'regional') {
-      const wrong = available.find((camera) => {
-        const province = camera.region?.province?.code || camera.province_code || null;
-        const region = regionForProvince(province);
-        return region && region !== REGION;
-      });
-      if (wrong) throw new EdgeRequestError(409, `กล้อง ${wrong.name || wrong.id} มีจังหวัดนอกภาค ${REGION} — แก้ที่ Edge จังหวัดก่อน sync`);
+      const outside = available.filter((camera) => isOutsideRegion(camera.region?.province?.code || camera.province_code));
+      const key = outside.map((camera) => camera.id).sort().join(',');
+      if (key && warnedOutside.get(source.id) !== key) {
+        console.warn(`[Edge] ${source.label || source.id}: กล้อง ${outside.length} ตัวมีจังหวัดนอกภาค ${REGION} — รับเข้าแต่แจ้งเตือน (${outside.slice(0, 5).map((c) => c.name || c.id).join(', ')}${outside.length > 5 ? ' …' : ''})`);
+      }
+      if (key) warnedOutside.set(source.id, key); else warnedOutside.delete(source.id);
     }
     const byId = new Map(available.map((c) => [c.id, c]));
     // กล้องที่คนลบที่ edge (edge จดไว้ — shared/camera-deletions.js) — ลบตามได้ ต่างจากกล้องที่แค่หายไป
     const deletedAtEdge = new Set((Array.isArray(deletedRefs) ? deletedRefs : []).map(String));
     const rows = await all(
-      'SELECT id, name, rtsp, rtsp_sub, enabled, source_ref, source_missing_at FROM cameras WHERE source_id = ?',
+      'SELECT id, name, rtsp, rtsp_sub, enabled, audio_enabled, source_ref, source_missing_at FROM cameras WHERE source_id = ?',
       [source.id],
     );
     const importedRefs = new Set(rows.map((r) => r.source_ref));
@@ -412,6 +431,7 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
       }
       if ((f.rtsp && f.rtsp !== row.rtsp) || (f.rtspSub && f.rtspSub !== row.rtsp_sub)) streamsChanged = true;
       if (Number(row.enabled ?? 1) !== f.enabled) streamsChanged = true;
+      if (Number(row.audio_enabled || 0) !== f.audio) streamsChanged = true; // go2rtc ต้องเติม/ถอด #audio=aac
       if (row.source_missing_at) streamsChanged = true; // กลับมาที่ edge — ใส่กลับเข้า go2rtc
       /*
         global_id: ใช้ COALESCE ไม่เขียนทับ — ID ที่ออกไปแล้วห้ามเปลี่ยนแม้ edge จะรายงานต่างไป
@@ -420,11 +440,11 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
       // แถวเดียวเขียนไม่ได้ (เช่น global_id ชนกับกล้องอื่น) ต้องไม่ทำให้ทั้งรายการหยุด — ข้ามแล้วไปแถวถัดไป
       try {
         const result = await run(
-          `UPDATE cameras SET name=?, brand=?, lat=?, lng=?, province_code=?, district_code=?, enabled=?,
+          `UPDATE cameras SET name=?, brand=?, lat=?, lng=?, province_code=?, district_code=?, enabled=?, audio_enabled=?,
                   global_id = COALESCE(global_id, ?), rtsp = COALESCE(?, rtsp), rtsp_sub = COALESCE(?, rtsp_sub),
                   source_missing_at = NULL
            WHERE id = ?`,
-          [f.name, f.brand, f.lat, f.lng, f.province, f.district, f.enabled, f.globalId, f.rtsp, f.rtspSub, row.id],
+          [f.name, f.brand, f.lat, f.lng, f.province, f.district, f.enabled, f.audio, f.globalId, f.rtsp, f.rtspSub, row.id],
         );
         rewritten += result.changes;
       } catch (err) {
@@ -517,8 +537,9 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
 
     await run(
       `UPDATE camera_sources SET last_sync_at = ?, status = 'ok', status_at = ?, status_error = NULL,
-              remote_node = ?, remote_build = ?, remote_role = ?, remote_region = ?, node_block = ?${key ? ', password_sealed = ?' : ''} WHERE id = ?`,
-      [nowIso(), nowIso(), h.node, h.build || null, h.role, h.region || null, h.role === 'regional' ? h.node : null, ...(key ? [seal(key)] : []), source.id],
+              remote_node = ?, remote_build = ?, remote_role = ?, remote_region = ?, node_block = ?, remote_province = ?${key ? ', password_sealed = ?' : ''} WHERE id = ?`,
+      [nowIso(), nowIso(), h.node, h.build || null, h.role, h.region || null, h.role === 'regional' ? h.node : null,
+        h.role === 'edge' ? reportedProvince(h.province) : null, ...(key ? [seal(key)] : []), source.id],
     );
     if (!removedSources.has(source.id)) status.set(source.id, { reachable: true, node: h.node, build: h.build || null, at: Date.now() });
     return result;
@@ -676,7 +697,7 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
     : Promise.resolve(null));
 
   /** edge ส่ง hello มา — ตรวจเลขเครื่องแล้วบันทึกว่าต่ออยู่ คืนข้อความ error ถ้าไม่รับ */
-  async function linkUp(source, { node, role = 'edge', region, protocol, build, via, remote, platform, runner }, link) {
+  async function linkUp(source, { node, role = 'edge', region, protocol, build, via, remote, platform, runner, province }, link) {
     if (role !== (ROLE === 'central' ? 'regional' : 'edge')) {
       return `${ROLE} รับสายจาก ${role} ไม่ได้`;
     }
@@ -709,10 +730,14 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
     const remoteText = remote ? String(remote).replace(/^::ffff:/, '').slice(0, 64) : null;
     // บันทึกลง DB ไม่ได้ (ล็อก/ดิสก์) ไม่ใช่เหตุให้ปฏิเสธสาย — สถานะในหน่วยความจำตั้งไปแล้ว รอบหน้าเขียนใหม่
     await run(`UPDATE camera_sources SET status='ok', status_at=?, status_error=NULL, remote_node=?, remote_build=?, remote_role=?, remote_region=?, node_block=?,
-                                        link_via=?, link_remote=? WHERE id=?`,
-      [nowIso(), n, build || null, role, role === 'regional' ? region : null, role === 'regional' ? n : null, viaText, remoteText, source.id])
+                                        link_via=?, link_remote=?, remote_province=? WHERE id=?`,
+      [nowIso(), n, build || null, role, role === 'regional' ? region : null, role === 'regional' ? n : null, viaText, remoteText,
+        role === 'edge' ? reportedProvince(province) : null, source.id])
       .catch((err) => console.warn(`[Edge link] ${source.label}: บันทึกสถานะสายลง DB ไม่ได้ — ${err.message}`));
     console.log(`[Edge link] ${source.label}: edge ${n} ต่อเข้ามาแล้ว (build ${build || '?'}${viaText ? ` ผ่าน ${viaText}` : ''}${remoteText ? ` จาก ${remoteText}` : ''})`);
+    if (ROLE === 'regional' && role === 'edge' && isOutsideRegion(reportedProvince(province))) {
+      console.warn(`[Edge link] ${source.label}: edge ${n} ตั้งจังหวัด ${reportedProvince(province)} นอกภาค ${REGION} — รับสายแต่แจ้งเตือน`);
+    }
     // ไล่ตาม event หลังส่ง welcome แล้ว — edge ตอบ rpc ได้เมื่อรู้ว่าสายพร้อม
     setTimeout(() => syncAiEvents(source.id), 2000).unref?.();
     return null;
@@ -944,12 +969,33 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
   async function listEdges() {
     const rows = await all(
       `SELECT s.id, s.label, s.remark, s.host, s.port, s.created_at, s.last_sync_at, s.status, s.status_at, s.status_error,
-              s.remote_node, s.remote_build, s.remote_role, s.remote_region, s.node_block, COALESCE(s.mode, 'pull') AS mode, s.link_via, s.link_remote,
+              s.remote_node, s.remote_build, s.remote_role, s.remote_region, s.node_block, s.remote_province, COALESCE(s.mode, 'pull') AS mode, s.link_via, s.link_remote,
               (SELECT COUNT(*) FROM cameras c WHERE c.source_id = s.id) AS cameraCount,
               (SELECT COUNT(*) FROM cameras c WHERE c.source_id = s.id AND c.source_missing_at IS NOT NULL) AS missingCount
        FROM camera_sources s WHERE s.kind = 'edge' ORDER BY s.created_at`,
     );
-    return rows.map((r) => ({ ...r, reachable: status.get(r.id)?.reachable ?? null, update: updateInfo.get(r.id) || null }));
+    // Regional: นับกล้องจังหวัดนอกภาคต่อ edge ให้หน้า Edge Nodes เตือน (รับเข้าแล้ว ไม่ได้ปฏิเสธ)
+    const outside = new Map();
+    if (ROLE === 'regional') {
+      const cams = await all("SELECT source_id, name, province_code FROM cameras WHERE province_code IS NOT NULL AND province_code != ''");
+      for (const c of cams) {
+        if (!isOutsideRegion(c.province_code)) continue;
+        const o = outside.get(c.source_id) || { count: 0, names: [] };
+        o.count += 1;
+        if (o.names.length < 10) o.names.push(c.name);
+        outside.set(c.source_id, o);
+      }
+    }
+    return rows.map((r) => ({
+      ...r,
+      reachable: status.get(r.id)?.reachable ?? null,
+      update: updateInfo.get(r.id) || null,
+      // edge ตั้งจังหวัดของตัวเองนอกภาค — เตือนเหมือนกล้อง ไม่ปฏิเสธ (ไม่รู้จังหวัด = ไม่เตือน)
+      edgeOutsideRegion: ROLE === 'regional' && r.remote_role === 'edge' && isOutsideRegion(r.remote_province),
+      remoteProvinceName: r.remote_province ? lookupArea(r.remote_province)?.nameTh || null : null,
+      outOfRegionCount: outside.get(r.id)?.count || 0,
+      outOfRegionNames: outside.get(r.id)?.names || [],
+    }));
   }
 
   /** ถอด edge ออก — ลบกล้องทุกแถวของมันที่ central (ของที่ edge ไม่ถูกแตะ) */

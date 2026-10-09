@@ -52,10 +52,9 @@ const PLATFORM = currentPlatform();
 const REPO = path.resolve(__dirname, '..', '..');
 /*
   ของที่แพ็กเกจอัปเดตแบบสลับไฟล์ใน repo (pm2 บน Linux) มีได้ — เกินจากนี้ = ปฏิเสธทั้งแพ็กเกจ
-  ai-worker เพิ่มเมื่อ 2026-09-28: edge ที่รันรุ่นก่อนหน้านี้ปฏิเสธแพ็กเกจที่มี ai-worker ("แพ็กเกจมีของที่ไม่คาด")
-  จึงต้องอัปเดตผ่านแพ็กเกจสะพานที่ไม่มี ai-worker ก่อนหนึ่งรอบ (build-edge-kit.ps1 -UpdatesOnly -NoAiWorker)
+  แพ็กเกจใหม่มีเฉพาะ gateway และเครื่องมือรับผลจากต้นทาง
 */
-const IN_PLACE_ENTRIES = ['server', 'scripts', 'ai-worker', 'dist', 'ecosystem.edge.config.cjs', 'package.json', 'BUILD'];
+const IN_PLACE_ENTRIES = ['server', 'scripts', 'dist', 'ecosystem.edge.config.cjs', 'package.json', 'BUILD'];
 const IN_PLACE = RUNNER === 'pm2' && process.platform === 'linux' && process.env.pm_id !== undefined
   && path.relative(REPO, DIR).startsWith('..');
 const CAN_INSTALL = RUNNER === 'edge-run' || IN_PLACE;

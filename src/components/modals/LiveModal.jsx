@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
   เริ่มที่ main (ภาพเต็มความละเอียด) สลับเป็น sub ได้ถ้าเน็ตช้า · ปิด dialog = LivePlayer ถอด src
   ซึ่งปิดสายไป go2rtc ทันที กล้องไม่ถูกดึงภาพค้างไว้
 */
-export default function LiveModal({ camera, open, onClose }) {
+// showPtz=false: กล้องที่ไม่มีทางสั่ง PTZ เลย (กล้อง Public) — ภาพเต็มความกว้าง ไม่ต้องถาม /ptz ให้เสียเที่ยว
+export default function LiveModal({ camera, open, onClose, showPtz = true, description }) {
   const [type, setType] = useState('main');
 
   return (
@@ -22,13 +23,13 @@ export default function LiveModal({ camera, open, onClose }) {
             {camera?.name || camera?.id}
             <span className="font-mono text-xs font-normal text-muted-foreground">{camera?.global_id || camera?.id}</span>
           </DialogTitle>
-          <DialogDescription>ภาพสดผ่าน Gateway — ไม่มีเสียง</DialogDescription>
+          <DialogDescription>{description || <>ภาพสดผ่าน Gateway{Number(camera?.audio_enabled) === 1 ? ' — กดลำโพงมุมล่างขวาเพื่อเปิดเสียง' : ' — ไม่มีเสียง'}</>}</DialogDescription>
         </DialogHeader>
 
         {/* minmax(0,1fr): คอลัมน์ภาพต้องหดได้ — ไม่งั้นความกว้างจริงของวิดีโอ (1280+) ดันแผง PTZ หลุดขอบ */}
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className={cn('mt-4 grid grid-cols-1', showPtz && 'lg:grid-cols-[minmax(0,1fr)_260px]')}>
           <div className="relative aspect-video min-w-0 bg-black">
-            {open && camera?.id && <LivePlayer key={`${camera.id}-${type}`} cameraId={camera.id} type={type} className="absolute inset-0" />}
+            {open && camera?.id && <LivePlayer key={`${camera.id}-${type}`} cameraId={camera.id} type={type} audio={Number(camera.audio_enabled) === 1} className="absolute inset-0" />}
             <div className="absolute right-3 top-3 flex overflow-hidden rounded-md border border-white/20 bg-black/60 text-[11px] text-white">
               {['main', 'sub'].map((t) => (
                 <button key={t} type="button" onClick={() => setType(t)}
@@ -39,11 +40,13 @@ export default function LiveModal({ camera, open, onClose }) {
             </div>
           </div>
           {/* จอกว้าง: แผง PTZ สูงเท่าภาพพอดี preset เยอะก็เลื่อนในแผง ไม่ดัน dialog ให้ยาว */}
-          <div className="relative min-w-0 border-t lg:border-l lg:border-t-0">
-            <div className="lg:absolute lg:inset-0 lg:overflow-y-auto custom-scrollbar">
-              {open && camera?.id && <PtzPad cameraId={camera.id} />}
+          {showPtz && (
+            <div className="relative min-w-0 border-t lg:border-l lg:border-t-0">
+              <div className="lg:absolute lg:inset-0 lg:overflow-y-auto custom-scrollbar">
+                {open && camera?.id && <PtzPad cameraId={camera.id} />}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="flex justify-end px-5 py-4">

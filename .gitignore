@@ -79,6 +79,7 @@ server/.rtsp-credentials.json
 
 # เวอร์ชันสูตรของ source เส้น _raw ที่ลงไว้กับ go2rtc ตัวนี้ — สถานะของเครื่อง ไม่ใช่ของโปรเจกต์
 server/.go2rtc-raw-recipe
+server/.go2rtc-applied.json
 server/ai_meta/
 
 # design-md เป็น repo อื่นที่ถูก clone ไว้ในนี้ ไม่ใช่โค้ดของโปรเจกต์

@@ -16,6 +16,7 @@ const fs = require('fs');
 
 const { GO2RTC_API_PORT: API_PORT, stateFile } = require('../shared/instance');
 const { isSafeEdgeRtsp, warnRejected } = require('../vms/edge');
+const { PUBLIC_TYPE, isAllowedPublicUrl, keyOfSourceId } = require('../vms/public-cams');
 const HOST = '127.0.0.1';
 
 /** ชื่อ path — ต้องตรงกับ streamPathName ใน gateway/streams.js และ src/lib/api.js */
@@ -59,8 +60,13 @@ function request(method, path, timeoutMs = 8000) {
  *
  * `#hardware` ให้ go2rtc ใช้ NVENC/NVDEC ของ GPU เมื่อจำเป็นต้อง transcode จริง
  * และไม่มีผลอะไรเมื่อต้นทางเป็น H.264 อยู่แล้ว (go2rtc จะ passthrough)
+ *
+ * `#audio=aac` เฉพาะกล้องที่เปิด audio_enabled — ไม่มี `#audio` เลย go2rtc ให้ ffmpeg ออกแต่ภาพ
+ * MSE ของเบราว์เซอร์เล่น pcm_alaw/pcm_mulaw ที่กล้องส่งมาไม่ได้ จึงต้องแปลงเป็น AAC
+ * ทดสอบแล้ว 2026-10-06 กับ 203.0.113.12: ได้ `avc1.640029,mp4a.40.2` (AAC 8 kHz mono)
  */
-const sourceFor = (rtsp) => `ffmpeg:${String(rtsp).replace(/"/g, '')}#video=h264#hardware`;
+const sourceFor = (rtsp, audio = false) =>
+  `ffmpeg:${String(rtsp).replace(/"/g, '')}#video=h264#hardware${audio ? '#audio=aac' : ''}`;
 
 /**
  * แหล่งเดียวกันแต่ไม่ผ่าน ffmpeg — go2rtc ต่อ RTSP เองแล้วส่งต่อ elementary stream ดิบ
@@ -136,6 +142,24 @@ const writeRecipeStamp = (version) => {
 };
 
 /**
+ * ลายนิ้วมือของ source ทั้งสตริง (รวม fragment) ที่ลงให้ go2rtc ไปแล้ว ต่อชื่อสตรีม
+ *
+ * bareUrl() มองไม่เห็น fragment — การเปิด/ปิดเสียง (`#audio=aac`) จึงไม่ทำให้เกิด PUT ถ้าไม่มีตัวนี้
+ * เก็บแค่ sha1 ไม่เก็บ source เพราะ source มีรหัสกล้อง · ไฟล์หาย/ไม่มีชื่อนั้น = ถือว่าตรงกับของที่ต้องการ
+ * (ไม่ PUT ทุกเส้นหลังอัปเกรด) แล้วจดไว้ — การเปลี่ยนรอบถัดไปจึงเห็น
+ */
+const APPLIED_PATH = stateFile('.go2rtc-applied.json');
+const fingerprint = (src) => require('crypto').createHash('sha1').update(String(src)).digest('hex').slice(0, 16);
+const readApplied = () => {
+  try { return JSON.parse(fs.readFileSync(APPLIED_PATH, 'utf8')) || {}; } catch { return {}; }
+};
+const writeApplied = (map) => {
+  try { fs.writeFileSync(APPLIED_PATH, JSON.stringify(map), 'utf8'); } catch (err) {
+    console.warn(`[go2rtc Sync] บันทึกลายนิ้วมือ source ไม่ได้: ${err.message}`);
+  }
+};
+
+/**
  * ทำให้สตรีมใน go2rtc ตรงกับกล้องใน DB
  *
  * @param {object} db  sqlite3 connection ของ server.js
@@ -174,13 +198,27 @@ async function syncCamerasToGo2rtc(db, resolveSubRtsp) {
   const wanted = new Map();
   for (const cam of rows) {
     if (!cam.rtsp) continue;
+    /*
+      กล้อง public (vms/public-cams.js): ต้นทางเป็น HLS H.264 ของหน่วยงาน — ตรวจ whitelist ซ้ำก่อนส่งให้ ffmpeg
+      ไม่มี sub · เส้น `_raw` ใช้ ffmpeg copy เพราะ go2rtc ดึง HLS เองไม่ได้ (rawSourceFor มีไว้สำหรับ RTSP)
+    */
+    if (cam.type === PUBLIC_TYPE) {
+      if (!isAllowedPublicUrl(cam.rtsp, keyOfSourceId(cam.source_id))) {
+        console.warn(`[go2rtc Sync] ข้ามกล้อง public ${cam.id} — URL ไม่อยู่ใน whitelist ของแหล่ง`);
+        continue;
+      }
+      wanted.set(pathName(cam.id, 'main'), sourceFor(cam.rtsp));
+      if (withRaw) wanted.set(rawPathName(cam.id, 'main'), `ffmpeg:${cam.rtsp}#video=copy`);
+      continue;
+    }
     // กล้องจาก edge: ที่อยู่มาจากเครื่องอื่น — รับเฉพาะ RTSP เปล่า (ดู isSafeEdgeRtsp) ด่านที่สองหลัง rtspFrom
     // เผื่อแถวที่เขียนไว้ก่อนมีด่านแรก · main ไม่ผ่าน = ข้ามทั้งกล้อง, sub ไม่ผ่าน = ไม่มี sub
     if (cam.type === 'edge_relay' && !isSafeEdgeRtsp(cam.rtsp)) {
       warnRejected(cam.rtsp, `camera ${cam.id} main`);
       continue;
     }
-    wanted.set(pathName(cam.id, 'main'), sourceFor(cam.rtsp));
+    const audio = Number(cam.audio_enabled) === 1;
+    wanted.set(pathName(cam.id, 'main'), sourceFor(cam.rtsp, audio));
     let sub = cam.rtsp_sub || (resolveSubRtsp ? resolveSubRtsp(cam) : null);
     if (sub && cam.type === 'edge_relay' && !isSafeEdgeRtsp(sub)) {
       warnRejected(sub, `camera ${cam.id} sub`);
@@ -188,7 +226,7 @@ async function syncCamerasToGo2rtc(db, resolveSubRtsp) {
     }
     // ไม่มี substream ก็ไม่สร้างชื่อ _sub ทิ้งไว้ให้ 404 — ปลายทางที่ขอ sub จะได้
     // ตกไปใช้ main อย่างถูกต้อง ดีกว่าเจอ path ที่มีอยู่แต่ไม่มีภาพ
-    if (sub) wanted.set(pathName(cam.id, 'sub'), sourceFor(sub));
+    if (sub) wanted.set(pathName(cam.id, 'sub'), sourceFor(sub, audio));
 
     // เส้น passthrough ต้องเข้ามาทาง wanted เท่านั้น ไม่ใช่ PUT แยกต่างหาก เพราะลูป
     // ล่างสุดลบทุก stream ที่ไม่มีใน wanted ทิ้ง — ของที่ใส่นอกทางนี้จะหายทุกรอบ sync
@@ -214,14 +252,19 @@ async function syncCamerasToGo2rtc(db, resolveSubRtsp) {
   let added = 0;
   let updated = 0;
   let removed = 0;
+  const applied = readApplied();
+  const nextApplied = {};
 
   for (const [name, src] of wanted) {
     const existing = current[name];
+    const fp = fingerprint(src);
 
     if (!existing) {
       const res = await request('PUT', `/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(src)}`);
-      if (res.status >= 200 && res.status < 300) added += 1;
-      else console.warn(`[go2rtc Sync] เพิ่ม ${name} ไม่สำเร็จ (${res.status})`);
+      if (res.status >= 200 && res.status < 300) {
+        added += 1;
+        nextApplied[name] = fp;
+      } else console.warn(`[go2rtc Sync] เพิ่ม ${name} ไม่สำเร็จ (${res.status})`);
       continue;
     }
 
@@ -238,21 +281,32 @@ async function syncCamerasToGo2rtc(db, resolveSubRtsp) {
       "ต่างกัน" ตลอดเวลา แล้วกลายเป็น PUT ทุกรอบ ซึ่งตัดผู้ชมที่กำลังดูอยู่ทิ้ง
     */
     const currentUrl = (existing.producers || [])[0]?.url;
-    if (!currentUrl) continue; // ไม่รู้ของเดิม อย่าเดา — PUT มั่วจะตัดผู้ชมทิ้งเปล่าๆ
+    if (!currentUrl) { // ไม่รู้ของเดิม อย่าเดา — PUT มั่วจะตัดผู้ชมทิ้งเปล่าๆ
+      if (applied[name]) nextApplied[name] = applied[name];
+      continue;
+    }
 
     // สูตรของเส้น `_raw` เปลี่ยน = ต้องลงใหม่ ถึงแม้ URL เปล่าจะเท่าเดิม เพราะสิ่งที่เปลี่ยน
     // อยู่ใน fragment ซึ่งไม่มีทางเห็นจากการเทียบ
     const recipeChanged = name.endsWith('_raw') && rawRecipeStale;
-    if (!recipeChanged && bareUrl(currentUrl) === bareUrl(src)) continue;
+    // fragment เปลี่ยน (เช่นเปิด/ปิดเสียง) — เห็นได้จากลายนิ้วมือที่จดไว้ตอน PUT ครั้งก่อนเท่านั้น
+    const fragmentChanged = Boolean(applied[name]) && applied[name] !== fp;
+    if (!recipeChanged && !fragmentChanged && bareUrl(currentUrl) === bareUrl(src)) {
+      nextApplied[name] = fp;
+      continue;
+    }
 
     const res = await request('PUT', `/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(src)}`);
     if (res.status >= 200 && res.status < 300) {
       updated += 1;
-      console.log(`[go2rtc Sync] ${name}: ที่อยู่ต้นทางเปลี่ยน — อัปเดตแล้ว`);
+      nextApplied[name] = fp;
+      console.log(`[go2rtc Sync] ${name}: ${fragmentChanged ? 'สูตร source เปลี่ยน' : 'ที่อยู่ต้นทางเปลี่ยน'} — อัปเดตแล้ว`);
     } else {
+      if (applied[name]) nextApplied[name] = applied[name];
       console.warn(`[go2rtc Sync] อัปเดต ${name} ไม่สำเร็จ (${res.status})`);
     }
   }
+  writeApplied(nextApplied);
 
   for (const name of Object.keys(current)) {
     if (wanted.has(name)) continue;

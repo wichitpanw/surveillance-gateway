@@ -14,7 +14,7 @@ import CameraScopeTree from '../CameraScopeTree';
 // ป้ายอ่านง่ายของ perm key — key ที่ไม่มีในนี้จะโชว์ key ดิบ (ยังใช้งานได้)
 const PERM_LABEL = {
   'menu.logs': 'System Logs', 'menu.users': 'Access Control', 'menu.settings': 'System Settings',
-  'menu.live': 'Live view', 'device.ptz': 'Control PTZ (pan / tilt / zoom / presets)',
+  'menu.live': 'Live view', 'menu.publiccam': 'Public Cam Map (Central)', 'device.ptz': 'Control PTZ (pan / tilt / zoom / presets)',
   'playback.view': 'View recorded video (playback)',
   'device.manage': 'Manage cameras & AI', 'device.secrets': 'View camera credentials',
   'user.manage': 'Manage users & roles', 'system.settings': 'System settings & notifications',

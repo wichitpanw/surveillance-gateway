@@ -1,7 +1,7 @@
 <Window x:Class="SurveillanceGateway.VideoWallProbe.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Surveillance Gateway — M1 video wall probe"
+        Title="Gateway — M1 video wall probe"
         Width="1600" Height="960"
         WindowStartupLocation="CenterScreen"
         Background="#0B0F14">

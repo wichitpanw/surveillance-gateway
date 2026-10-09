@@ -1,5 +1,5 @@
 @echo off
-rem Gateway Edge flash-drive installer (Windows x64) - double-click this file.
+rem Edge API Gateway flash-drive installer (Windows x64) - double-click this file.
 rem Asks for administrator rights, then runs install-windows.ps1 next to it.
 rem Running it again on an installed machine updates the program and keeps the data.
 

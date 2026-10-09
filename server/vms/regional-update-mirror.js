@@ -135,7 +135,7 @@ function createRegionalUpdateMirror() {
       fs.mkdirSync(kitDir, { recursive: true });
       for (const kit of kits) {
         try {
-          if (!/^GW-Edge-[\w-]+\.(zip|tar\.gz)$/.test(String(kit?.file || '')) ||
+          if (!/^(?:GW-)?Edge-[\w-]+\.(zip|tar\.gz)$/.test(String(kit?.file || '')) ||
               !PLATFORMS.includes(kit.platform) || !/^[0-9a-f]{64}$/i.test(String(kit.sha256 || '')) ||
               !Number.isSafeInteger(kit.size) || kit.size <= 0) throw new Error('metadata ของชุดติดตั้งไม่ถูกต้อง');
           const target = path.join(kitDir, kit.file);

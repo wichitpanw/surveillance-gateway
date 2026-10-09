@@ -5,7 +5,7 @@
  * central เคยถามทาง HTTP (รายการกล้อง, สถานะ, PTZ, สั่งเปิดภาพ) วิ่งบนสายเดียวนี้แทน
  *
  * ข้อความเป็น JSON หนึ่งก้อนต่อ frame:
- *   edge → central   hello {node, build, name, via, platform, runner} · heartbeat · catalog {cameras, deleted}
+ *   edge → central   hello {node, build, name, via, platform, runner, province} · heartbeat · catalog {cameras, deleted}
  *                    camera_state {...} · update_status {state, build, error} · reply {id, ok, data | error}
  *   central → edge   welcome {node} · rpc {id, method, params} · error {error}
  *                    update {build, platform, file, size, sha256, signature, path} — มีแพ็กเกจใหม่ (vms/edge-updates.js)

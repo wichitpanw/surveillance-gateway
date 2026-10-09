@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Deploy ครบในคำสั่งเดียว: backup → restart central + edge 001 (+ ai-worker) → รอจน /api/instance เป็น build ใหม่ →
+  Deploy ครบในคำสั่งเดียว: backup → restart Central + Regional → รอจน /api/instance เป็น build ใหม่ →
   build หน้าเว็บ → เผยแพร่แพ็กเกจอัปเดตให้ edge แบบ link → ปล่อย Windows client (ถ้าสั่ง)
 
 .DESCRIPTION
@@ -17,7 +17,7 @@
   ใช้ pm2 ตัวเดียวกับ Scheduled Task ตอนบูต (scripts\start-gateway.cmd): node + D:\gw-pm2\npm\...\pm2 กับ PM2_HOME=D:\gw-pm2\home
 
 .PARAMETER ReloadEdgeConfig
-  แก้ D:\gateway-edge\edge.json มา (aiWorker / aiPython / aiModel / aiGpu / centralUrls ฯลฯ) หรือแก้ ecosystem.edge.config.cjs
+  แก้ D:\gateway-edge\edge.json มา (centralUrls / publicHost ฯลฯ) หรือแก้ ecosystem.edge.config.cjs
   — pm2 restart ไม่อ่าน env ใหม่ จึง delete แล้ว start แทน
 .PARAMETER ReloadRegionalConfig
   แก้ D:\gateway-regional\regional.json มา — pm2 restart ไม่อ่าน env ใหม่ จึง delete แล้ว start แทน
@@ -81,7 +81,7 @@ try {
     if ($hasProvincial -and $Regional -eq $Edge) { Fail "Regional และ Edge ใช้ที่อยู่ $Edge ซ้ำกัน" }
   }
   # นิยาม build: ต้องตรงกับ BUILD_PATHS ใน server/shared/instance.js (ต้นฉบับ) ทุกตัว
-  $buildPaths = @('server', 'src', 'ai-worker', 'scripts', 'package.json', 'ecosystem.edge.config.cjs')
+  $buildPaths = @('server', 'src', 'scripts', 'package.json', 'ecosystem.edge.config.cjs')
   $expected = (git log -1 --format=%h -- @buildPaths).Trim()
   $dirty = git status --porcelain -- @buildPaths ecosystem.windows.config.cjs
   if ($dirty) {
@@ -106,12 +106,19 @@ try {
   # (ConvertFrom-Json ของ PowerShell 5.1 ล้มเพราะ env ใน jlist มีทั้ง username และ USERNAME — เจอจริง 2026-09-28)
   $jl = @(Invoke-Pm2 jlist 2>$null) | Where-Object { $_ -match '^\s*\[' } | Select-Object -Last 1
   $running = @(if ($jl) { $jl | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>JSON.parse(s).forEach(a=>console.log(a.name)))" })
+  # ถอน process inference เดิมออกจาก daemon ก่อนเริ่ม gateway รุ่นใหม่
+  foreach ($retired in '4-edge-ai', '4-provincial-ai') {
+    if ($running -contains $retired) {
+      Invoke-Pm2 delete $retired | Out-Null
+      if ($LASTEXITCODE) { Fail "ถอน $retired ไม่สำเร็จ" }
+    }
+  }
   if (-not $hasRegional) {
     # ก่อน M2: Edge เดิม :5273 ยังอยู่ (M1 มี Edge จังหวัดใหม่ :5373 เพิ่มเข้ามา)
-    $legacyApps = @('3-edge-gateway') + @($running | Where-Object { $_ -eq '4-edge-ai' })
+    $legacyApps = @('3-edge-gateway')
     if (-not $hasProvincial -and $ReloadEdgeConfig) {
-      foreach ($app in '3-edge-gateway', '4-edge-ai') { if ($running -contains $app) { Invoke-Pm2 delete $app | Out-Null } }
-      Invoke-Pm2 start (Join-Path $repo 'ecosystem.edge.config.cjs') --only '3-edge-gateway,4-edge-ai' | Out-Null
+      foreach ($app in '3-edge-gateway') { if ($running -contains $app) { Invoke-Pm2 delete $app | Out-Null } }
+      Invoke-Pm2 start (Join-Path $repo 'ecosystem.edge.config.cjs') --only '3-edge-gateway' | Out-Null
     } else {
       Invoke-Pm2 restart @legacyApps | Out-Null
     }
@@ -121,7 +128,7 @@ try {
   }
 
   if ($hasProvincial) {
-    $provincialApps = @('1-go2rtc-provincial', '3-provincial-gateway') + @($running | Where-Object { $_ -eq '4-provincial-ai' })
+    $provincialApps = @('1-go2rtc-provincial', '3-provincial-gateway')
     if ($ReloadEdgeConfig) {
       foreach ($app in $provincialApps) { if ($running -contains $app) { Invoke-Pm2 delete $app | Out-Null } }
       Invoke-Pm2 start (Join-Path $repo 'ecosystem.provincial.config.cjs') | Out-Null

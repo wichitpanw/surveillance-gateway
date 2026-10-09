@@ -66,7 +66,7 @@ if ($installed) { Say "พบการติดตั้งเดิมที่
 
 # ── 2. หยุดของเดิม แล้วก๊อปโปรแกรม ────────────────────────────────────────────
 if (-not $DryRun -and (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
-  Say 'หยุด Gateway Edge ตัวเดิม…'
+  Say 'หยุด Edge ตัวเดิม…'
   Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
   Start-Sleep 3
 }
@@ -78,38 +78,6 @@ foreach ($sub in 'app', 'bin') {
 }
 $node = Join-Path $Root 'bin\node.exe'
 $build = (Get-Content (Join-Path $Root 'app\BUILD') -ErrorAction SilentlyContinue | Select-Object -First 1)
-
-# ── 2b. ai-worker (เฉพาะชุดที่ build ด้วย -WithAi และเครื่องที่มีการ์ด NVIDIA) ──────────────────
-# Python แบบพกพา → venv ที่ <Root>\ai\venv → ติดตั้ง wheels จากชุด (ไม่ใช้ internet) · สร้าง venv ใหม่เมื่อ requirements เปลี่ยน
-$aiKit = Join-Path $plat 'ai'
-$aiReady = $false
-if (Test-Path (Join-Path $aiKit 'python.tar.gz')) {
-  if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) {
-    Say 'ชุดนี้มี ai-worker แต่เครื่องนี้ไม่มีการ์ด NVIDIA — ข้าม (ใช้ได้แค่ AI ที่หัวกล้อง)'
-  } else {
-    $ai = Join-Path $Root 'ai'
-    $reqHash = (Get-FileHash (Join-Path $aiKit 'requirements.txt') -Algorithm SHA256).Hash
-    $stamp = Join-Path $ai 'venv\.requirements'
-    $venvPy = Join-Path $ai 'venv\Scripts\python.exe'
-    if ((Test-Path $venvPy) -and (Test-Path $stamp) -and ((Get-Content $stamp -Raw).Trim() -eq $reqHash)) {
-      Say 'ai-worker: venv เดิมตรงกับ requirements — ไม่ต้องติดตั้งใหม่'
-    } else {
-      Say 'ai-worker: ติดตั้ง Python + ไลบรารี GPU (ใช้เวลาหลายนาที)…'
-      if (Test-Path $ai) { Remove-Item (Join-Path $ai 'python'), (Join-Path $ai 'venv') -Recurse -Force -ErrorAction SilentlyContinue }
-      New-Item -ItemType Directory -Force $ai | Out-Null
-      & (Join-Path $env:SystemRoot 'System32\tar.exe') -xzf (Join-Path $aiKit 'python.tar.gz') -C $ai
-      if ($LASTEXITCODE) { Fail 'แตก Python ของ ai-worker ไม่สำเร็จ' }
-      & (Join-Path $ai 'python\python.exe') -m venv (Join-Path $ai 'venv')
-      if ($LASTEXITCODE) { Fail 'สร้าง venv ของ ai-worker ไม่สำเร็จ' }
-      $env:PYTHONUTF8 = '1'
-      & $venvPy -m pip install -q --no-index --find-links (Join-Path $aiKit 'wheels') -r (Join-Path $aiKit 'requirements.txt')
-      if ($LASTEXITCODE) { Fail 'ติดตั้งไลบรารีของ ai-worker ไม่สำเร็จ' }
-      Set-Content -Path $stamp -Value $reqHash -Encoding ascii
-    }
-    robocopy (Join-Path $aiKit 'models') (Join-Path $ai 'models') /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
-    $aiReady = $true
-  }
-}
 
 # ── 3. edge.json ของเครื่องนี้ ────────────────────────────────────────────────
 # ลำดับ: ค่าเดิม (อัปเดต) → ค่าจากไฟล์ของ central → ค่าที่ขึ้นกับเครื่องนี้ (ทับเสมอ)
@@ -131,14 +99,8 @@ $cfg['go2rtcApi'] = $Go2rtcApi
 $cfg['go2rtcRtsp'] = $Go2rtcRtsp
 $cfg['go2rtcBin'] = Join-Path $Root 'bin\go2rtc.exe'
 $cfg['ffmpeg'] = Join-Path $Root 'bin\ffmpeg.exe'
-if ($cfg['role'] -eq 'regional') { $cfg['aiWorker'] = $false }
-if ($aiReady -and $cfg['role'] -ne 'regional') {
-  # ติดตั้งครั้งแรกเปิด ai-worker ให้เลย (ไม่มีกล้องเปิด AI = worker รอเฉย ๆ) · ผู้ดูแลปิดเองไว้ (false) = คงไว้ตอนอัปเดต
-  if ($null -eq $cfg['aiWorker']) { $cfg['aiWorker'] = $true }
-  $cfg['aiPython'] = Join-Path $Root 'ai\venv\Scripts\python.exe'
-  $cfg['aiModel'] = Join-Path $Root 'ai\models\yolox_s.onnx'
-  if ($null -eq $cfg['aiGpu']) { $cfg['aiGpu'] = 0 }
-}
+# ถอดค่าของ inference เดิมโดยคงค่าแหล่งรับและกล้องไว้
+foreach ($key in 'aiWorker', 'aiPython', 'aiModel', 'aiGpu') { $cfg.Remove($key) }
 Write-Json $stateJson $cfg
 # token อยู่ในไฟล์นี้ — ให้อ่านได้แค่ SYSTEM กับ Administrators
 if (-not $DryRun) { icacls $state /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null }

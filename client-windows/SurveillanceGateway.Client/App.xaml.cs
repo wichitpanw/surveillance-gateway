@@ -126,12 +126,15 @@ public partial class App : Application
         // --clock-jitter=0 and --clock-synchro=0 are deliberately absent. They switch off
         // libvlc's clock handling, which suits a local file and not a live camera whose packets
         // arrive unevenly; the frame pacing they produce is what reads as flicker.
+        //
+        // No global --no-audio any more: cameras with sound enabled at the edge play it per cell
+        // (muted until the operator unmutes). Each media without sound gets :no-audio instead -
+        // see LibVlcVideoRenderer and PlaybackView.
         _libVlc = new LibVLC(
             "--avcodec-hw=d3d11va",
             "--network-caching=500",
             "--live-caching=500",
             "--rtsp-tcp",
-            "--no-audio",
             "--quiet");
 
         _client = new GatewayClient();

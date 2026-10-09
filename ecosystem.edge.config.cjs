@@ -66,7 +66,6 @@ try {
     go2rtcBin     ไฟล์ go2rtc ที่ใช้ (ไม่ใส่ = ตัวใน repo บน Windows, <stateDir>/bin/go2rtc บน Linux)
     ffmpeg        ไฟล์ ffmpeg ที่ gateway ใช้ push ภาพขึ้น central (ไม่ใส่ = C:\ffmpeg\bin\ffmpeg.exe / ffmpeg ใน PATH)
                   สองค่านี้ชุดติดตั้ง flash drive ใส่ให้ (docs/EDGE-KIT.md)
-    aiWorker / aiPython / aiModel / aiGpu เป็นค่าเก่าที่ไม่ใช้แล้ว (2026-10-02)
     ระบบรับผล AI จากต้นทาง ไม่มี inference worker; ตั้งแหล่งรับที่หน้า AI Sources
 */
 const EDGE = { ...DEFAULTS, ...local };
@@ -135,9 +134,7 @@ module.exports = {
         GATEWAY_CENTRAL_URL: centralUrls.join(','),
         GATEWAY_CENTRAL_TOKEN: EDGE.centralToken,
         ...(EDGE.ffmpeg ? { FFMPEG_PATH: EDGE.ffmpeg } : {}),
-        GATEWAY_AI_WORKER: '0',
       },
     },
-    // รับผล AI จากต้นทาง — ไม่เริ่ม 4-edge-ai แม้ config เก่ายังมี aiWorker
   ],
 };

@@ -218,6 +218,8 @@ const isElevatedRole = (role) => ELEVATED_ROLES.includes(role);
 const MENU_KEYS = [
   'menu.ai', 'menu.aistats', 'menu.cameras', 'menu.logs', 'menu.users', 'menu.settings', 'menu.apiclients',
   'menu.live',
+  // หน้า Public Cam Map ของ Central + สิทธิ์ติ๊ก "กล้อง Public" ให้ API key (vms/public-cams.js)
+  'menu.publiccam',
 ];
 const OP_KEYS = [
   'device.manage',    // เพิ่ม/แก้/ลบกล้อง, สแกน, ตั้งค่า AI, ROI
@@ -256,7 +258,7 @@ const SEED_ROLES = [
     id: 'r_admin', name: 'admin', label: 'Admin', is_system: 0, all_devices: 1,
     perms: [...BASE_MENUS, 'menu.cameras', 'menu.logs',
             'device.manage', 'device.secrets', 'device.ptz', 'playback.view', 'menu.users', 'menu.settings',
-            'user.manage', 'system.settings', 'system.maintain', 'log.purge'],
+            'user.manage', 'system.settings', 'system.maintain', 'log.purge', 'menu.publiccam'],
   },
   {
     id: 'r_superadmin', name: 'superadmin', label: 'Superadmin', is_system: 1, all_devices: 1,
@@ -277,6 +279,8 @@ const MTX_HLS_PORT = Number(process.env.MTX_HLS_PORT || 8888);
 const { stateFile, HTTP_PORT, GO2RTC_API_PORT, ROLE: GATEWAY_ROLE, REGION: GATEWAY_REGION, NODE_NUMBER, DSS_RELAY_PORT } = require('./shared/instance');
 const acceptsChildEdges = GATEWAY_ROLE === 'central' || GATEWAY_ROLE === 'regional';
 const linksToParent = GATEWAY_ROLE === 'edge' || GATEWAY_ROLE === 'regional';
+// กล้องสาธารณะที่ Central ดึงเอง (vms/public-cams.js) — ไม่มี IP/ONVIF ให้ถาม สถานะมาจาก API ของหน่วยงาน
+const { PUBLIC_TYPE, createPublicCams } = require('./vms/public-cams');
 /** streaming core ที่ใช้จริง — ต้องตรงกับ GATEWAY_STREAM_CORE ที่ server/gateway/streams.js อ่าน */
 const STREAM_CORE = String(process.env.GATEWAY_STREAM_CORE || 'go2rtc').toLowerCase();
 
@@ -534,8 +538,14 @@ app.get('/stream/:name.mp4', requireStreamToken((req) => req.params.name), (req,
   */
   const isRaw = req.params.name.endsWith('_raw');
   const video = isRaw ? 'copy' : 'h264';
-  const forward = () => {
-    req.url = `/api/stream.mp4?src=${encodeURIComponent(req.params.name)}&video=${video}`;
+  /*
+    เสียง: go2rtc ใส่แทร็กเสียงลง mp4 เฉพาะเมื่อขอ — มีแค่ `video=` แล้วเสียงหายแม้ต้นทางมี
+    ขอ `&audio` (ไม่ระบุโคเดค) เฉพาะกล้องที่เปิด audio_enabled: เส้นปกติได้ AAC ที่ `#audio=aac` แปลงไว้
+    ส่วนเส้น `_raw` go2rtc แปลง PCMA/PCMU ของกล้องเป็น FLAC เอง (`audio=aac` ใช้กับ `_raw` ไม่ได้ — ไม่มี ffmpeg)
+    ทดสอบแล้ว 2026-10-06 กับ 203.0.113.12 · เส้น `_raw` มีเสียงของกล้องติดมาเสมอ จึงต้องดูค่าในแถว ไม่ขอทุกตัว
+  */
+  const forward = (audio = false) => {
+    req.url = `/api/stream.mp4?src=${encodeURIComponent(req.params.name)}&video=${video}${audio ? '&audio' : ''}`;
     proxyToStreamCore(GO2RTC_API_PORT, { rewrite: false })(req, res);
   };
   /*
@@ -545,10 +555,11 @@ app.get('/stream/:name.mp4', requireStreamToken((req) => req.params.name), (req,
   const base = req.params.name.replace(/_raw$/, '');
   const which = base.endsWith('_sub') ? 'sub' : 'main';
   const cameraKey = which === 'sub' ? base.slice(0, -4) : base;
-  if (!cameraKey.startsWith('cam_edge_')) return forward();
-  db.get("SELECT * FROM cameras WHERE lower(replace(id, ' ', '_')) = ? AND type = ?", [cameraKey, 'edge_relay'], (err, row) => {
+  db.get("SELECT * FROM cameras WHERE lower(replace(id, ' ', '_')) = ?", [cameraKey], (err, row) => {
     if (err || !row) return forward();
-    edgeSources.ensureLinkStream(row, which).catch(() => {}).finally(forward);
+    const audio = Number(row.audio_enabled) === 1;
+    if (row.type !== 'edge_relay' || !cameraKey.startsWith('cam_edge_')) return forward(audio);
+    edgeSources.ensureLinkStream(row, which).catch(() => {}).finally(() => forward(audio));
   });
 });
 
@@ -614,6 +625,9 @@ db.serialize(() => {
   // enabled = ผู้ดูแลเปิดใช้กล้องนี้ไหม (0 = ไม่ซิงก์เข้า core ไม่เช็คสถานะ) — ดู shared/camera-state.js
   // กล้องจาก edge: central เขียนตามค่าของ edge ทุกรอบ sync (edge เป็นเจ้าของ)
   db.run("ALTER TABLE cameras ADD COLUMN enabled INTEGER DEFAULT 1", () => {});
+  // audio_enabled = ส่งเสียงของกล้องนี้ต่อไหม (0 = ภาพอย่างเดียวเหมือนเดิม) — ตั้งที่ edge, ชั้นบนรับตามรอบ sync
+  // ปิดเป็นค่าตั้งต้น: AAC เพิ่มงาน ffmpeg ทุกเส้น และกล้องส่วนใหญ่ไม่มีไมค์ (docs/CAMERA-AUDIO.md)
+  db.run("ALTER TABLE cameras ADD COLUMN audio_enabled INTEGER DEFAULT 0", () => {});
   db.run("ALTER TABLE cameras ADD COLUMN stream_type TEXT", (err) => {
     // 💡 ละเว้นข้อผิดพลาดหากมีคอลัมน์ stream_type อยู่แล้วในฐานข้อมูลค่ะ
   });
@@ -627,6 +641,15 @@ db.serialize(() => {
   db.run("ALTER TABLE cameras ADD COLUMN onvif_sub_token TEXT", () => {});
   // เลขช่องของ Uniview คงที่แม้ ONVIF ยังไม่คืน RTSP ใช้จับคู่เพื่อเติมสตรีมในแถวเดิม
   db.run("ALTER TABLE cameras ADD COLUMN nvr_channel INTEGER", () => {});
+  /*
+    ช่อง AXIS S30 ที่ import ก่อน 2026-10-06 ได้ sub = main (1080p เต็ม) — ตั้งเป็นภาพที่ S30 ย่อ 640×360 ให้
+    (ตัวเดียวกับ axisS30SubRtsp ใน vms/axis-s30.js) · แตะเฉพาะแถวที่ sub ยังเท่า main ไม่ทับค่าที่คนตั้งเอง
+  */
+  db.run(`UPDATE cameras SET rtsp_sub = rtsp || '&resolution=640x360'
+          WHERE brand = 'axis' AND type = 'onvif_nvr' AND rtsp LIKE '%/axis-media/media.amp?device=%'
+            AND rtsp NOT LIKE '%resolution=%' AND (rtsp_sub IS NULL OR rtsp_sub = rtsp)`, function cb(err) {
+    if (!err && this.changes) console.log(`[AXIS S30] ตั้ง sub 640x360 ให้ช่องเดิม ${this.changes} ช่อง`);
+  });
 
   // ── กล้องที่มาจาก VMS (Digifort) ──────────────────────────────────────────────
   //
@@ -1204,6 +1227,8 @@ const captureMainSnapshotBuffer = async (camera) => {
     return { buffer: buf, source: 'ffmpeg-rtsp' };
   } catch (e) {
     console.error(`[Main Snap] ffmpeg/RTSP fail (${camera.id}):`, e.message);
+    // กล้องสาธารณะมีแต่ HLS — ทางสำรอง VAPIX/ISAPI/ONVIF จะเดา IP จาก URL แล้วยิงไปที่เครื่องหน่วยงาน
+    if (camera.type === PUBLIC_TYPE) throw e;
   }
   if (camera.brand === 'axis') {
     try {
@@ -1249,7 +1274,8 @@ const captureRtspFrameFfmpeg = (rtspUrl, timeoutMs = 8000) => new Promise((resol
   const ffmpegPath = FFMPEG_PATH.replace(/\\\\/g, '\\');
   const args = [
     '-hide_banner', '-loglevel', 'error',
-    '-rtsp_transport', 'tcp',
+    // เฉพาะ RTSP — กล้อง Public เป็น HLS (https) และ ffmpeg ปฏิเสธทั้งคำสั่งเมื่อเจอ option ที่ demuxer ไม่รู้จัก
+    ...(/^rtsps?:/i.test(url) ? ['-rtsp_transport', 'tcp'] : []),
     // Lower analyze/probe than before — a single keyframe doesn't need deep probing, and small
     // values open far faster (matters most for the local relay, already-decoded H264).
     '-analyzeduration', '1000000',
@@ -1508,7 +1534,7 @@ app.get('/api/tiles/:z/:x/:y.pbf', (req, res) => {
   เซิร์ฟเวอร์อาสาสมัครของเขาทุกครั้งที่มีคนเลื่อนแผนที่
 */
 const OSM_CACHE_DIR = path.join(__dirname, 'map_data', 'osm-cache');
-const OSM_UA = 'GW-Surveillance-Gateway/1.0 (LAN CCTV dashboard; contact via system administrator)';
+const OSM_UA = 'Surveillance-Gateway/1.0 (LAN CCTV dashboard; contact via system administrator)';
 
 app.get('/api/osm/:z/:x/:y.png', async (req, res) => {
   const z = parseInt(req.params.z, 10);
@@ -1922,7 +1948,7 @@ const { startDssRelay } = require('./vms/dss-rtsp-relay');
 const { createDssRoutes } = require('./vms/dss-routes');
 const { createDssPtz } = require('./vms/dss-ptz');
 const { readUniviewChannels, mergeUniviewChannels } = require('./vms/uniview');
-const { readAxisS30Devices, axisS30Rtsp } = require('./vms/axis-s30');
+const { readAxisS30Devices, axisS30Rtsp, axisS30SubRtsp } = require('./vms/axis-s30');
 const { syncCamerasToGo2rtc } = require('./gateway/go2rtc-sync');
 const { dispatchPtz, PtzError } = require('./gateway/ptz');
 const { createAnalyticsPoller } = require('./gateway/analytics/poller');
@@ -1993,8 +2019,23 @@ const edgeSources = createEdgeSources({
 edgeSources.ensureSchema()
   .then(() => edgeSources.startMonitor())
   .catch((err) => console.error(`[Edge] เตรียมตารางไม่สำเร็จ: ${err.message}`));
-/** กล้องที่ไม่มีหัวกล้องให้ถามตรง ๆ — มาผ่าน VMS หรือผ่าน edge ทาง ONVIF/AI/สแกนต้องข้าม */
-const isRelayCamera = (type) => type === DIGIFORT_TYPE || type === EDGE_TYPE || type === DSS_TYPE;
+/** กล้องที่ไม่มีหัวกล้องให้ถามตรง ๆ — มาผ่าน VMS, ผ่าน edge หรือเป็นกล้อง public ทาง ONVIF/AI/สแกนต้องข้าม */
+const isRelayCamera = (type) => type === DIGIFORT_TYPE || type === EDGE_TYPE || type === DSS_TYPE || type === PUBLIC_TYPE;
+
+/*
+  กล้องสาธารณะ (docs/PUBLIC-CAMS.md) — Central เท่านั้น: ดึงรายชื่อ/สถานะจาก API ของหน่วยงานทุก 5 นาที
+  Regional/Edge สร้างตัวไว้ให้ originOf ทำงาน (ไม่มีแถว public ก็คืน null) แต่ไม่เริ่มดึง
+*/
+const publicCams = createPublicCams({
+  db,
+  cameraState,
+  resyncStreamCore: () => setTimeout(() => syncCamerasToStreamCore('public-cams'), 1000),
+  onCatalogChanged: () => {
+    invalidateRoleCache();
+    identity.assignMissing().catch(() => {});
+  },
+});
+if (GATEWAY_ROLE === 'central') publicCams.start();
 
 /*
   กล้องจาก Dahua DSS (vms/dss*.js) — แอดที่ edge เหมือน Digifort
@@ -2010,7 +2051,7 @@ if (GATEWAY_ROLE === 'edge') {
     resolve: async (cameraId, stream) => {
       const t = await dssSessions.forCamera(cameraId);
       if (!t) throw new Error(`ไม่พบกล้อง DSS ${cameraId}`);
-      return t.client.liveUrl(t.channelId, stream);
+      return t.client.liveUrls(t.channelId, stream);
     },
   });
 }
@@ -2027,16 +2068,6 @@ const regionalPlaybackSource = GATEWAY_ROLE === 'regional'
   ? require('./vms/relay-playback').createRelayPlayback({ playback, getCameraRow })
   : null;
 
-/*
-  AI บน GPU ของ edge (gateway/ai-config.js + ai-worker/) — กล้องที่เปิด AI และกฎเส้น/โซน
-  ตาราง/คอลัมน์สร้างทุกเครื่อง · key ของ worker ออกเองเมื่อเปิด GATEWAY_AI_WORKER=1 (edge.json: aiWorker)
-*/
-const { createAiConfig } = require('./gateway/ai-config');
-const aiConfig = createAiConfig(db);
-aiConfig.ensureSchema()
-  // เก็บ schema เดิมไว้ แต่ไม่ออก key หรือเริ่ม inference worker
-  .catch((err) => console.error(`[AI] เตรียมค่าไม่สำเร็จ: ${err.message}`));
-
 // แจ้งเตือนเมื่อ edge หลุด (central) — log, SSE edge_state, แถบเตือนบนหน้าเว็บ (vms/edge-alerts.js)
 const edgeAlerts = acceptsChildEdges
   ? require('./vms/edge-alerts').createEdgeAlerts({ listEdges: () => edgeSources.listEdges(), saveLog })
@@ -2050,7 +2081,7 @@ const gateway = createGatewayRouter({
   captureMainSnapshotBuffer,
   initOnvifDevice: initOnvifDeviceWithFallback,
   saveLog,
-  originOf: (row) => edgeSources.originOf(row),
+  originOf: (row) => publicCams.originOf(row) || edgeSources.originOf(row),
   edgeClientFor: (row) => edgeSources.clientForCamera(row),
   cameraState,
   listEdges: () => edgeSources.listEdges(),
@@ -2058,7 +2089,6 @@ const gateway = createGatewayRouter({
   playback,
   aiEvents,
   edgeAlerts,
-  aiConfig,
 });
 app.use('/api/v1', gateway.router);
 
@@ -2140,7 +2170,7 @@ const regionalUpdateMirror = GATEWAY_ROLE === 'regional' ? require('./vms/region
   Tiandy นับคนเข้า-ออกที่หัวกล้อง) ให้ลงตารางกลางในรูปแบบเดียวกัน
 */
 const { AI_ENABLED } = require('./shared/instance');
-// AI ที่หัวกล้องไม่ส่งเข้า ai_events (ถอดออก 2026-09-28 — ยังไม่เอามารวมระบบ) · event มาจาก ai-worker อย่างเดียว
+// รับ AI event จากต้นทางผ่าน AI Sources และส่งต่อขึ้น Regional/Central
 const analyticsPoller = createAnalyticsPoller(db);
 // ปิด AI ไว้ก่อน (shared/instance.js) — ไม่เริ่ม poller ไม่เปิดสายไปกล้อง ตารางยังถูกสร้างตามปกติ
 if (AI_ENABLED) analyticsPoller.start().catch((err) => console.error(`[Analytics] เริ่มไม่สำเร็จ: ${err.message}`));
@@ -2249,6 +2279,9 @@ const collectorOnly = (req, res, next) => {
   res.status(403).json({ error: 'edge ไม่รับ edge ตัวอื่น' });
 };
 app.use('/api/edges', collectorOnly, edgeSources.createRouter({ requirePerm }));
+// หน้า Public Cam Map — กล้อง public มีที่ Central เท่านั้น
+app.use('/api/public-cams', (req, res, next) => (GATEWAY_ROLE === 'central'
+  ? next() : res.status(403).json({ error: 'กล้อง Public มีที่ Central เท่านั้น' })), publicCams.createRouter({ requirePerm }));
 
 /*
   ภาพย้อนหลังของหน้าเว็บ (ใต้ checkAuth) — กล้องต้องอยู่ในขอบเขตของ role · ตัวภาพวิ่งทาง /playback/* ด้วย token
@@ -2297,25 +2330,12 @@ app.put('/api/ai/sources/:id', edgeOnly, requirePerm('device.manage'), async (re
   } catch (err) { res.status(err.status || 500).json({ error: redactUrls(err.message) }); }
 });
 
-/** ค่า AI ของ edge (หน้า AI Rules) — กล้องที่เปิด AI, กฎเส้น/โซน · ส่งกฎมา = แทนชุดเดิมทั้งชุด */
-app.get('/api/ai/config', edgeOnly, requirePerm('menu.cameras'), async (req, res) => {
-  try {
-    res.json({ cameras: await aiConfig.listCameras(), classes: require('./gateway/ai-config').COCO,
-      workerEnabled: String(process.env.GATEWAY_AI_WORKER || '') === '1' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+/** API ตั้ง inference เดิมยกเลิกแล้ว — ใช้ AI Sources รับผลจากต้นทาง */
+app.get('/api/ai/config', edgeOnly, requirePerm('menu.cameras'), (req, res) => {
+  res.status(410).json({ error: 'ตั้งแหล่งรับผล AI ที่ AI Sources' });
 });
-app.put('/api/ai/cameras/:id', edgeOnly, requirePerm('device.manage'), async (req, res) => {
-  if (!cameraInScope(req, req.params.id)) return sendOutOfScope(res);
-  try {
-    const { aiEnabled, objects, rules } = req.body || {};
-    const cam = await aiConfig.saveCamera(req.params.id, { aiEnabled, objects, rules });
-    saveLog(req.user?.username, 'AI_RULES', `ตั้ง AI กล้อง ${cam.name || cam.id}: ${cam.aiEnabled ? 'เปิด' : 'ปิด'} · กฎ ${cam.rules.length} ข้อ`);
-    res.json({ success: true, camera: cam });
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
+app.put('/api/ai/cameras/:id', edgeOnly, requirePerm('device.manage'), (req, res) => {
+  res.status(410).json({ error: 'ตั้งแหล่งรับผล AI ที่ AI Sources' });
 });
 
 /** edge ที่หลุดเกิน 2 นาที — แถบเตือนบนหน้าเว็บ central (vms/edge-alerts.js) */
@@ -2895,6 +2915,63 @@ app.patch('/api/cameras/:id/enabled', edgeOnly, requirePerm('device.manage'), (r
   });
 });
 
+/**
+ * เปิด/ปิดส่งเสียงของกล้อง — ที่ edge เท่านั้น (ชั้นบนรับค่าตาม edge ตอน sync เหมือน enabled)
+ * เปิด = go2rtc ต่อ `#audio=aac` ให้เส้นที่เบราว์เซอร์เล่น และสาย link ส่งเสียงขึ้น Regional/Central ด้วย
+ */
+app.patch('/api/cameras/:id/audio', edgeOnly, requirePerm('device.manage'), (req, res) => {
+  if (!cameraInScope(req, req.params.id)) return sendOutOfScope(res);
+  const audio = req.body?.enabled ? 1 : 0;
+  db.get('SELECT id, name FROM cameras WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'ไม่พบกล้องนี้' });
+    db.run('UPDATE cameras SET audio_enabled = ? WHERE id = ?', [audio, row.id], (upErr) => {
+      if (upErr) return res.status(500).json({ error: upErr.message });
+      saveLog(req.user?.username || 'unknown', audio ? 'Enable Camera Audio' : 'Disable Camera Audio',
+        `${audio ? 'เปิด' : 'ปิด'}รับเสียงกล้อง "${row.name}"`);
+      setTimeout(syncCamerasToStreamCore, 500);
+      // สาย link: ffmpeg ที่ push อยู่ต้องเริ่มใหม่ด้วยค่าเสียงใหม่ และชั้นบนต้องได้ค่าใหม่ทันที ไม่รอรอบ 5 นาที
+      edgeLink?.catalogSoon?.();
+      res.json({ success: true, audio: Boolean(audio) });
+    });
+  });
+});
+
+/**
+ * ตรวจว่ากล้องส่ง track เสียงมาไหม — ถามต้นทางตรง ๆ (ไม่ผ่าน go2rtc ซึ่งตัดเสียงทิ้งตอนปิดอยู่)
+ * ตอบ { hasAudio, codec, sampleRate, channels } · ต่อไม่ได้ = 502 พร้อมข้อความที่ตัดรหัสแล้ว
+ *
+ * ใช้ ffmpeg ไม่ใช่ ffprobe: ชุดติดตั้ง edge (scripts/edge-kit) มีแค่ ffmpeg — ffprobe ไม่มี (ENOENT ที่ Edge 101
+ * 2026-10-06) · `ffmpeg -i <url>` ที่ไม่มี output พิมพ์รายการ stream ลง stderr แล้วออกด้วย code 1 เสมอ
+ * จึงตัดสินจากบรรทัด `Stream #` ไม่ใช่ exit code
+ */
+app.post('/api/cameras/:id/audio-probe', edgeOnly, requirePerm('device.manage'), (req, res) => {
+  if (!cameraInScope(req, req.params.id)) return sendOutOfScope(res);
+  db.get('SELECT id, rtsp FROM cameras WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'ไม่พบกล้องนี้' });
+    if (!row.rtsp) return res.status(409).json({ error: 'กล้องนี้ยังไม่มีที่อยู่สตรีม' });
+    const args = ['-hide_banner', '-rtsp_transport', 'tcp', '-timeout', '8000000', '-i', row.rtsp];
+    execFile(FFMPEG_PATH.replace(/\\\\/g, '\\'), args, { windowsHide: true, timeout: 20000 }, (error, stdout, stderr) => {
+      const text = String(stderr || '');
+      const streams = text.split(/\r?\n/).filter((l) => /^\s*Stream #\d+:\d+/.test(l));
+      if (!streams.length) {
+        const why = redactUrls((text.trim() || error?.message || '').split(/\r?\n/).pop());
+        return res.status(502).json({ error: `ถามกล้องไม่ได้: ${why}` });
+      }
+      // เช่น "Stream #0:1: Audio: pcm_alaw, 8000 Hz, mono, s16, 64 kb/s"
+      const line = streams.find((l) => /: Audio: /.test(l));
+      const m = line ? /: Audio: ([\w-]+)[^,]*(?:,\s*(\d+) Hz)?(?:,\s*(mono|stereo|(\d+) channels))?/.exec(line) : null;
+      res.json({
+        hasAudio: Boolean(line),
+        codec: m?.[1] || null,
+        sampleRate: m?.[2] ? Number(m[2]) : null,
+        channels: m?.[3] === 'mono' ? 1 : m?.[3] === 'stereo' ? 2 : m?.[4] ? Number(m[4]) : null,
+      });
+    });
+  });
+});
+
 /*
   PTZ จากหน้า Live ของเว็บ (session ของคน) — ใช้ตัวคุม PTZ ตัวเดียวกับ /api/v1 (gateway.ptz)
   ดู: menu.live · สั่ง: device.ptz · กล้องนอก scope ของ role = 404 เหมือนไม่มีกล้องนี้
@@ -3067,6 +3144,8 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
       }
       for (const ch of requested) {
         ch.main = { rtsp: axisS30Rtsp({ ip, rtspPort, user, pass, sourceId: ch.sourceId }), token: ch.sourceId };
+        // sub = ภาพเดียวกันที่ S30 ย่อเป็น 640×360 ให้ — ไม่ตั้ง = Live Wall ดึงภาพเต็มขนาดทุกช่อง
+        ch.sub = { rtsp: axisS30SubRtsp(ch.main.rtsp), token: ch.sourceId };
       }
     } catch (err) {
       return res.status(502).json({ error: err.message });
@@ -4392,7 +4471,17 @@ const updateCameraStatuses = async () => {
       camLastStatus[c.id] = 'disabled';
       delete streamHealthState[c.id];
     }
-    const cams = allCams.filter((c) => Number(c.enabled) !== 0);
+    /*
+      กล้อง public (vms/public-cams.js): สถานะมาจาก API ของหน่วยงาน — ไม่ยิง TCP ไปเครื่องหน่วยงานทุก 15 วิ
+      ไม่ลง log ออนไลน์/ออฟไลน์ และไม่นับในยอดรวมของระบบ (ยอดนับเป็นของกล้องเราเท่านั้น)
+    */
+    for (const c of allCams.filter((x) => Number(x.enabled) !== 0 && x.type === PUBLIC_TYPE)) {
+      const reported = publicCams.reportedOnline(c.id);
+      cameraState.set(c.id, { enabled: true, reachable: reported === undefined ? null : reported, streaming: isStreaming(c.id) });
+      camLastStatus[c.id] = reported === true ? 'online' : 'offline';
+      delete streamHealthState[c.id];
+    }
+    const cams = allCams.filter((c) => Number(c.enabled) !== 0 && c.type !== PUBLIC_TYPE);
 
     // เคลียร์ status ของกล้องที่ถูกลบไปแล้ว — ไม่งั้น camLastStatus/streamHealthState จะค้าง
     // entry เก่าตลอดไป (ไม่มีที่ไหน delete key ทิ้งเลย) ทำให้ onlineCount ฝั่ง frontend
@@ -5164,7 +5253,9 @@ app.post('/api/cameras/:id/stream/start', checkAuth, async (req, res) => {
     const type = req.query.type === 'main' ? 'main' : 'sub';
     const camera = await getCameraRow(req.params.id);
     if (!camera) return res.status(404).json({ error: 'Camera not found' });
-    if (req.deviceIds instanceof Set && !req.deviceIds.has(camera.id)) {
+    // กล้อง public: คนที่เห็นหน้า Public Cam Map ดูได้ทุกตัว ไม่ขึ้นกับขอบเขตกล้องของ role
+    const publicViewer = camera.type === PUBLIC_TYPE && req.perms?.has('menu.publiccam');
+    if (req.deviceIds instanceof Set && !req.deviceIds.has(camera.id) && !publicViewer) {
       return res.status(403).json({ error: 'ไม่มีสิทธิ์เข้าถึงกล้องนี้' });
     }
     if (Number(camera.enabled) === 0) return res.status(409).json({ error: 'กล้องนี้ถูกปิดใช้งาน' });

@@ -6,7 +6,7 @@
  * ffmpeg ต่อ URL ของ DSS ตรง (token อยู่ใน query ของ argv ช่วงสั้น ๆ เหมือนแหล่งภาพ AXIS/Uniview)
  */
 const { PlaybackError } = require('../gateway/playback');
-const { DssAuthError } = require('./dss');
+const { DssAuthError, firstReachable } = require('./dss');
 const common = require('./playback-common');
 
 const LABEL = 'DSS';
@@ -43,7 +43,8 @@ function createDssPlayback({ ffmpegPath, sessions }) {
     // ไฟล์ของ DSS ยาวได้ถึง ~30 นาที — ค้นย้อนไป 1 ชม. เพื่อให้เจอไฟล์ที่เริ่มก่อนเวลาที่ขอ
     const recs = await wrap(() => client.records(channelId, ms - 3_600_000, ms + Math.max(1000, duration * 1000)));
     const rec = common.clipAt(recs, ms);
-    const url = await wrap(() => client.playbackUrl(channelId, rec, ms));
+    // DSS หลัง NAT ให้ URL ที่ชี้ IP ภายใน — เลือกทางที่ต่อได้ก่อนส่งให้ ffmpeg (เหมือนตัวกลางภาพสด)
+    const url = await wrap(async () => firstReachable(await client.playbackUrl(channelId, rec, ms)));
     return { url, at: ms, seconds: Math.min(duration, (rec.end - ms) / 1000) };
   }
 

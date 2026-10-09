@@ -126,7 +126,7 @@ function createAiEvents(db) {
           snapshot TEXT,
           received_at TEXT
         )`, () => {});
-        // event_id (2026-09-29): ไอดีที่ ai-worker ออกเอง — กันแถวซ้ำเมื่อ worker ส่งชุดเดิมอีกครั้ง
+        // event_id (2026-09-29): ไอดีจากต้นทาง — กันแถวซ้ำเมื่อส่งชุดเดิมอีกครั้ง
         // ADD COLUMN ทั้ง DB ใหม่และเก่า (ตารางข้างบนไม่มีคอลัมน์นี้) · มีแล้ว = error ที่ตั้งใจเมิน · NULL ซ้ำกันได้ใน unique index
         db.run('ALTER TABLE ai_events ADD COLUMN event_id TEXT', () => {});
         db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_events_event_id ON ai_events (event_id)', (err) => {

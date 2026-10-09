@@ -36,6 +36,10 @@ public sealed class V1Camera : INotifyPropertyChanged
     [JsonPropertyName("alwaysOn")]
     public bool AlwaysOn { get; set; }
 
+    /// <summary>The camera's stream carries sound (enabled at the edge). Older gateways omit it: false.</summary>
+    [JsonPropertyName("audio")]
+    public bool Audio { get; set; }
+
     [JsonPropertyName("analytics")]
     public V1Analytics? Analytics { get; set; }
 

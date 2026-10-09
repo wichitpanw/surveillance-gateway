@@ -43,7 +43,7 @@ for live view / PTZ control without installing software, while serious multi-scr
 | Following month | Windows client (.NET/WPF) gained multi-screen viewing; the web UI once dropped video/maps, then Central brought back the Live page and Camera Map | `client-windows/`, `client-updates/` |
 | Then | ONVIF PTZ, Inter + Noto Sans Thai fonts | `server/gateway/ptz.js` |
 | **Central / Edge split** | **Split into Central / Edge** · global ID + province · cameras cleared and restarted · AI off · dark-sidebar UI · satellite map | see [docs/EDGE-PLAN.md](EDGE-PLAN.md) |
-| Same day, afternoon | Central shows the map only (pinning at the edge) · client named **Surveillance Client** · three-valued camera status + live status from the edge · edge connects up by itself (link) · Live web page on Central | `server/shared/camera-state.js`, `server/vms/edge-link-*.js`, `src/components/LiveWall.jsx` |
+| Same day, afternoon | Central shows the map only (pinning at the edge) · client named **Surveillance Gateway Client** · three-valued camera status + live status from the edge · edge connects up by itself (link) · Live web page on Central | `server/shared/camera-state.js`, `server/vms/edge-link-*.js`, `src/components/LiveWall.jsx` |
 | Next day | Offline edge install kit (Windows/Pi/Linux) downloaded from the Edge Nodes page · edge numbers reserved at Central · edge updates over the link, triggered from Central (an edge updated twice for real, no SSH/sudo) | `scripts/build-edge-kit.ps1`, `scripts/edge-kit/`, `scripts/edge-run.cjs`, `server/vms/edge-update*.js`, [docs/EDGE-KIT.md](EDGE-KIT.md) |
 | Following days | Client 1.7.3 reworked Home / Wall, shows the status of every camera, F11 covers the true screen edge including the taskbar; unused build output and samples cleared | `client-windows/`, [docs/CLIENT-RELEASES.md](CLIENT-RELEASES.md) |
 | AI-at-edge decision | Agreed that AI lives at the edge (Central aggregates events and runs no inference) · recording at the edge + Playback via Central | `server/shared/ai-events.js`, `server/gateway/playback.js` |
@@ -136,7 +136,7 @@ so the person on site chooses the time, and `edge-run` rolls back by itself if t
   the nightly task must be registered once by hand from an admin shell (command in docs/OPERATIONS.md)
 - `App.jsx` holds almost all state and passes it down as props (no router/state library) — known, not a mistake
 - The map in the Windows client (`src/client-map/`) still uses its own style, with no satellite button like the web page
-- The Surveillance Client exists only for Windows (WPF) — a Linux client (port to Avalonia) was agreed but parked
+- The Surveillance Gateway Client exists only for Windows (WPF) — a Linux client (port to Avalonia) was agreed but parked
 - The admin-requiring steps of the edge kit's Windows installer have not been tried on a real machine · the Raspberry Pi kit has not been tried on a real Pi
 - `server/edge-updates/` and `server/edge-kits/` are created by an admin shell — `-Publish` from an ordinary shell cannot delete old versions
 - Time to first frame depends on the camera's keyframes — a sub stream with a sparse I-frame (e.g. 5 fps + GOP 10 s) makes Live Wall channels wait tens of seconds;
