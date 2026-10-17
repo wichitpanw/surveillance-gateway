@@ -1,14 +1,16 @@
 # Windows client (SurveillanceGateway)
 
-สถานะ release 2026-10-07: Client **1.9.5** (release 2026-10-06) · Gateway **d645ed9**
+สถานะ release 2026-10-17: Client **1.14.2** เผยแพร่ full/delta แล้ว · Gateway **651549d** (Central/Regional ตรวจ API และ edge-updates manifest)
 1.9.5 เพิ่มปุ่มลำโพงต่อ tile สำหรับกล้องที่ Edge เปิดเสียง เริ่มปิดเสียงเสมอ — ดู [docs/CAMERA-AUDIO.md](../docs/CAMERA-AUDIO.md)
 AI Events รองรับภาพย่อ/เต็ม และตัวกรอง Edge/Group/ที่มา (1.9.3) · Camera Library หุบแผงตัวกรองได้ (1.9.4)
-ตรวจ build และ render WPF แบบ offscreen ผ่าน; ยังไม่ได้ยืนยันหน้าต่าง Client จริง/เสียงจริงหลังติดตั้งรุ่นนี้
+1.9.7 คืนหน้าต่าง player แยกเมื่อคลิกหมุดแผนที่; 1.9.8 ใช้ชื่อ Surveillance Gateway Client และถอด vendor branding (งาน 2026-10-08/09)
+1.12.0 เพิ่มผังรวมช่องและตัวแก้ผัง; 1.13.0 เปลี่ยนหน้า Home เป็นการ์ด isometric; 1.14.0–1.14.2 ปรับหน้า Live แบบ VMS พร้อมแถบซ้าย Cameras/Views/PTZ แบบ accordion
+ผล build/render offscreen และข้อจำกัดการตรวจหน้าต่าง/เสียงจริงของ 1.9.5 เป็นหลักฐานตามรุ่นเดิม; รอบอัปเดตเอกสารนี้ตรวจเฉพาะ feed ไม่ได้ตรวจหน้าต่าง Client จริง
 
 โปรแกรมดูกล้องของผู้ใช้ — ต่อ **Surveillance Gateway Regional** หรือ **Surveillance Gateway Central** ด้วย API key ของเครื่องปลายทาง แล้วเล่นภาพ, ทำ video wall, ดูแผนที่, สั่ง PTZ
 
 Client ภายในภาคควรตั้ง URL และ API key ของ Regional ภาคนั้นโดยตรง เพื่อให้ดูภาพในภาคต่อได้เมื่อสาย Regional–Central ขาด; ผู้ดูระดับประเทศใช้ Central และ key ที่ Central ออกให้
-เป็น "ผู้บริโภค" ของ `/api/v1` ตัวอ้างอิง ไม่ใช่ทางเข้ากล้องอีกทาง · .NET 8 / WPF · อัปเดต 2026-10-07 (v1.9.5)
+เป็น "ผู้บริโภค" ของ `/api/v1` ตัวอ้างอิง ไม่ใช่ทางเข้ากล้องอีกทาง · .NET 8 / WPF · อัปเดต 2026-10-17 (v1.14.2)
 
 ## ทำไมมีโปรแกรมนี้
 
@@ -50,8 +52,8 @@ bin\Release\net8.0-windows\win-x64\SurveillanceGateway.exe [--server=203.0.113.8
 | Sidebar | สีมืดเสมอ หมวด Overview / Monitoring / Devices แถบเหลืองที่หน้าที่เลือก หุบเหลือไอคอนได้ (ปุ่ม ☰) |
 | Title bar / Navbar | แถบบนสีเข้มพร้อมปุ่มย่อ/ขยาย/ปิด · breadcrumb (Surveillance Gateway Client › หมวด › หน้า) · chip ที่อยู่ server + key · อัปเดต, เต็มจอ (F11), ออกจากระบบ |
 | Tabs | หน้าเปิดเป็น tab และ view ถูกเก็บไว้ตลอดที่ tab เปิด (wall ที่จัดไว้ไม่หาย) · ปิด tab = ทำลาย view และหยุดถอดรหัส |
-| Home | การ์ด Live Wall เด่น พร้อม Map / Camera details และแผง Total / Online / Offline / Other กับเหตุการณ์ล่าสุด |
-| Video wall | 1/4/9/16/25 ช่อง, เลือกกล้อง, Layout และ Stream ในแถบกล้อง, Clear all cells ข้าง Stream, saved views ใน Wall Controls ด้านล่าง, ตัวกรองสถานะ, รายการโปรด, วนหน้าอัตโนมัติแบบกดเริ่มเอง, จุดสถานะ + fps + codec · คลิกขวาเมนูช่อง · ดับเบิลคลิกขยายภาพใน Wall เดิมพร้อม PTZ ข้างภาพเมื่อมีสิทธิ์ |
+| Home | การ์ดสีเต็มใบพร้อมภาพ isometric แบบหน้าแรก VMS (1.13.0, วาดด้วยโค้ดใน `Views/IsoArt.cs`): Video wall / Playback / Map / AI events / Camera details / Diagnostics · แผง Total / Online / Offline / Other กับเหตุการณ์ล่าสุด |
+| Video wall | หน้า Live แบบ VMS (1.14.0): ผังเต็มพื้นที่เส้นแบ่ง 1 px, แถบซ้าย Cameras / Views / PTZ แบบ accordion, PTZ สั่งช่องที่เลือกได้ทันที, toolbar แถวเดียว · 1/4/9/16/25 ช่อง และผังรวมช่อง (1+3, 1+5, 1+7, 1+9, 2+8, 1+12 · ตัวแก้ผังของเครื่อง ≤ 25 ช่อง, 1.12.0 — Auto ให้ช่องใหญ่ใช้ main), เลือกกล้อง, Layout และ Stream ในแถบกล้อง, Clear all cells ข้าง Stream, saved views ใน Wall Controls ด้านล่าง, ตัวกรองสถานะ, รายการโปรด, วนหน้าอัตโนมัติแบบกดเริ่มเอง, จุดสถานะ + fps + codec · คลิกขวาเมนูช่อง · ดับเบิลคลิกขยายภาพใน Wall เดิมพร้อม PTZ ข้างภาพเมื่อมีสิทธิ์ |
 | Map | หมุดกล้องบนแผนที่ 3 มิติใน WebView2 จาก `/client-map.html` ของ central (หน้านั้นไม่ถือ key) |
 | Camera details | ข้อมูลกล้อง สตรีม แทร็ก |
 | Player window | หนึ่งหน้าต่างต่อกล้อง ลากไปจออื่นได้ · แผง PTZ ข้างภาพ (กดค้าง = หมุน) |
@@ -108,3 +110,15 @@ decoder GPU 13%, **encoder 0%** (ถ้าผ่านเบราว์เซ�
 - สลับ Gateway อัตโนมัติ (Central → Regional) เมื่อสายขาด — ต้องเลือก Gateway ที่บันทึกไว้เอง
 - เสียงใน Playback (ภาพอย่างเดียวโดยตั้งใจ)
 - client บน Linux (Avalonia) — ตกลงแล้วแต่พักไว้
+
+## Release 1.10.0 (2026-10-11)
+
+Diagnostics, multi-monitor walls, Auto stream, AI event navigation และ evidence export พร้อม SHA256 อยู่ใน release 1.10.0; ปล่อย feed รุ่น 1.10.0 ในรอบนี้. รายละเอียดและข้อจำกัด: [WINDOWS-CLIENT-1.10.0](../docs/WINDOWS-CLIENT-1.10.0.md).
+
+## Release 1.11.0 — workspace redesign
+
+Shell/Live/Playback โฉมใหม่ปล่อยเป็น Client 1.11.0. ดู [ผลตรวจและขั้นตอนทดสอบ](../docs/WINDOWS-CLIENT-WORKSPACE.md).
+
+## ปิดงาน Map hotfix (2026-10-12)
+
+Gateway `a0d8867` bundle MapLibre worker ผ่าน Vite แก้ Map ค้าง Loading; ตรวจแผนที่ production ใน browser แล้ว และผู้ดูแลยืนยันอัปเดตเรียบร้อย ไม่ต้องติดตั้ง Client ใหม่สำหรับ hotfix นี้ ดู [บันทึกปิดงาน](../docs/WINDOWS-CLIENT-WORKSPACE.md).

@@ -26,17 +26,17 @@
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.35" Color="#000000" />
         </Border.Effect>
-        <StackPanel>
-            <Grid Margin="20,14,12,12">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+            <Grid Margin="20,14,12,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
                     <Border Width="4" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" CornerRadius="1"
                             Background="{DynamicResource BrandYellowBrush}" />
-                    <TextBlock x:Name="TitleText" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}"
+                    <TextBlock x:Name="TitleText" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontFamily="{StaticResource DisplayFont}"
                                FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" />
-                    <TextBlock x:Name="SubtitleText" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                    <TextBlock x:Name="SubtitleText" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" VerticalAlignment="Center" FontSize="12"
                                Foreground="{DynamicResource MutedForegroundBrush}" />
                 </StackPanel>
-                <Button x:Name="CloseButton" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                <Button x:Name="CloseButton" Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
                         IsCancel="True" Content="{svc:T events.detail.close}" />
             </Grid>
 
@@ -57,6 +57,7 @@
                 <TextBlock x:Name="PositionText" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                            Style="{StaticResource MonoText}" FontSize="12" Foreground="{DynamicResource MutedForegroundBrush}" />
             </Grid>
-        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="20,0,20,16"><Button x:Name="LiveButton" Style="{StaticResource GhostButton}" Content="{svc:T investigation.live}"/><Button x:Name="PlaybackButton" Style="{StaticResource GhostButton}" Content="{svc:T investigation.playback}" Margin="8,0"/></StackPanel>
+        </StackPanel></ScrollViewer>
     </Border>
 </Window>

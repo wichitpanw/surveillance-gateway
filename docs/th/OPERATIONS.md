@@ -1,15 +1,18 @@
 # OPERATIONS — คู่มือปฏิบัติการ
 
-ทุกอย่างที่ต้องทำกับเครื่องที่รันระบบ · อัปเดต 2026-10-07
+ทุกอย่างที่ต้องทำกับเครื่องที่รันระบบ · อัปเดต 2026-10-17
 กติกาการแก้โค้ดอยู่ใน [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
-## สถานะปัจจุบัน — 2026-10-07
+## สถานะปัจจุบัน — 2026-10-17
 
-- Gateway `d645ed9` ตรงกันทั้ง Central (000), Regional ภาคกลาง (100), Windows Edge 101 และ Ubuntu Edge 102 (deploy 2026-10-06 ~20:35; ตรวจจาก `/api/instance` และ `remote_build` ที่ Regional)
-- Windows Client `1.9.5` ปล่อยแล้ว (`client-updates/releases.win.json`): ปุ่มลำโพงต่อ tile สำหรับกล้องที่ Edge เปิดเสียง · [CAMERA-AUDIO.md](CAMERA-AUDIO.md)
-- แพ็กเกจอัปเดต edge (`server/edge-updates/`) = `d645ed9` ทั้งสามแพลตฟอร์ม · **ชุดติดตั้ง offline (`server/edge-kits/kits.json`) ยังเป็น `e12f958`** — ก่อนติดตั้ง edge ใหม่ให้รัน `build-edge-kit.ps1 -Publish` หรือกดอัปเดตทันทีหลังเครื่องต่อสาย
-- 163 กล้อง: Edge 101 = 7, Edge 102 = 156 · Edge `103` "Edge ทดสอบ" = Edge ทดสอบ ต่อ Regional ภาคกลางโดยตั้งใจ (2026-10-07) — กล้องจังหวัดนอกภาครับได้ ขึ้นป้ายเตือน "นอกภาค" (../CONTRIBUTING.md "กล้องนอกภาค")
+- Gateway `651549d` — ตรวจ `/api/instance` ของ Central :5173 และ Regional :5273 เมื่อ 2026-10-17
+- Windows Client `1.14.2` เผยแพร่ full/delta ใน `client-updates/releases.win.json` แล้ว (ตรวจ 2026-10-17); รองรับผังรวมช่อง (`1.12.0`), หน้า Home แบบ isometric (`1.13.0`), หน้า Live แบบ VMS พร้อมแถบซ้าย Cameras/Views/PTZ แบบ accordion (`1.14.0–1.14.2`)
+- ตรวจ manifest แพ็กเกจอัปเดต Edge ทั้ง windows-x64/linux-x64/linux-arm64 เมื่อ 2026-10-17 = `651549d`; offline kit ยังเป็น `5005316` จึงต้องอัปเดตผ่านสายหลังติดตั้ง; ไม่ได้ตรวจ mirror ของ Regional รอบนี้
+- จำนวนกล้องตามบันทึก 2026-10-07: 163 กล้อง (Edge 101 = 7, Edge 102 = 156); ไม่ใช่ยอดที่ตรวจใหม่ · Edge `103` "Edge ทดสอบ" เป็น Edge ทดสอบที่ตั้งใจต่อ Regional ภาคกลาง; ยังไม่ได้ตรวจสถานะสาย/ยอดกล้องล่าสุด
 - Windows Client `1.9.4` เพิ่มการหุบตัวกรอง Camera Library; 1.9.3 เพิ่มภาพ AI Events และตัวกรอง Edge/กลุ่ม/ที่มา
+- Avigilon H.265: ONVIF Media1 → Media2 fallback ใน `48f4298`; ผู้ดูแลยืนยันเมื่อ 2026-10-11 ว่าทดสอบใช้งานแล้วภาพมา
+- DSS หลัง NAT รองรับ fallback ของ URL media ทั้งสด/ย้อนหลัง และจำ `playbackType` ต่อ DSS; จังหวัดทดสอบยืนยันย้อนหลัง 2026-10-09
+- Public Cam อุดรธานีเพิ่มที่ Central แล้ว; หน้าผู้ใช้ถอด vendor branding; คู่มือ rebuild 2026-10-09 เพื่อปรับข้อความและภาพ
 - AI Sources เป็น General และมีตัวกรอง Group; กล้องใหม่ไม่เปิด receiver อัตโนมัติ ต้องเลือกแหล่งรับและเปิดต่อกล้อง
 - Tiandy MODEL-A ใช้ AlarmInfo + ภาพ Alarm บน SD; UNV IPC2325SB ใช้ ONVIF RTSP metadata LineCrossing + GetSnapshotUri สำหรับเหตุใหม่ (กล้องเดี่ยวช่อง 1)
 - หลังอัปเดต receiver Tiandy/UNV ที่ Edge 101 เชื่อมต่อแล้ว; Tiandy มีภาพเหตุจริงใน Central production; UNV event พร้อมภาพทดสอบกับกล้องจริงในระบบจำลองครบสามชั้น ไม่อ้างว่าเกิดเหตุพร้อมภาพใหม่ใน production แล้ว
@@ -159,6 +162,16 @@ build ของ Edge 101/102 ดูที่หน้า Edge Nodes ของ Re
   ```
   `-StartWhenAvailable` = เครื่องปิดตอนตี 2 ก็รันทันทีที่เปิด · ทดสอบ: `Start-ScheduledTask 'CCTV Backup (nightly)'`
 - backup อยู่ดิสก์ D: ลูกเดียวกับข้อมูลจริง กันความผิดพลาดได้ ไม่กันดิสก์เสีย
+
+### Backup/restore จากหน้า System Settings
+
+- Web backup เป็น SQLite snapshot ที่รวมข้อมูล commit ใน WAL แล้ว ไม่ใช่การคัดลอกเฉพาะ main file; เป็น DB อย่างเดียว ไม่รวม secret/config/JPEG จึงไม่แทน backup-windows.ps1
+- Restore ตรวจ SQLite header, integrity และ core schema ก่อนปิด DB; ไฟล์ผิดตอบ 400 และ DB เดิมยังใช้งานได้ คอลัมน์ใหม่ที่ migration เติมได้ไม่จำเป็นต้องมีใน backup เก่า
+- Backup/restore ทำซ้อนกันไม่ได้ (409); upload ใช้ชื่อชั่วคราวแยกต่อคำขอ และลบหลังใช้งาน
+- ก่อนแทน DB เก็บ snapshot ชื่อ vms.db.before-restore-<เวลา>-<UUID> รวม commit ก่อนปิด connection; หากแทนไฟล์ไม่สำเร็จพยายามกู้ snapshot ก่อน restart ถ้ากู้กลับไม่ได้ log จะแจ้งให้ใช้ snapshot นี้ด้วยมือ
+- Restore สำเร็จยัง restart ผ่าน supervisor เหมือนเดิม; snapshot มีข้อมูลลับ ห้ามเข้า git และต้องใช้สิทธิ์ไฟล์เช่นเดียวกับ DB
+- ตรวจ regression ในพื้นที่แยก: node scripts/check-database-maintenance.cjs (fixture ใน TEMP, ไม่ใช้ DB/พอร์ต production)
+
 - `D:\gateway-backups\vm-final` = สภาพสุดท้ายของยุค VM อย่าลบจนกว่าจะแน่ใจว่าไม่ต้องใช้ VHDX แล้ว
 
 กู้ DB: หยุดแอปนั้น (`pm2 stop 2-vms-backend` หรือ `3-regional-gateway`) → ลบ `vms.db-wal`, `vms.db-shm` → วาง `<รอบ>\central\vms.db`
@@ -247,13 +260,15 @@ edge ต้องออกไปหาพอร์ต gateway และ RTSP ข
 
 ## ทดสอบโดยไม่แตะ production
 
-`scripts/edge-sim.ps1` เปิด edge จำลอง (5283, node 999) + central ทดสอบ (5383) พร้อม go2rtc ของตัวเอง
-state อยู่ที่ `D:\gateway-sandbox\edge-sim` หน้าเว็บจาก `D:\gateway-sandbox\edge-sim\dist`
+`scripts/edge-sim.ps1` เปิด Edge (5283, node 101), Regional (5483, node 100) และ Central (5383, node 000) พร้อม go2rtc แยก instance
+state อยู่ใต้ `-Root` (ค่าเริ่มต้น `D:\gateway-sandbox\edge-sim`); หน้าเว็บใช้ `dist` ของ worktree ที่เรียกสคริปต์ ไม่ใช่ `<Root>\dist`
+ตรวจทุกพอร์ตและเจ้าของ process ก่อนใช้ทั้ง start และ -Stop เพราะสคริปต์หยุด process ตามพอร์ต; ห้ามใช้เมื่อชนงานอื่น และห้าม npm ci ลง junction ของ worktree
 
 ```bash
-npx vite build --outDir D:\gateway-sandbox\edge-sim\dist --emptyOutDir
-powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\edge-sim.ps1
-powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\edge-sim.ps1 -Stop
+cd D:\gateway-dev
+npx vite build --outDir D:\gateway-dev\dist --emptyOutDir
+powershell -ExecutionPolicy Bypass -File D:\gateway-dev\scripts\edge-sim.ps1 -Root D:\gateway-sandbox\audit-fresh
+powershell -ExecutionPolicy Bypass -File D:\gateway-dev\scripts\edge-sim.ps1 -Root D:\gateway-sandbox\audit-fresh -Stop
 ```
 
 - **ข้อมูลใน `D:\gateway-sandbox\edge-sim` ก่อน 2026-09-23 ชี้ไปพอร์ต 5273** ซึ่งตอนนี้คือ edge จริง — ลบโฟลเดอร์ `edge`, `central`
@@ -280,3 +295,78 @@ powershell -ExecutionPolicy Bypass -File D:\gateway-dashboard\scripts\edge-sim.p
 | กล้องต่อได้แต่จอดำ | [CAMERA-QUIRKS.md](CAMERA-QUIRKS.md) |
 | `pm2` ทำอะไรก็ไม่มีผล | shell ไม่ได้ยกสิทธิ์ — มี daemon เปล่าเกิดใหม่ ปิด `node … pm2\lib\Daemon.js` ตัวที่เพิ่งเกิด |
 | แผนที่ว่าง | ต้องต่อเน็ตได้ (ไทล์ OSM/Esri ผ่าน proxy + cache ใน `server/map_data/`) หรือสลับเป็น MBTiles ใน System Settings |
+
+## สิทธิ์ API key ของ SSE
+
+- `/api/v1/events` ปิด connection ของ key นั้นทันทีเมื่อ admin แก้สิทธิ์/disable/delete สำเร็จ; Client ต่อใหม่แล้วใช้ scope ปัจจุบัน ส่วน key อื่นยังต่อได้
+- ตรวจ id + key hash + enabled และ scope จาก DB โดยตรงทุก 30 วินาที ไม่ใช้ auth cache; การแก้ DB นอก admin API จึงมีช่วงรอตรวจสูงสุดหนึ่งรอบ บวกเวลา query
+- ระหว่าง refresh พักส่ง camera/AI/edge events; หากอ่าน key หรือ scope ไม่ได้ปิด SSE ไม่ใช้สิทธิ์เดิมต่อ AI callback จากรอบสิทธิ์ก่อนหน้าถูกทิ้ง
+- SSE ไม่ใช่ durable queue: หลัง reconnect อ่านสถานะจาก `/api/v1/cameras` และตาม AI ที่ตกหล่นผ่าน `/api/v1/ai/events?since=` ตาม client เดิม
+- Regression: `node scripts/check-gateway-events.cjs` ใช้ SQLite/HTTP fixture บน loopback และจำลองเวลาเพื่อไม่รอ 30 วินาที ไม่ใช้ DB/key production
+
+## Playback request และภาพนิ่ง
+
+- เปลี่ยนกล้อง/วัน หรือ seek ใหม่ จะยกเลิกสิทธิ์เขียน state ของคำขอเก่า; success/error ที่ตอบช้าไม่เปลี่ยนภาพหรือเวลาที่เลือกใหม่ และออกจากหน้าก็ไม่รับคำตอบค้าง
+- ปุ่มภาพนิ่งปิดระหว่างรอ Playback ใหม่ ไม่ใช้ timestamp ของกล้อง/วันก่อนหน้า; หากเปลี่ยนบริบทระหว่างรอ token ของภาพนิ่ง จะปิด popup เปล่าและไม่เปิดภาพของบริบทเก่า
+- Regression: `node scripts/check-playback-races.cjs` ใช้ handler/lifecycle จาก source กับ deferred API fixture เพื่อทดสอบ response ย้อนลำดับ ไม่เรียกอุปกรณ์จริง
+
+## Accepted manifest state และ rollback
+
+- updater เก็บลำดับ manifest ที่รับใน `<state>/updates/accepted-manifest.json` ผ่าน temporary file + fsync + atomic rename และ marker `accepted-manifest.initialized` เพื่อแยกเครื่องใหม่จาก state ที่หาย
+- อ่าน/parse/schema ของ accepted state ผิด หรือเขียน state ไม่ได้ = ไม่รับ offer/ไม่สร้าง apply.json; runner ตรวจ accepted state ซ้ำก่อนแตกแพ็กเกจ เครื่องเก่าที่มี pending/last-result แต่ accepted หายก็ไม่ถือเป็น first install
+- หาก state เสีย ให้เก็บหลักฐานแล้วกู้ accepted state ที่เชื่อถือได้ล่าสุดและแก้สิทธิ์/พื้นที่ดิสก์ ห้ามลบ accepted/marker เพื่อข้าม antirollback; state ที่สำรอง/กู้ครบเครื่องต้องรวมทั้งสองไฟล์ด้วย nightly DB backup เดิมไม่ได้รับรองว่ารวม updates state
+- Rollback อัตโนมัติคืน app รุ่นเดิม แต่คงลำดับ accepted รุ่นใหม่ไว้ จึงยังไม่รับ manifest เก่า การตั้งใจ publish code เก่าต้องเซ็นด้วย issuedAt ใหม่ตามขั้นตอนเดิม
+- ตัวคุม edge-run ที่รันค้างยังเป็นโค้ดตอนเริ่ม process; การสลับ app ไม่อัปเกรดตัวคุมใน memory ต้องวางแผน restart supervisor เพื่อให้การตรวจ strict ของ runner รุ่นนี้มีผลครบ
+- Regression: `node scripts/check-edge-updates.cjs` ใช้ TEMP, generated test key, loopback HTTP, tar fixture และ runner/worker จำลองจริง ไม่ใช้ signing key/package/process production ต้องมี tar ใน PATH/Windows System32
+
+
+### Build runtime และ dependency — รอบแก้ audit 2026-10-11
+
+- Vite 7 ต้องใช้ Node `^20.19.0 || >=22.12.0`; Node 22.6.0 ของ shell เดิมไม่รองรับ
+- `npm run build`, `scripts/deploy.ps1` และ `scripts/build-edge-kit.ps1` ตรวจ runtime ก่อนทำงาน; deploy หยุดก่อน backup/restart เมื่อ Node ของ shell ไม่ผ่าน
+- Node 22.23.3 Windows x64 ผ่าน build เว็บ, SQLite native และ regression fixture; ทดสอบแยก ยังไม่ได้ติดตั้งแทน Node ของ production
+- ก่อน deploy ต้องเตรียม Node ที่รองรับใน PATH ของ shell และตรวจ runtime ของ Scheduled Task/PM2; `-Node` ใน deploy อย่างเดียวไม่เปลี่ยน Node ที่ npm/npx ใช้
+- Server pin Axios 1.20.0 และ Multer 2.4.0 ใน manifest/lockfile; ติดตั้งตาม lockfileในช่วง deploy ที่วางแผนไว้ ห้าม npm ci ลง junction ของ worktree
+- `node scripts/check-stack.cjs` ตรวจ HTTP upload/redirect/binary/timeout/cancel กับ loopback fixture ไม่ติดต่ออุปกรณ์จริง
+- Advisory ที่เหลือ และ E2E กล้องจริง/เสียง/PTZ/WPF ยังต้องตรวจต่อ; fixture ไม่รับรองอุปกรณ์ทุกยี่ห้อ
+
+
+### Express dependency patch — 2026-10-11
+
+Server lockfile อัปเดต proxy-addr 2.0.8, path-to-regexp 8.4.2, qs 6.16.0 และ body-parser 2.3.0 ภายใน semver range เดิมของ Express 5.2.1; ไม่เพิ่ม trust proxy และไม่เปลี่ยน API/schema
+
+หลังติดตั้ง dependency ตาม lockfile ใน sandbox รัน `node scripts/check-express-dependencies.cjs` เพื่อตรวจ trust subnet, query parser, literal route patterns และ HTTP JSON/size-limit fixture; ผลนี้ไม่แทน full Gateway E2E
+
+
+### SQLite/native install dependency — 2026-10-11
+
+- Server pin sqlite3 6.0.1 และ engines Node ^20.19.0 || >=22.12.0 (ครอบคลุม native install fallback และ Vite); lockfile ใช้ tar 7.5.22/node-gyp 12.x รุ่นใหม่ ไม่ใช้ override ข้าม major ของ tar บน SQLite 5
+- build-edge-kit.ps1 อ่านรุ่น SQLite จาก lockfile ใน app ที่ git archive แล้ว จึงแพ็ก native binary ตรงกับโค้ดใน commit ไม่ใช่ไฟล์แก้ค้าง
+- ทดสอบ npm ci พร้อม lifecycle จริงบน Windows x64 ด้วย Node 22.23.3 และตรวจ installed binary ตรง release ทางการ; Linux x64/ARM64 ตรวจ checksum/การแตกไฟล์แล้ว ยังไม่ได้รันจริง
+- SQLite 6 เป็น major upgrade และ upstream node-sqlite3 archived/unmaintained; ต้องผ่าน Gateway startup/E2E และ Linux native smoke test ก่อน production rollout ไม่ได้เปลี่ยน DB driver/schema ในรอบนี้
+- Retest ข้ามรุ่น: ตั้ง CHECK_NATIVE_BASELINE_MODULE เป็น absolute path ของแพ็กเกจ sqlite3 5.1.7 ที่สำรองไว้ แล้วรัน `node scripts/check-native-dependencies.cjs` ใน sandbox ที่ติดตั้ง lockfile ใหม่; baseline ใช้เฉพาะสร้าง/อ่าน fixture ใหม่ ไม่มี DB production
+
+
+### Final dependency / three-tier regression — 2026-10-11
+
+- Removed unused @google-cloud/vertexai and @google/generative-ai: external AI ingress does not perform local inference. Server production dependency audit: 0 advisories in the tested lockfile.
+- MapLibre pinned 6.4.1 for attribution XSS fix; map imports use namespace exports and custom Marker uses { element }. Central/Regional/Edge/Client Map build and grouped marker/theme/sanitizer fixtures passed.
+- Web audit still reports 11 package entries (8 high, 3 moderate), including build/CLI transitive braces and postcss-selector-parser chains. No forced Tailwind major migration or shadcn downgrade. This is not a zero-advisory release.
+- Fresh isolated Edge -> Regional -> Central passed ownership/scope/catalog/Global ID/audio metadata/central outage catalog/AI event dedup/JPEG hash and actual synthetic H.264 + AAC playback on Regional and Central. Viewer consumers returned to zero after closing Live.
+- Linux x64/ARM64 native execution, real hardware PTZ/playback, WPF UI and complete Gateway offer-to-supervisor update E2E remain NOT TESTED on this host; existing component fixtures do not replace these release gates.
+- All verification used isolated state/dependencies/dist and loopback mock devices. No production restart, deployment or dependency installation was performed.
+
+
+### Deploy เมื่อ lockfile เปลี่ยน
+
+ใช้ PowerShell แบบ Administrator และ Node ที่ผ่าน runtime guard; เรียก scripts/deploy.ps1 -InstallDependencies เพื่อ backup ก่อนหยุด Central/Regional แล้ว npm ci พร้อม native smoke จากนั้น restart/build/publish ตามลำดับเดิม หากติดตั้งล้มเหลว backend จะหยุดอยู่เพื่อไม่โหลด native module ที่ติดตั้งไม่ครบ; แก้การติดตั้งและรันคำสั่งเดิมซ้ำ ห้ามติดตั้งผ่าน worktree junction ไม่ได้แก้ runtime ของ Scheduled Task/PM2 ให้อัตโนมัติ ต้องใช้ Node ที่รองรับในตำแหน่งเดิมก่อน deploy
+
+
+### Build tools audit cleanup — 2026-10-11 (หลัง ae03082)
+
+- ถอน shadcn CLI ที่ไม่ใช้จาก manifest/lockfile; ไม่ลบ src/components/ui หรือ components.json. tailwindcss-animate อยู่ devDependencies เพราะใช้สร้าง CSS เท่านั้น.
+- ย้าย Tailwind 4.3.3 + @tailwindcss/postcss 4.3.3; ถอน autoprefixer และ parser overrides เดิม. เปลี่ยน @tailwind เป็น @import และกำหนด @source เฉพาะ src กับ HTML entry.
+- ถอนสาย braces/chokidar/fast-glob/micromatch ออกจาก lockfile จริง; root npm audit รวม devDependencies = 0 vulnerabilities เมื่อ 2026-10-11. ผล audit เป็นสถานะวันที่ตรวจ ต้องตรวจซ้ำก่อน release.
+- คง theme/custom coarse variant/animation และเปลี่ยน shadow-sm -> shadow-xs, backdrop-blur-sm -> backdrop-blur-xs, outline-none -> outline-hidden เพื่อรักษาค่าของ Tailwind 3; rounded-sm คงเดิมเพราะมี custom theme.
+- ตรวจ clean install, compiler regression และ build ครบ Central/Regional/Edge/client-map ในพื้นที่แยก. UI sandbox: login ทั้งสามชั้น, light/dark, dashboard, Live synthetic muted, Playback layout, AI Events, Camera Map layout, modal/dropdown. Dashboard font/color/nav geometry ตรง baseline. แผนที่ภาพ tiles และ WPF จริงยังไม่ได้ตรวจรอบนี้.
+- Retest: node scripts/check-build-dependencies.cjs และ npm audit หลัง npm ci ใน dependency แยก; ห้ามติดตั้งลง node_modules junction หรือ build ทับ production dist. Tailwind 4 ต้องใช้ Chrome 111+, Safari 16.4+, Firefox 128+; WebView2 ใช้ Evergreen runtime.

@@ -14,17 +14,17 @@
 
     <!-- Grounds and surfaces, darkest first. Panels sit on the ground; nothing is pure black
          except the video cell itself, which has to be black so letterboxing is invisible. -->
-    <Color x:Key="BackgroundColor">#101315</Color>
-    <Color x:Key="SurfaceColor">#16191B</Color>
-    <Color x:Key="CardColor">#1D2224</Color>
-    <Color x:Key="MutedColor">#23282A</Color>
-    <Color x:Key="ElevatedColor">#2B3133</Color>
-    <Color x:Key="BorderColor">#353C3E</Color>
+    <Color x:Key="BackgroundColor">#10141C</Color>
+    <Color x:Key="SurfaceColor">#151B24</Color>
+    <Color x:Key="CardColor">#1B2330</Color>
+    <Color x:Key="MutedColor">#232E3D</Color>
+    <Color x:Key="ElevatedColor">#2A3748</Color>
+    <Color x:Key="BorderColor">#344153</Color>
 
     <!-- Three levels of ink, so a label can recede without being invisible. -->
-    <Color x:Key="ForegroundColor">#F2F3F1</Color>
-    <Color x:Key="MutedForegroundColor">#A6ADAC</Color>
-    <Color x:Key="FaintForegroundColor">#929C98</Color>
+    <Color x:Key="ForegroundColor">#EEF3FA</Color>
+    <Color x:Key="MutedForegroundColor">#ABB8CA</Color>
+    <Color x:Key="FaintForegroundColor">#96A6BC</Color>
 
     <Color x:Key="PrimaryColor">#B68C20</Color>
     <Color x:Key="PrimaryForegroundColor">#FFFFFF</Color>
@@ -47,7 +47,7 @@
     <Color x:Key="StatusOkColor">#43B17E</Color>
     <Color x:Key="StatusWarnColor">#EE862B</Color>
     <Color x:Key="StatusCritColor">#F06B60</Color>
-    <Color x:Key="StatusCritInkColor">#101315</Color>
+    <Color x:Key="StatusCritInkColor">#10141C</Color>
     <Color x:Key="StatusCritSoftColor">#2A1716</Color>
 
     <Color x:Key="VideoGroundColor">#05070E</Color>

@@ -15,6 +15,7 @@
  *   (<state>/updates/link-ok.json) ไม่งั้นถอยกลับเป็น app.prev · ตัวคุมเองเป็นรุ่นใหม่ตอนบูตครั้งถัดไป
  */
 const fs = require('fs');
+const { readAccepted } = require('./edge-update-state.cjs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, spawnSync, execFileSync } = require('child_process');
@@ -26,6 +27,10 @@ if (cfgArg > 0 && process.argv[cfgArg + 1]) process.env.GW_EDGE_CONFIG = path.re
 // โครงของชุดติดตั้ง: <root>/app/scripts/edge-run.cjs + <root>/app/BUILD — เท่านั้นที่สลับโปรแกรมได้
 const appDir = path.resolve(__dirname, '..');
 const rootDir = path.dirname(appDir);
+// กู้คืนกรณีไฟดับระหว่างสลับโฟลเดอร์: ถ้าถูกเรียกจาก app.prev หรือ app/ หายแต่ app.prev ยังอยู่ ให้สลับกลับทันที
+if (path.basename(appDir) === 'app.prev' && !fs.existsSync(path.join(rootDir, 'app'))) {
+  try { fs.renameSync(appDir, path.join(rootDir, 'app')); } catch { /* ถูกล็อก */ }
+}
 const kitLayout = path.basename(appDir) === 'app' && fs.existsSync(path.join(appDir, 'BUILD'));
 // ถือ cwd ไว้ใน app/ = Windows เปลี่ยนชื่อโฟลเดอร์นั้นไม่ได้ตอนอัปเดต
 if (kitLayout) process.chdir(rootDir);
@@ -38,7 +43,10 @@ function loadEcosystem() {
   return require(ecosystemPath);
 }
 let ecosystem = loadEcosystem();
-const gateway = ecosystem.apps.find((a) => a.name === '3-edge-gateway');
+const gateway = ecosystem?.apps?.find((a) => a.name === '3-edge-gateway');
+if (!gateway?.env?.GATEWAY_STATE_DIR) {
+  throw new Error(`ไม่พบ 3-edge-gateway หรือ GATEWAY_STATE_DIR ใน ${ecosystemPath}`);
+}
 const stateDir = gateway.env.GATEWAY_STATE_DIR;
 const logDir = path.join(stateDir, 'logs');
 const updDir = path.join(stateDir, 'updates');
@@ -225,7 +233,8 @@ function verifyV2(m) {
   } catch (err) {
     return `ตรวจ sig2 ไม่ได้: ${err.message}`;
   }
-  const last = readJson(path.join(updDir, 'accepted-manifest.json'));
+  let last;
+  try { last = readAccepted(updDir, { requireExisting: true }); } catch (err) { return err.message; }
   const prev = last ? Date.parse(String(last.issuedAt)) : NaN;
   if (Number.isFinite(prev)) {
     if (issued < prev) return `manifest ออกเมื่อ ${m.issuedAt} เก่ากว่าที่เคยรับ (${last.issuedAt}) — ไม่ลดเวอร์ชัน`;
@@ -241,7 +250,6 @@ async function applyUpdate() {
   if (applying || !fs.existsSync(reqFile)) return;
   applying = true;
   const req = readJson(reqFile);
-  fs.rmSync(reqFile, { force: true });
   let fromBuild = '?';
   try { fromBuild = fs.readFileSync(path.join(appDir, 'BUILD'), 'utf8').trim(); } catch { /* ไม่มี BUILD */ }
   const appNew = path.join(rootDir, 'app.new');
@@ -310,6 +318,7 @@ async function applyUpdate() {
     fs.rmSync(appNew, { recursive: true, force: true });
     writeResult({ ok: false, build: req?.build || null, from: fromBuild, rolledBack, error: err.message });
   } finally {
+    fs.rmSync(reqFile, { force: true });
     applying = false;
   }
 }

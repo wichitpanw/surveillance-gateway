@@ -170,7 +170,29 @@ const LINK_IN = /^rtsp:\/\/(?:[^@/]*@)?127\.0\.0\.1:\d+\/([\w.-]+_in)$/;
 /** ต้นทางปลอมของสตรีม `_in` — พอร์ต 1 ไม่มีใครฟัง ภาพมาจากผู้ push เท่านั้น */
 const LINK_IDLE_SOURCE = 'rtsp://127.0.0.1:1/edge-link-idle';
 
+let syncInProgress = null;
+let syncQueued = false;
+
 async function syncCamerasToGo2rtc(db, resolveSubRtsp) {
+  if (syncInProgress) {
+    syncQueued = true;
+    return syncInProgress;
+  }
+  syncInProgress = (async () => {
+    try {
+      return await doSyncCamerasToGo2rtc(db, resolveSubRtsp);
+    } finally {
+      syncInProgress = null;
+      if (syncQueued) {
+        syncQueued = false;
+        setImmediate(() => syncCamerasToGo2rtc(db, resolveSubRtsp).catch(() => {}));
+      }
+    }
+  })();
+  return syncInProgress;
+}
+
+async function doSyncCamerasToGo2rtc(db, resolveSubRtsp) {
   let current;
   try {
     const res = await request('GET', '/api/streams');

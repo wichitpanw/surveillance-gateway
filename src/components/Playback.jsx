@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Search, Play, Download, SkipBack, SkipForward, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -46,12 +46,22 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
   const [timeInput, setTimeInput] = useState('');
   const videoRef = useRef(null);
   const tokenRef = useRef(null);
+  const playReqRef = useRef(0); // response เก่าห้ามเปลี่ยนภาพ เวลา หรือ error ของคำขอใหม่
+  const errorCtrlRef = useRef(null);
+  const rangesContextRef = useRef(null);
   const videoBoxRef = useRef(null);
   // วิดีโอ 16:9 ทั้งกล่องต้องอยู่ในจอ (จอ 1080p กว้างเต็มแล้วสูงเกินจอ) — จำกัดกว้างตามความสูงที่เหลือ
   const videoMaxWidth = useFitToViewport(videoBoxRef, 16 / 9);
   const pendingRef = useRef(null); // ms ที่รอเล่นหลังโหลดช่วงเวลาของวัน/กล้องใหม่เสร็จ
   const [pendingTick, setPendingTick] = useState(0); // กล้อง/วันเดิม = ไม่มีอะไรโหลดใหม่ ต้องปลุก effect เอง
   const rangesReqRef = useRef(0); // เลขคำขอช่วงเวลาล่าสุด — คำตอบของคำขอเก่า (เปลี่ยนกล้อง/วันเร็ว ๆ) ทิ้ง
+  /** ยกเลิกสิทธิ์เขียน state ของคำขอเดิม ทั้งตอนเปลี่ยนบริบทและ unmount */
+  const invalidatePlayback = useCallback(() => {
+    playReqRef.current++;
+    rangesReqRef.current++;
+    rangesContextRef.current = null;
+    errorCtrlRef.current?.abort();
+  }, []);
 
   const usable = useMemo(() => cameras.filter((c) => !c.source_missing_at), [cameras]);
   const q = search.trim().toLowerCase();
@@ -78,6 +88,7 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
   /** โหลดช่วงเวลาที่มีภาพของกล้อง/วัน — เฉพาะคำขอล่าสุดเท่านั้นที่เขียน state ได้ */
   const loadRanges = useCallback(async (cam, d) => {
     const reqId = ++rangesReqRef.current;
+    rangesContextRef.current = null;
     if (!cam) {
       setLoadingRanges(false);
       return;
@@ -92,6 +103,7 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
       const body = await res.json().catch(() => ({}));
       if (reqId !== rangesReqRef.current) return;
       if (!res.ok) throw new Error(body.error || `โหลดช่วงเวลาไม่สำเร็จ (${res.status})`);
+      rangesContextRef.current = { cameraId: cam.id, day: d };
       setRanges(body.ranges || []);
     } catch (err) {
       if (reqId !== rangesReqRef.current) return;
@@ -102,12 +114,17 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
     }
   }, []);
 
-  useEffect(() => {
+  // ล้างบริบทก่อน browser วาดจอใหม่ ป้องกันภาพนิ่งจับคู่กล้องใหม่กับเวลาเก่า
+  useLayoutEffect(() => {
+    invalidatePlayback();
+    tokenRef.current = null;
     setSrc(null);
     setPlayStart(null);
+    setNowMs(null);
     setVideoError(null);
     loadRanges(camera, day);
-  }, [camera, day, loadRanges]);
+    return invalidatePlayback;
+  }, [camera, day, loadRanges, invalidatePlayback]);
 
   // ถอดวิดีโอเก่าเมื่อเปลี่ยน src / ออกจากหน้า — ปิดการเชื่อมต่อที่ค้าง (แบบเดียวกับ LivePlayer)
   useEffect(() => {
@@ -133,19 +150,26 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
   }, [target, cameras, onTargetUsed]);
 
   /** token ของกล้องนี้ (อายุ 1 ชม.) — ขอใหม่ถ้าเปลี่ยนกล้องหรือใกล้หมด */
-  const tokenFor = async (cam) => {
+  const tokenFor = async (cam, reqId) => {
     const t = tokenRef.current;
     if (t && t.id === cam.id && Date.now() - t.at < 50 * 60_000) return t;
     const res = await apiFetch(`/api/playback/${encodeURIComponent(cam.id)}/token`);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || 'ขอสิทธิ์ดูภาพไม่สำเร็จ');
-    tokenRef.current = { id: cam.id, at: Date.now(), ...body };
-    return tokenRef.current;
+    const token = { id: cam.id, at: Date.now(), ...body };
+    if (reqId === playReqRef.current) tokenRef.current = token;
+    return token;
   };
 
   /** เล่นจากเวลา ms — ถ้าตรงช่องว่างระหว่างช่วง ข้ามไปต้นช่วงถัดไป */
   const playAt = async (ms) => {
-    if (!camera) return;
+    if (!camera || rangesContextRef.current?.cameraId !== camera.id || rangesContextRef.current?.day !== day) return;
+    const reqId = ++playReqRef.current;
+    errorCtrlRef.current?.abort();
+    setSrc(null);
+    setPlayStart(null);
+    setNowMs(null);
+    setVideoError(null);
     const next = ranges.find((r) => Date.parse(r.end) > ms);
     if (!next) {
       setVideoError('หลังเวลานี้ไม่มีภาพบันทึกในวันที่เลือก');
@@ -153,54 +177,61 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
     }
     const start = Math.max(ms, Date.parse(next.start));
     try {
-      const t = await tokenFor(camera);
+      const t = await tokenFor(camera, reqId);
+      if (reqId !== playReqRef.current) return;
       setVideoError(null);
       setPlayStart(start);
       setNowMs(start);
       setSrc(`${t.video}?t=${encodeURIComponent(t.token)}&start=${encodeURIComponent(isoBangkok(start))}&duration=${CHUNK_SECONDS}`);
     } catch (err) {
-      setVideoError(err.message);
+      if (reqId === playReqRef.current) setVideoError(err.message);
     }
   };
 
   /** วิดีโอเล่นไม่ได้ — ถามเซิร์ฟเวอร์ซ้ำเพื่อเอาข้อความจริง (แท็ก <video> ไม่บอกเหตุผล) */
-  const onVideoError = async () => {
-    if (!src) return;
+  const onVideoError = async (event) => {
+    if (!src || event.currentTarget !== videoRef.current) return;
+    const reqId = playReqRef.current;
+    errorCtrlRef.current?.abort();
     const ctrl = new AbortController();
+    errorCtrlRef.current = ctrl;
+    const current = () => reqId === playReqRef.current && !ctrl.signal.aborted;
     try {
       const res = await fetch(src, { signal: ctrl.signal });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setVideoError(body?.error || `เล่นไม่ได้ (${res.status})`);
+        if (current()) setVideoError(body?.error || `เล่นไม่ได้ (${res.status})`);
       } else {
-        setVideoError('เบราว์เซอร์เล่นวิดีโอนี้ไม่ได้');
+        if (current()) setVideoError('เบราว์เซอร์เล่นวิดีโอนี้ไม่ได้');
       }
     } catch (err) {
-      setVideoError(err.message);
+      if (current()) setVideoError(err.message);
     } finally {
       ctrl.abort();
+      if (errorCtrlRef.current === ctrl) errorCtrlRef.current = null;
     }
   };
 
   // เวลาที่รอเล่น (มาจาก AI Events) — เล่นเมื่อช่วงเวลาของกล้อง/วันใหม่โหลดเสร็จ
   useEffect(() => {
-    if (loadingRanges || pendingRef.current === null || !camera) return;
+    if (loadingRanges || pendingRef.current === null || !camera
+      || rangesContextRef.current?.cameraId !== camera.id || rangesContextRef.current?.day !== day) return;
     const ms = pendingRef.current;
     pendingRef.current = null;
     playAt(ms);
     // playAt อ่าน ranges/camera ชุดล่าสุดอยู่แล้ว — ใส่ใน deps จะเล่นซ้ำทุกครั้งที่ฟังก์ชันถูกสร้างใหม่
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingRanges, ranges, camera, pendingTick]);
+  }, [loadingRanges, ranges, camera, day, pendingTick]);
 
-  const onEnded = () => {
-    if (playStart === null) return;
+  const onEnded = (event) => {
+    if (playStart === null || event.currentTarget !== videoRef.current) return;
     const v = videoRef.current;
     const reached = playStart + Math.round((v?.currentTime || 0) * 1000);
     playAt(reached + 500);
   };
 
-  const onTimeUpdate = () => {
-    if (playStart !== null && videoRef.current) setNowMs(playStart + videoRef.current.currentTime * 1000);
+  const onTimeUpdate = (event) => {
+    if (playStart !== null && videoRef.current && event.currentTarget === videoRef.current) setNowMs(playStart + videoRef.current.currentTime * 1000);
   };
 
   const base = dayStartMs(day);
@@ -222,18 +253,20 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
 
   /** เปิดภาพนิ่ง — เปิดหน้าต่างทันทีตอนคลิก (กัน popup blocker) แล้วค่อยใส่ URL หลังได้ token */
   const snapshotUrl = async () => {
-    if (!camera || nowMs === null) return;
+    if (!camera || !src || playStart === null || nowMs === null) return;
+    const reqId = playReqRef.current;
     const at = nowMs;
     const win = window.open('about:blank', '_blank');
     try {
-      const t = await tokenFor(camera);
+      const t = await tokenFor(camera, reqId);
+      if (reqId !== playReqRef.current) { win?.close(); return; }
       const url = `${t.frame}?t=${encodeURIComponent(t.token)}&at=${encodeURIComponent(isoBangkok(at))}`;
       if (!win) throw new Error('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต popup แล้วลองอีกครั้ง');
       win.opener = null;
       win.location.href = url;
     } catch (err) {
       win?.close();
-      setVideoError(`เปิดภาพนิ่งไม่สำเร็จ: ${err.message}`);
+      if (reqId === playReqRef.current) setVideoError(`เปิดภาพนิ่งไม่สำเร็จ: ${err.message}`);
     }
   };
 
@@ -298,7 +331,7 @@ export default function Playback({ cameras = [], target = null, onTargetUsed }) 
               <Input value={timeInput} onChange={(e) => setTimeInput(e.target.value)} placeholder="HH:MM:SS" className="w-28 font-mono" />
               <Button type="submit" size="sm" className="gap-1.5" disabled={!camera}><Play className="size-3.5" /> เล่น</Button>
             </form>
-            <Button variant="outline" size="sm" className="gap-1.5" disabled={nowMs === null} onClick={snapshotUrl} title="เปิดภาพนิ่ง ณ เวลาที่เล่นอยู่">
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={!src || playStart === null || nowMs === null} onClick={snapshotUrl} title="เปิดภาพนิ่ง ณ เวลาที่เล่นอยู่">
               <Download className="size-3.5" /> ภาพนิ่ง
             </Button>
             <span className="ml-auto font-mono text-sm tabular-nums">{nowMs !== null ? `${day} ${clock(nowMs)}` : ''}</span>

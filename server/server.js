@@ -37,6 +37,7 @@ console.log(`[GPU] GPU_COUNT=${GPU_COUNT}`);
 const { nowIso, toBangkokIso } = require('./shared/time');
 const { hashPassword, verifyPassword, hashLegacyPasswords, isHashed } = require('./shared/password');
 const { redactUrls } = require('./shared/redact');
+const { discoveredOnvifDevice, onvifEndpointCandidates, storedOnvifXaddrs } = require('./shared/onvif-endpoints');
 const sessionToken = require('./shared/session-token');
 const loginThrottle = require('./shared/login-throttle');
 
@@ -557,6 +558,7 @@ app.get('/stream/:name.mp4', requireStreamToken((req) => req.params.name), (req,
   const cameraKey = which === 'sub' ? base.slice(0, -4) : base;
   db.get("SELECT * FROM cameras WHERE lower(replace(id, ' ', '_')) = ?", [cameraKey], (err, row) => {
     if (err || !row) return forward();
+    if (Number(row.enabled ?? 1) === 0) return res.status(409).send('Camera disabled');
     const audio = Number(row.audio_enabled) === 1;
     if (row.type !== 'edge_relay' || !cameraKey.startsWith('cam_edge_')) return forward(audio);
     edgeSources.ensureLinkStream(row, which).catch(() => {}).finally(() => forward(audio));
@@ -581,6 +583,7 @@ app.use(express.static(distPath, {
 
 const dbPath = stateFile('vms.db');
 const db = new sqlite3.Database(dbPath);
+db.configure('busyTimeout', 5000); // 🚀 รอคิวเมื่อมี connection อื่นล็อก WAL
 db.run("PRAGMA journal_mode = WAL"); // 🚀 Enable WAL for better concurrency
 db.run("PRAGMA synchronous = NORMAL"); // 🚀 Faster writes in WAL mode
 
@@ -638,6 +641,8 @@ db.serialize(() => {
   */
   db.run("ALTER TABLE cameras ADD COLUMN rtsp_sub TEXT", () => {});
   db.run("ALTER TABLE cameras ADD COLUMN onvif_main_token TEXT", () => {});
+  // เก็บ XAddr ของอุปกรณ์ที่ Edge เพื่อให้ restart แล้วคง scheme/path/query เดิม
+  db.run("ALTER TABLE cameras ADD COLUMN onvif_xaddrs TEXT", () => {});
   db.run("ALTER TABLE cameras ADD COLUMN onvif_sub_token TEXT", () => {});
   // เลขช่องของ Uniview คงที่แม้ ONVIF ยังไม่คืน RTSP ใช้จับคู่เพื่อเติมสตรีมในแถวเดิม
   db.run("ALTER TABLE cameras ADD COLUMN nvr_channel INTEGER", () => {});
@@ -783,7 +788,7 @@ const profileRtspRaw = (p) => p?.stream?.rtsp || p?.stream?.udp || '';
 /**
  * เลขช่องจริงของ NVR จาก RTSP ที่ NVR ตอบมาเอง (ไม่ใช่ลำดับของ profile ใน GetProfiles ซึ่งสลับไปมา)
  * รูปแบบที่ NVR ใช้ในทางปฏิบัติ: Uniview /unicast/c<ช่อง>/s<สตรีม>/live · Hikvision /Streaming/Channels/<ช่อง>0<สตรีม>
- * · Dahua และตระกูล OEM ?channel=<ช่อง>&subtype=<สตรีม> · ไม่เข้ารูปไหน = null (หน้าเว็บใช้ลำดับแทน)
+ * · Dahua และตระกูล OEM ?channel=<ช่อง>&subtype=<สตรีม> · ไม่เข้ารูปไหน = null (ไม่อ้างลำดับเป็นเลขช่องจริง)
  */
 const nvrChannelNumber = (rtsp) => {
   const url = String(rtsp || '');
@@ -798,16 +803,16 @@ const nvrChannelNumber = (rtsp) => {
 const rtspIdentity = (url) => String(url || '').trim().replace(/^rtsp:\/\/[^/@]*@/i, 'rtsp://').toLowerCase();
 
 /**
- * Group ONVIF profiles by VideoSource token → one channel with main/sub by resolution.
- * No brand RTSP templates.
+ * รวม profile ตาม SourceToken ของกล้องจริง แล้วเลือก main/sub ตามความละเอียด
+ * อุปกรณ์เก่าที่ไม่ส่ง SourceToken ใช้ configuration token เดิม โดยไม่แต่ง RTSP
  */
 const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBridge = false) => {
   const list = Array.isArray(profiles) ? profiles : [];
   const buckets = new Map();
 
   list.forEach((p, idx) => {
-    const srcToken = p?.video?.source?.token;
-    // No VideoSource → one group per profile (avoid merging unrelated channels)
+    const srcToken = p?.video?.source?.sourceToken || p?.video?.source?.token;
+    // ไม่มี VideoSource ให้แยกแต่ละ profile เพื่อไม่รวมกล้องคนละตัว
     const key = srcToken || `profile_${p?.token || idx}`;
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(p);
@@ -830,6 +835,7 @@ const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBr
         streamRank: profileStreamRank(p, rtsp),
         encoding: String(p?.video?.encoder?.encoding || '').toUpperCase(),
         sourceToken: p?.video?.source?.token || null,
+        videoSourceToken: p?.video?.source?.sourceToken || null,
         sourceName: p?.video?.source?.name || null,
         order,
       };
@@ -853,6 +859,7 @@ const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBr
         id: String(key),
         name: label,
         sourceToken: allProfiles[0]?.sourceToken || null,
+        videoSourceToken: allProfiles[0]?.videoSourceToken || null,
         isOnline: false,
         main: null,
         sub: null,
@@ -898,6 +905,7 @@ const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBr
       name: label,
       channel: nvrChannelNumber(main.rtsp),
       sourceToken: main.sourceToken,
+      videoSourceToken: main.videoSourceToken,
       /*
         profile ที่ไม่ผูก VideoSource ไม่ใช่ช่องกล้อง — Uniview NVR มี token:16/0/0/3/1/s0 → /unicast/c0/…
         เป็นสตรีมของตัว NVR เอง (เจอเป็น CH 1 ของ SITE-1-3) · ยังแสดงให้เห็น แต่ไม่เลือกให้อัตโนมัติ
@@ -919,7 +927,8 @@ const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBr
     edge 002, 2026-09-24) — เติมช่องพวกนี้เป็นแถวออฟไลน์ตามข้อมูลจริงของ NVR ไม่แต่ง RTSP ให้
     (ไม่มี profile = ขอ GetStreamUri ไม่ได้) → แอดได้เมื่อสแกนซ้ำตอนกล้องกลับมา
   */
-  const seenSources = new Set(groups.map((g) => g.sourceToken).filter(Boolean));
+  // จับคู่ทั้ง token ของ configuration และ SourceToken จริง — Avigilon ให้ config camCfg0 แต่ VideoSource เป็น cam0
+  const seenSources = new Set(groups.flatMap((g) => [g.sourceToken, g.videoSourceToken]).filter(Boolean));
   const sourceOrder = new Map();
   videoSources.forEach((vs, i) => {
     sourceOrder.set(vs.token, i);
@@ -938,7 +947,10 @@ const groupOnvifProfiles = (profiles, user, pass, videoSources = [], milestoneBr
 
   // เรียงตามลำดับช่องที่ NVR รายงานใน GetVideoSources → เลขช่องจาก RTSP → ลำดับเดิม
   // (ลำดับจาก GetProfiles ของ NVR สลับไปมา) · profile ที่ไม่ผูก VideoSource ไว้ท้ายสุด
-  const orderOf = (g) => (g.sourceToken && sourceOrder.has(g.sourceToken) ? sourceOrder.get(g.sourceToken) : Infinity);
+  const orderOf = (g) => {
+    const t = [g.videoSourceToken, g.sourceToken].find((x) => x && sourceOrder.has(x));
+    return t ? sourceOrder.get(t) : Infinity;
+  };
   return groups
     .map((g, i) => ({ g, i }))
     .sort((a, b) => (orderOf(a.g) - orderOf(b.g))
@@ -967,12 +979,12 @@ const parseVideoSources = (data) => {
  * ทำให้ scan ไม่เจอกล้องเลยทั้งที่ port/user/pass ถูกหมด เพราะ SOAP ไปเป็น plain HTTP บน
  * TLS listener ไม่ได้ (ดู onvif_patch.js: patchOnvifSoapHttps)
  */
-const initOnvifDeviceWithFallback = async ({ ip, onvifPort, user, pass }) => {
-  const port = onvifPort || 80;
+const initOnvifDeviceWithFallback = async ({ ip, onvifPort, onvifXaddrs, user, pass }) => {
+  const endpoints = onvifEndpointCandidates({ ip, onvifPort, onvifXaddrs });
   let lastErr;
-  for (const scheme of ['http', 'https']) {
+  for (const xaddr of endpoints) {
     const device = new onvif.OnvifDevice({
-      xaddr: `${scheme}://${ip}:${port}/onvif/device_service`,
+      xaddr,
       user,
       pass,
     });
@@ -987,8 +999,8 @@ const initOnvifDeviceWithFallback = async ({ ip, onvifPort, user, pass }) => {
 };
 
 /** Probe ONVIF device → channel groups with real RTSP URIs. */
-const probeOnvifChannelGroups = async ({ ip, onvifPort, user, pass, milestoneBridge = false }) => {
-  const device = await initOnvifDeviceWithFallback({ ip, onvifPort, user, pass });
+const probeOnvifChannelGroups = async ({ ip, onvifPort, onvifXaddrs, user, pass, milestoneBridge = false }) => {
+  const device = await initOnvifDeviceWithFallback({ ip, onvifPort, onvifXaddrs, user, pass });
   const profiles = device.getProfileList();
   console.log(
     `[NVR ONVIF Scan] ${ip}: ${profiles.length} profile(s) from GetProfiles — ` +
@@ -1079,6 +1091,7 @@ const resolveOnvifStreams = async (c) => {
     const groups = await probeOnvifChannelGroups({
       ip,
       onvifPort: c.onvifPort,
+      onvifXaddrs: c.onvif_xaddrs,
       user,
       pass,
     });
@@ -1157,6 +1170,7 @@ const captureOnvifSnapshot = async (camera) => {
   const device = await initOnvifDeviceWithFallback({
     ip: camera.ip,
     onvifPort: camera.onvifPort,
+    onvifXaddrs: camera.onvif_xaddrs,
     user: camera.onvifUser,
     pass: camera.onvifPass,
   });
@@ -1993,6 +2007,7 @@ aiSourcesReady.catch((err) => console.error('[AI sources] ' + redactUrls(err.mes
 
 // Regional จดการลบ relay ที่ยืนยันจาก Edge เพื่อส่งต่อขึ้น Central ด้วย ID ของ Regional
 const cameraDeletions = require('./shared/camera-deletions').createCameraDeletions(db);
+const { removeCameras } = require('./shared/camera-removal');
 const edgeSources = createEdgeSources({
   aiEvents: acceptsChildEdges ? aiEvents : null,
   db,
@@ -2475,7 +2490,7 @@ app.post('/api/settings/upload-mbtiles', requirePerm('system.settings'), (req, r
 // (rtsp/rtsp_sub เป็น URL ที่ฝัง user:pass ของกล้อง, onvifUser/onvifPass เป็นรหัส ONVIF ตรงๆ)
 // การเล่นสตรีมฝั่ง frontend ไปผ่าน MediaMTX ไม่ได้ใช้ค่าพวกนี้ — มีแต่หน้า Camera Management/
 // CameraModal ที่ใช้ ซึ่งเป็นหน้าเฉพาะ elevated อยู่แล้ว
-const CAMERA_SECRET_FIELDS = ['rtsp', 'rtsp_sub', 'onvifUser', 'onvifPass'];
+const CAMERA_SECRET_FIELDS = ['rtsp', 'rtsp_sub', 'onvifUser', 'onvifPass', 'onvif_xaddrs'];
 // ส่งออกเฉพาะกล้องในขอบเขตผู้ใช้ และไม่เปิดให้ Edge เรียก
 app.get('/api/cameras/export', collectorOnly, requirePerm('menu.cameras'),
   require('./shared/camera-export').createCameraExport({ db, role: GATEWAY_ROLE, cameraState }));
@@ -2716,6 +2731,8 @@ app.patch('/api/cameras/region', edgeOnly, requirePerm('device.manage'), async (
 
 app.post('/api/cameras', edgeOnly, requirePerm('device.manage'), async (req, res) => {
   const c = req.body;
+  try { c.onvif_xaddrs = storedOnvifXaddrs(c.onvif_xaddrs); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
   let region;
   try {
     region = regionFromBody(c);
@@ -2732,7 +2749,7 @@ app.post('/api/cameras', edgeOnly, requirePerm('device.manage'), async (req, res
   const pinLat = Number.isFinite(parseFloat(c.lat)) ? parseFloat(c.lat) : null;
   const pinLng = Number.isFinite(parseFloat(c.lng)) ? parseFloat(c.lng) : null;
   db.run(
-    "INSERT INTO cameras (id, name, group_name, brand, type, rtsp, rtsp_sub, ip, onvifPort, rtspPort, onvifUser, onvifPass, lat, lng, stream_type, onvif_main_token, onvif_sub_token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT INTO cameras (id, name, group_name, brand, type, rtsp, rtsp_sub, ip, onvifPort, rtspPort, onvifUser, onvifPass, lat, lng, stream_type, onvif_main_token, onvif_sub_token, onvif_xaddrs, province_code, district_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     [
       newCameraId,
       c.name,
@@ -2751,6 +2768,9 @@ app.post('/api/cameras', edgeOnly, requirePerm('device.manage'), async (req, res
       c.stream_type || 'sub',
       streams.onvif_main_token || null,
       streams.onvif_sub_token || null,
+      c.onvif_xaddrs,
+      region.province,
+      region.district,
     ],
     async (err) => {
       // เดิมไม่ดู err — insert ล้มก็ยังตอบ success หน้าเว็บปิดฟอร์มเหมือนบันทึกแล้ว
@@ -2758,9 +2778,6 @@ app.post('/api/cameras', edgeOnly, requirePerm('device.manage'), async (req, res
         console.error('[Add Camera] insert failed:', err.message);
         return res.status(500).json({ error: `บันทึกกล้องไม่สำเร็จ: ${err.message}` });
       }
-      // จังหวัดต้องลงก่อน sync รอบแรก เพราะ global ID ใช้รหัสจังหวัดตอนออกเลขครั้งเดียวแล้วไม่เปลี่ยน
-      try { await saveCameraRegion([newCameraId], region); }
-      catch { return res.status(500).json({ error: 'บันทึกพื้นที่ไม่สำเร็จ' }); }
       notifyCatalogChanged();
       setTimeout(syncCamerasToStreamCore, 2000);
       res.json({ success: true });
@@ -2772,61 +2789,62 @@ app.post('/api/cameras', edgeOnly, requirePerm('device.manage'), async (req, res
 app.put('/api/cameras/:id', requirePerm('device.manage'), async (req, res) => {
   if (!cameraInScope(req, req.params.id)) return sendOutOfScope(res);
   const c = req.body;
+  const existing = await new Promise((resolve) =>
+    db.get('SELECT name, group_name, type, ip, rtsp, rtsp_sub, onvif_main_token, onvif_sub_token, onvif_xaddrs, lat, lng FROM cameras WHERE id = ?',
+      [req.params.id], (err, row) => resolve(row || null)));
+  if (!existing) return sendOutOfScope(res);
+
+  if (existing.type === PUBLIC_TYPE) {
+    return res.status(403).json({ error: 'กล้องสาธารณะ (Public) จัดการโดยระบบส่วนกลาง ไม่อนุญาตให้แก้ไขโดยตรง' });
+  }
+
+  /*
+    กล้องจาก edge: central เป็นเจ้าของแค่กลุ่มที่ใช้แสดงผล ชื่อ พิกัด และจังหวัดเป็นของ edge
+    (resync เขียนทับทุก 10 นาทีอยู่แล้ว) — แก้ที่นี่ก็หายเอง จึงรับแค่ group
+  */
+  if (existing.type === EDGE_TYPE) {
+    if (('lat' in c || 'lng' in c) && (c.lat !== existing.lat || c.lng !== existing.lng)) {
+      return res.status(403).json({ error: 'พิกัดกล้องจาก Edge แก้ไขได้ที่ Edge เท่านั้น', pinAtEdge: true });
+    }
+    return db.run(
+      'UPDATE cameras SET group_name=? WHERE id=?',
+      [c.group_name || c.group || 'Default', req.params.id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        notifyCatalogChanged();
+        res.json({ success: true, note: 'กล้องจาก edge แก้ได้เฉพาะกลุ่ม — ชื่อ พิกัด และจังหวัดแก้ที่ edge' });
+      },
+    );
+  }
+
   let region;
   try {
     region = regionFromBody(c);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
-  /*
-    กล้องจาก VMS แก้ได้แค่ชื่อ กลุ่ม และหมุดแผนที่
 
-    เส้นทางวิดีโอของมันเป็น URL relay ที่ระบบสร้างเองจากข้อมูลใน camera_sources ฟอร์มแก้กล้อง
-    ไม่มีช่องให้กรอก RTSP อยู่แล้ว การปล่อยให้ UPDATE เขียนคอลัมน์ rtsp ด้วยค่าจาก body จึงมีแต่
-    ทางเสีย — ค่าที่ส่งมาว่างเมื่อไหร่ กล้องตัวนั้นดับทันทีโดยไม่มีอะไรบอกว่าทำไม
-  */
-  const existing = await new Promise((resolve) =>
-    db.get('SELECT name, group_name, type, ip, rtsp, rtsp_sub, onvif_main_token, onvif_sub_token, lat, lng FROM cameras WHERE id = ?',
-      [req.params.id], (err, row) => resolve(row || null)));
-  /*
-    กล้องจาก edge: central เป็นเจ้าของแค่กลุ่มที่ใช้แสดงผล ชื่อ พิกัด และจังหวัดเป็นของ edge
-    (resync เขียนทับทุก 10 นาทีอยู่แล้ว) — แก้ที่นี่ก็หายเอง จึงรับแค่ group
-  */
-  if (existing && existing.type === EDGE_TYPE) {
+  try { c.onvif_xaddrs = storedOnvifXaddrs(c.onvif_xaddrs === undefined ? existing?.onvif_xaddrs : c.onvif_xaddrs); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
+
+  if (existing.type === DIGIFORT_TYPE || existing.type === DSS_TYPE) {
     return db.run(
-      'UPDATE cameras SET group_name=? WHERE id=?',
-      [c.group_name || c.group || 'Default', req.params.id],
+      'UPDATE cameras SET name=?, group_name=?, lat=?, lng=?, province_code=?, district_code=? WHERE id=?',
+      [c.name, c.group_name || c.group || 'Default', c.lat, c.lng, region.province, region.district, req.params.id],
       (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, note: 'กล้องจาก edge แก้ได้เฉพาะกลุ่ม — ชื่อ พิกัด และจังหวัดแก้ที่ edge' });
-      },
-    );
-  }
-  if (existing && (existing.type === DIGIFORT_TYPE || existing.type === DSS_TYPE)) {
-    return db.run(
-      'UPDATE cameras SET name=?, group_name=?, lat=?, lng=? WHERE id=?',
-      [c.name, c.group_name || c.group || 'Default', c.lat, c.lng, req.params.id],
-      async (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        try { await saveCameraRegion([req.params.id], region); }
-      catch { return res.status(500).json({ error: 'บันทึกพื้นที่ไม่สำเร็จ' }); }
+        notifyCatalogChanged();
         res.json({ success: true });
       },
     );
   }
-  /*
-    ฟอร์มแก้กล้องไม่มีช่อง sub stream และ ONVIF token — ถ้าไม่เติมจากแถวเดิม การแก้แค่ชื่อช่องของ NVR
-    จะทำให้ rtsp_sub กลายเป็น main (Live wall ดึงเส้นหนัก) และ token เป็น NULL (PTZ หาย)
-  */
-  if (!existing) return sendOutOfScope(res);
   // ผู้แก้ metadata ที่ไม่มีสิทธิ์เห็นรหัส ต้องไม่เปลี่ยนปลายทางหรือเขียนค่าว่างทับบัญชีกล้อง
   if (!req.perms?.has('device.secrets')) {
-    return db.run('UPDATE cameras SET name=?, group_name=?, lat=?, lng=? WHERE id=?',
+    return db.run('UPDATE cameras SET name=?, group_name=?, lat=?, lng=?, province_code=?, district_code=? WHERE id=?',
       [c.name ?? existing.name, c.group_name || c.group || existing.group_name,
-        'lat' in c ? c.lat : existing.lat, 'lng' in c ? c.lng : existing.lng, req.params.id], async (err) => {
+        'lat' in c ? c.lat : existing.lat, 'lng' in c ? c.lng : existing.lng, region.province, region.district, req.params.id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        try { await saveCameraRegion([req.params.id], region); }
-        catch { return res.status(500).json({ error: 'บันทึกพื้นที่ไม่สำเร็จ' }); }
+        notifyCatalogChanged();
         res.json({ success: true });
       });
   }
@@ -2856,7 +2874,7 @@ app.put('/api/cameras/:id', requirePerm('device.manage'), async (req, res) => {
   const rtsp = streams.rtsp || c.rtspUrl || c.rtsp;
   const rtspSub = streams.rtsp_sub || rtsp;
   db.run(
-    "UPDATE cameras SET name=?, group_name=?, brand=?, type=?, rtsp=?, rtsp_sub=?, ip=?, onvifPort=?, rtspPort=?, onvifUser=?, onvifPass=?, lat=?, lng=?, stream_type=?, onvif_main_token=?, onvif_sub_token=? WHERE id=?",
+    "UPDATE cameras SET name=?, group_name=?, brand=?, type=?, rtsp=?, rtsp_sub=?, ip=?, onvifPort=?, rtspPort=?, onvifUser=?, onvifPass=?, lat=?, lng=?, stream_type=?, onvif_main_token=?, onvif_sub_token=?, onvif_xaddrs=?, province_code=?, district_code=? WHERE id=?",
     [
       c.name,
       c.group_name || c.group || 'Default',
@@ -2874,11 +2892,14 @@ app.put('/api/cameras/:id', requirePerm('device.manage'), async (req, res) => {
       c.stream_type || 'sub',
       streams.onvif_main_token || null,
       streams.onvif_sub_token || null,
+      c.onvif_xaddrs,
+      region.province,
+      region.district,
       req.params.id,
     ],
-    async () => {
-      try { await saveCameraRegion([req.params.id], region); }
-      catch { return res.status(500).json({ error: 'บันทึกพื้นที่ไม่สำเร็จ' }); }
+    async (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      notifyCatalogChanged();
       setTimeout(syncCamerasToStreamCore, 2000);
       res.json({ success: true });
       /*
@@ -2910,6 +2931,7 @@ app.patch('/api/cameras/:id/enabled', edgeOnly, requirePerm('device.manage'), (r
         `${enabled ? 'เปิด' : 'ปิด'}ใช้งานกล้อง "${row.name}"`);
       setTimeout(syncCamerasToStreamCore, 500);
       setTimeout(updateCameraStatuses, 1500);
+      notifyCatalogChanged();
       res.json({ success: true, enabled: Boolean(enabled) });
     });
   });
@@ -3034,6 +3056,7 @@ app.patch('/api/cameras/:id/location', pinAtEdge, requirePerm('device.manage'), 
       saveLog(req.user.username, 'Update Map Pin', clearing
         ? `ถอนหมุดกล้อง ID "${req.params.id}" 📍`
         : `ย้ายหมุดกล้อง ID "${req.params.id}" → ${lat.toFixed(6)}, ${lng.toFixed(6)} 📍`);
+      notifyCatalogChanged();
       res.json({ success: true, lat: clearing ? null : lat, lng: clearing ? null : lng });
     }
   );
@@ -3085,20 +3108,31 @@ app.post('/api/cameras/locations', pinAtEdge, requirePerm('device.manage'), (req
     saveLog(req.user?.username || 'unknown', 'Update Map Pin', first.lat === null
       ? `ถอนหมุดกล้อง ${updated} ตัว 📍`
       : `ปักหมุดกล้อง ${updated} ตัวที่ ${first.lat.toFixed(6)}, ${first.lng.toFixed(6)} 📍`);
+    notifyCatalogChanged();
     res.json({ success: true, updated });
   });
 });
-/** edge จดการลบก่อนลบจริง ให้ central ลบตาม — ล้มก็ยังลบต่อ (central เห็นเป็น "หายจาก edge" ให้คนกดลบเอง) */
-const recordCameraDeletions = (ids, username) => (GATEWAY_ROLE === 'edge'
-  ? cameraDeletions.record(ids, username).catch((err) => console.warn(`[Camera deletions] จดไม่สำเร็จ: ${err.message}`))
-  : Promise.resolve());
 /** รายการกล้องที่ edge เปลี่ยน — ส่งขึ้น central ทันทีถ้าต่อแบบ link (ไม่ต้องรอรอบ 5 นาที) */
 const notifyCatalogChanged = () => { invalidateRoleCache(); edgeLink?.catalogSoon?.(); };
 
 app.delete('/api/cameras/:id', requirePerm('device.manage'), async (req, res) => {
   if (!cameraInScope(req, req.params.id)) return sendOutOfScope(res);
-  await recordCameraDeletions([req.params.id], req.user?.username);
-  db.run("DELETE FROM cameras WHERE id = ?", [req.params.id], () => {
+  db.get('SELECT id, type FROM cameras WHERE id = ?', [req.params.id], async (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'ไม่พบกล้องนี้' });
+    if (GATEWAY_ROLE !== 'edge' && row.type === EDGE_TYPE) {
+      return res.status(403).json({ error: 'กล้องจาก Edge ลบได้ที่ Edge เท่านั้น — Central จะอัปเดตตาม Edge อัตโนมัติ' });
+    }
+    if (row.type === PUBLIC_TYPE) {
+      return res.status(403).json({ error: 'กล้องสาธารณะ (Public) จัดการโดยระบบส่วนกลาง ไม่อนุญาตให้ลบโดยตรง' });
+    }
+    let deleted;
+    try {
+      deleted = await removeCameras({ dbPath, sqlite3, ids: [req.params.id], username: req.user?.username, recordDeletions: GATEWAY_ROLE === 'edge' });
+    } catch {
+      return res.status(500).json({ error: 'ลบกล้องไม่สำเร็จ กรุณาลองใหม่' });
+    }
+    if (!deleted.length) return res.status(404).json({ error: 'ไม่พบกล้องนี้' });
     invalidateRoleCache(); // role_devices อาจอ้างกล้องที่เพิ่งลบ — ล้าง cache ไม่ให้ค้าง
     delete camLastStatus[req.params.id];
     delete streamHealthState[req.params.id];
@@ -3114,6 +3148,9 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
     กล้องเข้ามาแบบยังไม่มีหมุด (NULL) แล้วปักในหน้า Map Pins
   */
   const { baseName, group, ip, onvifPort, rtspPort, user, pass, brand, channels: requested } = req.body;
+  let onvifXaddrs;
+  try { onvifXaddrs = storedOnvifXaddrs(req.body.onvif_xaddrs); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
   const univiewImport = req.body.importMode === 'uniview_api';
   const axisImport = req.body.importMode === 'axis_s30';
   if (!Array.isArray(requested) || requested.length === 0) {
@@ -3163,9 +3200,13 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
   const channels = requested.filter((ch) => {
     const url = ch.main?.rtsp || ch.rtsp;
     const key = url ? rtspIdentity(url) : null;
+    const profileKeys = [ch.sub, ...(Array.isArray(ch.profiles) ? ch.profiles : [])]
+      .filter((p) => p?.rtsp).map((p) => rtspIdentity(p.rtsp));
     const channelKey = univiewImport ? `${ip}:${onvifPort}:${ch.channel}` : null;
-    if ((key && existingRtsp.has(key)) || (channelKey && existingChannels.has(channelKey))) return false;
+    if ((key && existingRtsp.has(key)) || profileKeys.some((id) => existingRtsp.has(id))
+      || (channelKey && existingChannels.has(channelKey))) return false;
     if (key) existingRtsp.add(key);
+    profileKeys.forEach((id) => existingRtsp.add(id));
     if (channelKey) existingChannels.add(channelKey);
     return true;
   });
@@ -3175,7 +3216,7 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
   }
 
   const stmt = db.prepare(
-    "INSERT INTO cameras (id, name, group_name, brand, type, rtsp, rtsp_sub, ip, onvifPort, rtspPort, onvifUser, onvifPass, lat, lng, stream_type, onvif_main_token, onvif_sub_token, nvr_channel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    "INSERT INTO cameras (id, name, group_name, brand, type, rtsp, rtsp_sub, ip, onvifPort, rtspPort, onvifUser, onvifPass, lat, lng, stream_type, onvif_main_token, onvif_sub_token, nvr_channel, onvif_xaddrs, province_code, district_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
   );
   const baseTs = Date.now();
   const addedIds = [];
@@ -3183,14 +3224,18 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
   channels.forEach((ch, i) => {
     const mainRtsp = ch.main?.rtsp || ch.rtsp || null;
     const subRtsp = ch.sub?.rtsp || mainRtsp;
-    const label = String(ch.name || `${baseName || ''} CH ${i + 1}`).trim();
+    const knownChannel = univiewImport ? ch.channel : axisImport ? null : nvrChannelNumber(mainRtsp);
+    const label = String(ch.name || (knownChannel ? `${baseName || ''} CH ${knownChannel}` : `${baseName || ''} ช่องไม่ระบุหมายเลข`)).trim();
     const camId = `cam_${baseTs}_${i}_${String(ch.id || i).replace(/[^\w.-]/g, '_').slice(0, 40)}`;
     addedIds.push(camId);
     stmt.run([
       camId, label, String(group || '').trim() || 'Default', brand || 'generic', 'onvif_nvr',
       mainRtsp, subRtsp, ip, axisImport ? req.body.apiPort : onvifPort, rtspPort, user, pass, null, null, 'sub',
       ch.main?.token || null, ch.sub?.token || ch.main?.token || null,
-      univiewImport ? ch.channel : null,
+      knownChannel,
+      onvifXaddrs,
+      region.province,
+      region.district,
     ], (err) => { if (err && !insertErr) insertErr = err; }); // capture the FIRST row error
   });
   // Previously this always answered success even if every insert silently failed (e.g. a locked
@@ -3202,8 +3247,6 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
       console.error('[bulk-add] insert failed:', err.message);
       return res.status(500).json({ error: `บันทึกกล้องไม่สำเร็จ: ${err.message}` });
     }
-    try { await saveCameraRegion(addedIds, region); }
-      catch { return res.status(500).json({ error: 'บันทึกพื้นที่ไม่สำเร็จ' }); }
     notifyCatalogChanged();
     saveLog(req.user?.username || 'unknown', 'Add Camera',
       `เพิ่มกล้อง ${addedIds.length} ช่อง (${brand || 'generic'} ${ip}): ${addedIds.join(', ')}`);
@@ -3220,20 +3263,42 @@ app.post('/api/cameras/bulk-add', edgeOnly, requirePerm('device.manage'), async 
 app.post('/api/cameras/bulk-delete', requirePerm('device.manage'), async (req, res) => {
   if (!Array.isArray(req.body?.ids) || !req.body.ids.length) return res.status(400).json({ error: 'ids required' });
   // ลบได้เฉพาะกล้องในขอบเขตของ role — id นอกขอบเขตถูกข้ามเงียบ ๆ (บอกจำนวนที่ข้ามไว้ในคำตอบ)
-  const ids = req.body.ids.map(String).filter((id) => cameraInScope(req, id));
-  const skipped = req.body.ids.length - ids.length;
+  const requested = [...new Set(req.body.ids.map(String))];
+  const ids = requested.filter((id) => cameraInScope(req, id));
   if (!ids.length) return res.status(404).json({ error: 'ไม่พบกล้องที่เลือก' });
-  invalidateRoleCache();
-  await recordCameraDeletions(ids, req.user?.username);
-  db.run(`DELETE FROM cameras WHERE id IN (${ids.map(() => '?').join(',')})`, ids, () => {
-    for (const id of ids) {
+
+  const slots = ids.map(() => '?').join(',');
+  db.all(`SELECT id, type FROM cameras WHERE id IN (${slots})`, ids, async (cErr, rows) => {
+    if (cErr) return res.status(500).json({ error: cErr.message });
+    const disallowed = new Set(
+      (rows || [])
+        .filter((r) => (GATEWAY_ROLE !== 'edge' && r.type === EDGE_TYPE) || r.type === PUBLIC_TYPE)
+        .map((r) => r.id)
+    );
+    const validIds = ids.filter((id) => !disallowed.has(id));
+    const skipped = requested.length - validIds.length;
+    if (!validIds.length) {
+      return res.status(403).json({
+        error: GATEWAY_ROLE !== 'edge'
+          ? 'กล้องจาก Edge ต้องลบที่ Edge เท่านั้น และกล้อง Public ไม่สามารถลบได้'
+          : 'กล้องที่เลือกไม่สามารถลบได้',
+      });
+    }
+
+    let deleted;
+    try {
+      deleted = await removeCameras({ dbPath, sqlite3, ids: validIds, username: req.user?.username, recordDeletions: GATEWAY_ROLE === 'edge' });
+    } catch {
+      return res.status(500).json({ error: 'ลบกล้องไม่สำเร็จ กรุณาลองใหม่' });
+    }
+    for (const id of deleted) {
       delete camLastStatus[id];
       delete streamHealthState[id];
     }
-    saveLog(req.user?.username || 'unknown', 'Delete Camera', `ลบกล้อง ${ids.length} ตัว: ${ids.join(', ')}`);
+    saveLog(req.user?.username || 'unknown', 'Delete Camera', `ลบกล้อง ${deleted.length} ตัว: ${deleted.join(', ')}`);
     setTimeout(syncCamerasToStreamCore, 2000);
     notifyCatalogChanged();
-    res.json({ success: true, deleted: ids.length, skipped });
+    res.json({ success: true, deleted: deleted.length, skipped });
   });
 });
 app.post('/api/cameras/rename-group', requirePerm('device.manage'), (req, res) => {
@@ -3248,6 +3313,7 @@ app.post('/api/cameras/rename-group', requirePerm('device.manage'), (req, res) =
     if (err) return res.status(500).json({ error: err.message });
     saveLog(req.user.username, 'Rename Group', `เปลี่ยนชื่อกลุ่มกล้องจาก "${oldName}" เป็น "${newName}" 📁`);
     setTimeout(syncCamerasToStreamCore, 2000);
+    notifyCatalogChanged();
     res.json({ success: true, changes: this.changes });
   });
 });
@@ -3733,9 +3799,10 @@ const scanSubnet = async (subnetPrefix) => {
         // วนตรวจสอบพอร์ตที่เป็นไปได้ของบริการกล้อง
         for (const port of portsToCheck) {
           const open = await checkPort(ip, port, 1200); // 1200ms เพื่อรองรับความล่าช้าในเน็ตเวิร์กที่เชื่อมต่อข้ามวง VPN/L3
-          if (open) {
+          // พอร์ตเปิดอาจเป็นเว็บทั่วไป ต้องยืนยัน ONVIF ก่อนหยุดค้นพอร์ตของโฮสต์นี้
+          if (open && await probeOnvifUnauthenticated(ip, String(port))) {
             activeIPs.push({ ip, port: String(port) });
-            break; // หากพบพอร์ตบริการเปิดอยู่ ไม่จำเป็นต้องสแกนพอร์ตถัดไปของโฮสต์นี้ค่ะ
+            break; // พบ ONVIF จริงแล้ว เก็บหนึ่งแถวต่อโฮสต์
           }
         }
       })());
@@ -3757,12 +3824,11 @@ app.get('/api/scan', edgeOnly, requirePerm('device.manage'), async (req, res) =>
       }
       
       const activeIPs = await scanSubnet(prefix);
-      console.log(`[Network Scan] Found ${activeIPs.length} active hosts on port 80/8080`);
+      console.log(`[Network Scan] Found ${activeIPs.length} verified ONVIF hosts`);
       
       const foundDevices = [];
       const probeTasks = activeIPs.map(async (item) => {
-        // ไม่ใช้ init() แบบไม่มีรหัส — กล้องที่บังคับรหัส (Axis) ตอบ 401 แล้วหลุดจากผลสแกน
-        if (!(await probeOnvifUnauthenticated(item.ip, item.port))) return;
+        // scanSubnet ยืนยัน ONVIF แล้วภายใน batch ไม่ยิง SOAP ซ้ำทุกรายการ
         const axis = await probeAxis(item.ip, item.port);
         foundDevices.push({
           id: `unicast_${item.ip.replace(/\./g, '_')}`,
@@ -3780,20 +3846,7 @@ app.get('/api/scan', edgeOnly, requirePerm('device.manage'), async (req, res) =>
     
     // หากไม่มีการระบุวงเครือข่าย ให้ใช้วิธี Multicast Probe แบบดั้งเดิม
     const devices = await onvif.startProbe();
-    res.json(devices.map((d, i) => {
-      const m = d.xaddrs[0].match(/(?:[0-9]{1,3}\.){3}[0-9]{1,3}/);
-      const portMatch = d.xaddrs[0].match(/(?:[0-9]{1,3}\.){3}[0-9]{1,3}:([0-9]+)/);
-      const port = portMatch ? portMatch[1] : '80';
-      // WS-Discovery บอกชื่อ/ฮาร์ดแวร์ใน scope — Axis ใส่คำว่า AXIS ไว้ ใช้ตั้งยี่ห้อได้เลยไม่ต้องถามซ้ำ
-      const isAxis = /axis/i.test(`${d.name || ''} ${d.hardware || ''}`);
-      return {
-        id: `onvif_${i}`,
-        name: isAxis ? `${d.hardware || d.name || 'AXIS'} (${m ? m[0] : '?'})` : `ONVIF Device (${m ? m[0] : '?'})`,
-        ip: m ? m[0] : '',
-        onvifPort: port,
-        ...(isAxis ? { brand: 'axis', model: d.hardware || d.name || null } : {}),
-      };
-    }));
+    res.json(devices.map(discoveredOnvifDevice).filter(Boolean));
   } catch (e) { 
     console.error('[Network Scan Error] Scan failed:', e);
     res.status(500).json({ error: 'Scan failed' }); 
@@ -3829,12 +3882,13 @@ async function refreshExistingNvrSubs(pairs) {
 }
 
 app.post('/api/nvr/channels', edgeOnly, requirePerm('device.manage'), async (req, res) => {
-  const { ip, onvifPort, user, pass, milestoneBridge = false } = req.body || {};
+  const { ip, onvifPort, onvif_xaddrs: onvifXaddrs, user, pass, milestoneBridge = false } = req.body || {};
   if (!ip) return res.status(400).json({ error: 'ip required' });
   try {
     const groups = await probeOnvifChannelGroupsWithRetry({
       ip,
-      onvifPort: onvifPort || 80,
+      onvifPort,
+      onvifXaddrs,
       user: user || 'admin',
       pass: pass || '',
       milestoneBridge: milestoneBridge === true,
@@ -3851,7 +3905,11 @@ app.post('/api/nvr/channels', edgeOnly, requirePerm('device.manage'), async (req
       (err, rows) => resolve(err ? [] : rows || []),
     ));
     const byRtsp = new Map(existing.map((r) => [rtspIdentity(r.rtsp), r]));
-    const hits = groups.map((g) => ({ channel: g, row: g.main?.rtsp ? byRtsp.get(rtspIdentity(g.main.rtsp)) : null }));
+    const hits = groups.map((g) => ({
+      channel: g,
+      row: [g.main, ...(g.profiles || [])].filter((p) => p?.rtsp)
+        .map((p) => byRtsp.get(rtspIdentity(p.rtsp))).find(Boolean) || null,
+    }));
     const subsUpdated = await refreshExistingNvrSubs(hits.filter((h) => h.row));
     res.set('X-Subs-Updated', String(subsUpdated));
     res.json(hits.map(({ channel: g, row: hit }) => (hit ? { ...g, existingId: hit.id, existingName: hit.name } : g)));
@@ -3878,7 +3936,7 @@ app.post('/api/nvr/axis/channels', edgeOnly, requirePerm('device.manage'), async
   }
 });
 app.post('/api/nvr/uniview/channels', edgeOnly, requirePerm('device.manage'), async (req, res) => {
-  const { ip, onvifPort, apiPort, user, pass } = req.body || {};
+  const { ip, onvifPort, onvif_xaddrs: onvifXaddrs, apiPort, user, pass } = req.body || {};
   const port = Number(apiPort);
   if (!ip) return res.status(400).json({ error: 'ip required' });
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -3889,7 +3947,7 @@ app.post('/api/nvr/uniview/channels', edgeOnly, requirePerm('device.manage'), as
     let onvifChannels = [];
     try {
       onvifChannels = await probeOnvifChannelGroupsWithRetry({
-        ip, onvifPort: onvifPort || 80, user: user || 'admin', pass: pass || '',
+        ip, onvifPort: onvifPort || 80, onvifXaddrs, user: user || 'admin', pass: pass || '',
       });
     } catch (err) {
       // LAPI ยังให้เลขและชื่อช่องแม้ ONVIF ใช้งานไม่ได้; แสดงเป็นรอภาพไว้ก่อน
@@ -3924,13 +3982,13 @@ async function resolvePendingUniviewStreams() {
   resolvingUniviewStreams = true;
   try {
     const pending = await new Promise((resolve, reject) => db.all(
-      `SELECT id, ip, onvifPort, onvifUser, onvifPass, nvr_channel FROM cameras
+      `SELECT id, ip, onvifPort, onvif_xaddrs, onvifUser, onvifPass, nvr_channel FROM cameras
        WHERE brand = 'uniview' AND nvr_channel IS NOT NULL AND (rtsp IS NULL OR rtsp = '')`,
       (err, rows) => err ? reject(err) : resolve(rows || []),
     ));
     const groups = new Map();
     for (const row of pending) {
-      const key = JSON.stringify([row.ip, row.onvifPort, row.onvifUser, row.onvifPass]);
+      const key = JSON.stringify([row.ip, row.onvifPort, row.onvif_xaddrs, row.onvifUser, row.onvifPass]);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
@@ -3939,7 +3997,7 @@ async function resolvePendingUniviewStreams() {
       const first = rows[0];
       try {
         const found = await probeOnvifChannelGroupsWithRetry({
-          ip: first.ip, onvifPort: first.onvifPort || 80,
+          ip: first.ip, onvifPort: first.onvifPort || 80, onvifXaddrs: first.onvif_xaddrs,
           user: first.onvifUser || 'admin', pass: first.onvifPass || '',
         }, 1);
         const byNumber = new Map(found.filter((ch) => !ch.noVideoSource && ch.main?.rtsp)
@@ -4042,6 +4100,7 @@ pollGpuStats();
 setInterval(pollGpuStats, 3000);
 
 let startStats = getCPUUsage();
+let netStatsInFlight = false;
 setInterval(() => {
   const endStats = getCPUUsage();
   const idleDiff = endStats.idle - startStats.idle;
@@ -4050,8 +4109,11 @@ setInterval(() => {
   startStats = endStats;
 
   if (process.platform === 'win32') {
+    if (netStatsInFlight) return;
+    netStatsInFlight = true;
     // ดึงข้อมูลการใช้แบนด์วิดท์เครือข่ายสำหรับ Windows Server
-    exec("powershell -Command \"Get-NetAdapterStatistics | Measure-Object -Property ReceivedBytes, SentBytes -Sum | Select-Object -Property Property, Sum\"", { windowsHide: true }, (err, stdout) => {
+    exec("powershell -Command \"Get-NetAdapterStatistics | Measure-Object -Property ReceivedBytes, SentBytes -Sum | Select-Object -Property Property, Sum\"", { timeout: 4000, windowsHide: true }, (err, stdout) => {
+      netStatsInFlight = false;
       if (!err && stdout) {
         const lines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let rx = 0, tx = 0;
@@ -4104,7 +4166,6 @@ app.get('/api/stats', (req, res) => {
           totalRamGB: (tr / 1073741824).toFixed(2),
           disk: d,
           net: { in: netIn, out: netOut },
-        gpu: gpuStats,
           gpu: gpuStats,
           streamDegraded: streamHealthSummary.degraded || 0,
           streamOnline: streamHealthSummary.online || 0,
@@ -4124,8 +4185,7 @@ app.get('/api/stats', (req, res) => {
             totalRamGB: (tr / 1073741824).toFixed(2),
             disk: d,
             net: { in: netIn, out: netOut },
-        gpu: gpuStats,
-          gpu: gpuStats,
+            gpu: gpuStats,
             streamDegraded: streamHealthSummary.degraded || 0,
             streamOnline: streamHealthSummary.online || 0,
             streamOffline: streamHealthSummary.offline || 0,
@@ -4180,74 +4240,18 @@ app.post('/api/logs', (req, res) => {
 });
 
 // ==================== SYSTEM BACKUP & RESTORE APIS ====================
+const { createDatabaseMaintenance } = require('./shared/database-maintenance');
+const databaseMaintenance = createDatabaseMaintenance({
+  db, dbPath, sqlite3, saveLog, nowIso,
+  scheduleRestart: code => setTimeout(() => process.exit(code), 1000),
+});
 const dbUpload = multer({ storage: multer.diskStorage({
   destination: (q, f, c) => c(null, path.dirname(dbPath)),
-  filename: (q, f, c) => c(null, 'vms_restore_temp.db')
-}) });
+  filename: (q, f, c) => c(null, databaseMaintenance.uploadFilename()),
+}), limits: { files: 1 } });
 
-app.get('/api/system/backup', requirePerm('system.maintain'), (req, res) => {
-  const dbFile = dbPath;
-  if (fs.existsSync(dbFile)) {
-    saveLog(req.user.username, 'Backup DB', 'สำรองข้อมูลระบบฐานข้อมูลสำเร็จ 💾');
-    res.download(dbFile, `vms-backup-${Date.now()}.db`);
-  } else {
-    res.status(404).json({ error: 'Database file not found' });
-  }
-});
-
-app.post('/api/system/restore', requirePerm('system.maintain'), dbUpload.single('backup'), (req, res) => {
-  const tempPath = stateFile('vms_restore_temp.db');
-  const targetPath = dbPath;
-  
-  if (!fs.existsSync(tempPath)) {
-    return res.status(400).json({ error: 'Uploaded file not found' });
-  }
-  
-  // ลบไฟล์ที่อัปโหลดทิ้งเสมอ ไม่ว่าจะสำเร็จหรือไม่ — ไฟล์นี้คือ DB ทั้งก้อน (มีรหัสกล้อง) ห้ามค้างบนดิสก์
-  const dropTemp = () => { try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (_) { /* ignore */ } };
-  db.close((err) => {
-    // ปิดไม่สำเร็จ (เช่นมีคำสั่งค้าง) = connection เดิมยังเปิดอยู่และใช้ต่อได้ — ไม่แตะไฟล์ DB เลย
-    if (err) {
-      dropTemp();
-      console.error('[Restore Error] ปิดฐานข้อมูลไม่สำเร็จ:', err.message);
-      return res.status(500).json({ error: `ปิดฐานข้อมูลเพื่อกู้คืนไม่สำเร็จ: ${err.message}` });
-    }
-    try {
-      // Snapshot the CURRENT db before overwriting it — a restore replaces EVERY table, so
-      // without this a wrong/accidental restore is irreversible and leaves no trace (this is the
-      // leading suspect for the 2026-07-21 loss where an evening's user + camera additions
-      // vanished with nothing in the logs). The timestamped copy makes it undoable + auditable.
-      const stamp = nowIso().replace(/[:.+]/g, '-');
-      const snapPath = stateFile(`vms.db.before-restore-${stamp}`);
-      if (fs.existsSync(targetPath)) fs.copyFileSync(targetPath, snapPath);
-      // The old db's -wal/-shm MUST be removed before swapping in a different main file —
-      // otherwise SQLite may try to replay the previous database's WAL frames onto the restored
-      // file (mismatched db = corruption). The old endpoint left them in place.
-      for (const ext of ['-wal', '-shm']) {
-        try { if (fs.existsSync(targetPath + ext)) fs.unlinkSync(targetPath + ext); } catch (_) { /* ignore */ }
-      }
-      fs.copyFileSync(tempPath, targetPath);
-      fs.unlinkSync(tempPath);
-      console.warn(`[Restore] ${req.user?.username || 'unknown'} restored DB — previous state saved to ${path.basename(snapPath)}`);
-
-      res.json({ success: true, snapshot: path.basename(snapPath) });
-
-      // ปิดโปรเซสเพื่อให้ PM2 ชุบชีวิตขึ้นมาใหม่พร้อมกับไฟล์ DB กู้คืน
-      setTimeout(() => {
-        process.exit(0);
-      }, 1000);
-    } catch (e) {
-      /*
-        db ถูกปิดไปแล้ว — ทุก route ที่แตะฐานข้อมูลจะพังต่อจากนี้ และ module อื่นถือ connection เดิมไว้ เปิดใหม่แทนที่ไม่ได้
-        จึงออกให้ pm2 เปิด process ใหม่ (อ่านไฟล์ DB ที่อยู่บนดิสก์ตอนนั้น — ไฟล์เดิม หรือสำเนา before-restore ถ้า copy ค้างครึ่งทาง)
-      */
-      dropTemp();
-      console.error('[Restore Error]', e.message, '— restarting process');
-      res.status(500).json({ error: 'Failed to restore database file — ระบบกำลังเริ่มใหม่' });
-      setTimeout(() => process.exit(1), 1000);
-    }
-  });
-});
+app.get('/api/system/backup', requirePerm('system.maintain'), databaseMaintenance.exclusive, databaseMaintenance.backup);
+app.post('/api/system/restore', requirePerm('system.maintain'), databaseMaintenance.exclusive, dbUpload.single('backup'), databaseMaintenance.restore);
 // --- STATUS & WATCHER ---
 let camLastStatus = {};
 // stream health: TCP ติดแต่ sub ไม่ ready นาน → alert
@@ -4256,19 +4260,29 @@ const STREAM_ALERT_COOLDOWN_MS = Number(process.env.STREAM_ALERT_COOLDOWN_MS || 
 const streamHealthState = {};
 let streamHealthSummary = { total: 0, online: 0, degraded: 0, offline: 0, updatedAt: 0 };
 
-app.get('/api/status', (req, res) => res.json(camLastStatus));
+app.get('/api/status', (req, res) => {
+  res.json(Object.fromEntries(Object.entries(camLastStatus).filter(([id]) => cameraInScope(req, id))));
+});
 // สถานะสามค่าต่อกล้อง (shared/camera-state.js) — /api/status คงรูปเดิมไว้ให้หน้าที่ยังนับ online อยู่
 app.get('/api/camera-states', (req, res) => {
   const out = {};
-  for (const [id, s] of cameraState.all()) out[id] = publicCameraState(s);
+  for (const [id, s] of cameraState.all()) {
+    if (cameraInScope(req, id)) out[id] = publicCameraState(s);
+  }
   res.json(out);
 });
 
 app.get('/api/system/stream-health', checkAuth, (req, res) => {
-  res.json({
-    summary: streamHealthSummary,
-    cameras: Object.values(streamHealthState),
-  });
+  const cameras = Object.values(streamHealthState).filter(camera => cameraInScope(req, camera.id));
+  // summary ต้องนับเฉพาะกล้องที่ผู้ใช้เห็น ไม่เปิดเผยจำนวนกล้องนอกขอบเขตผ่านยอดรวม
+  const summary = req.deviceIds instanceof Set ? {
+    total: cameras.length,
+    online: cameras.filter(camera => ['ok', 'idle', 'degraded', 'no_stream'].includes(camera.health)).length,
+    degraded: cameras.filter(camera => ['degraded', 'no_stream'].includes(camera.health)).length,
+    offline: cameras.filter(camera => camera.health === 'offline').length,
+    updatedAt: streamHealthSummary.updatedAt,
+  } : streamHealthSummary;
+  res.json({ summary, cameras });
 });
 
 app.post('/api/system/resync-streams', requirePerm('system.maintain'), (req, res) => {
@@ -4315,14 +4329,22 @@ const checkCameraTcp = (rtspUrl) => {
 const ONVIF_STATUS_PROBE_TIMEOUT_MS = 4000;
 const checkCameraDeviceReachable = async (camera) => {
   if (!camera?.ip) return false;
-  const candidatePorts = [
-    Number(camera.onvifPort) || 0,
-    80,
-    443,
-  ].filter((p, i, arr) => p > 0 && arr.indexOf(p) === i);
+  let endpoints;
+  try {
+    endpoints = onvifEndpointCandidates({ ip: camera.ip, onvifPort: camera.onvifPort, onvifXaddrs: camera.onvif_xaddrs });
+  } catch { return false; }
+  const targets = endpoints.map((raw) => {
+    const endpoint = new URL(raw);
+    return { host: endpoint.hostname.replace(/^\[|\]$/g, ''), port: Number(endpoint.port) || (endpoint.protocol === 'https:' ? 443 : 80) };
+  });
+  targets.push({ host: camera.ip, port: 80 }, { host: camera.ip, port: 443 });
+  const seen = new Set();
   let tcpReachable = false;
-  for (const port of candidatePorts) {
-    if (await checkTcpPort(camera.ip, port)) { tcpReachable = true; break; }
+  for (const { host, port } of targets) {
+    const key = `${host}:${port}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (await checkTcpPort(host, port)) { tcpReachable = true; break; }
   }
   if (!tcpReachable) return false;
   try {
@@ -4330,6 +4352,7 @@ const checkCameraDeviceReachable = async (camera) => {
       initOnvifDeviceWithFallback({
         ip: camera.ip,
         onvifPort: camera.onvifPort,
+        onvifXaddrs: camera.onvif_xaddrs,
         user: camera.onvifUser,
         pass: camera.onvifPass,
       }),
@@ -4340,59 +4363,6 @@ const checkCameraDeviceReachable = async (camera) => {
   } catch {
     return false;
   }
-};
-
-const fetchMtxPathReadyMap = () => new Promise((resolve) => {
-  http.get({
-    hostname: '127.0.0.1',
-    port: 9997,
-    path: '/v3/paths/list',
-    headers: { 'Accept': 'application/json' }
-  }, (r) => {
-    let d = '';
-    r.on('data', (c) => { d += c; });
-    r.on('end', () => {
-      try {
-        const resObj = JSON.parse(d);
-        const paths = resObj.items || [];
-        const map = {};
-        for (const p of paths) {
-          map[p.name] = Boolean(p.ready);
-        }
-        resolve(map);
-      } catch {
-        resolve(null);
-      }
-    });
-  }).on('error', () => resolve(null));
-});
-
-const fetchMtxPathReady = (streamName) => new Promise((resolve) => {
-  http.get({
-    hostname: '127.0.0.1',
-    port: 9997,
-    path: `/v3/paths/get/${encodeURIComponent(streamName)}`,
-  }, (r) => {
-    let d = '';
-    r.on('data', (c) => { d += c; });
-    r.on('end', () => {
-      try { resolve(Boolean(JSON.parse(d).ready)); } catch { resolve(false); }
-    });
-  }).on('error', () => resolve(false));
-});
-
-// รอ path พร้อมเล่นจริง (มี source publish แล้ว) แบบ bounded — ใช้เฉพาะตอน main stream
-// on-demand start เพื่อไม่ให้ frontend ยิง HLS request แรกไปชนช่วงที่ยังไม่มีอะไร publish
-// (สาเหตุของ error แดง "HLS error. Retrying..." ที่ขึ้นก่อนเสมอ)
-const MAIN_STREAM_READY_POLL_MS = Number(process.env.MAIN_STREAM_READY_POLL_MS || 500);
-const MAIN_STREAM_READY_MAX_WAIT_MS = Number(process.env.MAIN_STREAM_READY_MAX_WAIT_MS || 8000);
-const waitForMtxPathReady = async (streamName) => {
-  const deadline = Date.now() + MAIN_STREAM_READY_MAX_WAIT_MS;
-  while (Date.now() < deadline) {
-    if (await fetchMtxPathReady(streamName)) return true;
-    await new Promise((r) => setTimeout(r, MAIN_STREAM_READY_POLL_MS));
-  }
-  return false;
 };
 
 /**
@@ -4422,24 +4392,12 @@ const fetchCoreCamPathCount = async () => {
 
 let lastStreamCoreResyncAt = 0;
 const STREAM_CORE_RESYNC_COOLDOWN_MS = 60000;
-const mtxPathSyncState = {}; // pathName -> config hash
-let mtxSyncInFlight = false;
-let mtxSyncStartedAt = 0;
-let mtxSyncPendingReason = null;
 let corePathMissingStreak = 0;
-let mtxPublisherDownStreak = 0;
-const MTX_SYNC_MAX_MS = 8 * 60 * 1000;
 
 const forceStreamCoreResync = (reason = '') => {
   const now = Date.now();
   if (now - lastStreamCoreResyncAt < STREAM_CORE_RESYNC_COOLDOWN_MS) return false;
   lastStreamCoreResyncAt = now;
-  // ห้ามล้าง hash ทั้งก้อนทุกครั้ง — ทำให้ upsert วนลบ/สร้างทุก path แล้ว stampede
-  // ล้างเฉพาะเมื่อ probe NVENC ใหม่จริงๆ
-  if (/nvenc|driver/i.test(String(reason || ''))) {
-    for (const k of Object.keys(mtxPathSyncState)) delete mtxPathSyncState[k];
-    nvencAvailable = null;
-  }
   console.warn(`[Stream core] force re-sync paths${reason ? `: ${reason}` : ''}`);
   if (typeof syncCamerasToStreamCore === 'function') {
     syncCamerasToStreamCore(reason || 'force');
@@ -4448,11 +4406,8 @@ const forceStreamCoreResync = (reason = '') => {
 };
 
 const updateCameraStatuses = async () => {
-  // เช็ค ffmpeg ที่ Node manage อยู่ว่าค้าง (alive แต่ bytesReceived ไม่ขยับ) หรือไม่ ทุกรอบ
-  // เดียวกับ interval นี้ (ทุก 15s) ไม่เพิ่ม interval ใหม่ — ดู checkStalledTranscodes ด้านบน
-  checkStalledTranscodes().catch((e) => console.warn('[Watchdog] check failed:', e.message));
 
-  db.all('SELECT id, name, type, rtsp, nvr_channel, always_on, enabled, ip, onvifPort, onvifUser, onvifPass FROM cameras', async (err, allCams) => {
+  db.all('SELECT id, name, type, rtsp, nvr_channel, always_on, enabled, ip, onvifPort, onvif_xaddrs, onvifUser, onvifPass FROM cameras', async (err, allCams) => {
     if (err || !allCams) return;
 
     cameraState.retain(allCams.map((c) => c.id));
@@ -4544,37 +4499,10 @@ const updateCameraStatuses = async () => {
       จะทำต่อต้องพิสูจน์ด้วยกล้องที่ปิดจริงก่อนว่า ready ของ go2rtc เปลี่ยนตามหรือไม่
       อย่าเดาจากชื่อฟิลด์
     */
-    const readyMap = STREAM_CORE === 'go2rtc' ? null : await fetchMtxPathReadyMap();
     const now = Date.now();
     let online = 0;
     let degraded = 0;
     let offline = 0;
-
-    // กล้อง always_on ต้องมี publisher จริง — เดิมถูกป้ายว่า "idle" แล้วไม่เคยถูกซ่อม
-    // ก้อนนี้ทำงานเฉพาะตอนใช้ MediaMTX เพราะ readyMap เป็น null ภายใต้ go2rtc (ดูเหตุผลข้างบน)
-    if (readyMap) {
-      const critical = cams.filter((c) => c.rtsp && Number(c.always_on) === 1);
-      let publisherDown = 0;
-      for (const c of critical) {
-        const sn = String(c.id || '').toLowerCase().replace(/\s+/g, '_');
-        const mainReady = Boolean(readyMap[sn]);
-        const subReady = Boolean(readyMap[`${sn}_sub`]);
-        if (!mainReady && !subReady) publisherDown += 1;
-      }
-      if (critical.length > 0 && publisherDown > 0) {
-        mtxPublisherDownStreak += 1;
-        // อย่า force resync บ่อยจาก AI ที่ main on-demand (ready=false ตามปกติ)
-        // ใช้แค่เตือนใน log — sync ปกติจัดการ path
-        if (mtxPublisherDownStreak >= 6) {
-          console.warn(
-            `[MediaMTX] AI Detect sub offline ${publisherDown}/${critical.length} — skip mass resync (avoid ffmpeg storm)`
-          );
-          mtxPublisherDownStreak = 0;
-        }
-      } else {
-        mtxPublisherDownStreak = 0;
-      }
-    }
 
     await Promise.all(cams.map(async (c) => {
       // NVR ตอบ HTTP ได้ไม่ได้แปลว่าช่อง offline มีภาพ; รอ RTSP จริงก่อนนับว่า online
@@ -4589,10 +4517,9 @@ const updateCameraStatuses = async () => {
         offline += 1;
         return;
       }
-      const sn = String(c.id || '').toLowerCase().replace(/\s+/g, '_');
-      const mainReady = readyMap ? Boolean(readyMap[sn]) : null;
-      const subReady = readyMap ? Boolean(readyMap[`${sn}_sub`]) : null;
-      const streamReady = mainReady === true || subReady === true;
+      const mainReady = null;
+      const subReady = null;
+      const streamReady = false;
       /*
         กล้องจาก edge: TCP ไปที่ RTSP ของมันคือไปที่ go2rtc ของ edge ซึ่งตอบเสมอตราบที่ edge ยังอยู่
         — วัดได้แค่ "edge ยังอยู่" ไม่ใช่ "กล้องยังอยู่" จึงใช้ค่าที่ edge รายงานมา (edge-source.js)
@@ -4603,7 +4530,7 @@ const updateCameraStatuses = async () => {
       const edgeReachable = fromEdge ? (cameraState.get(c.id)?.reachable ?? null) : null;
       const tcpOk = fromEdge ? edgeReachable === true : await checkCameraTcp(c.rtsp);
       // เช็คแยกต่างหากเฉพาะตอน RTSP เอื้อมไม่ถึง — กันยิง TCP รัว 2 ครั้งทุกกล้องทุกรอบโดยไม่จำเป็น
-      const deviceReachable = tcpOk || streamReady || fromEdge ? tcpOk || streamReady : await checkCameraDeviceReachable(c);
+      const deviceReachable = tcpOk || fromEdge ? tcpOk : await checkCameraDeviceReachable(c);
       cameraState.set(c.id, {
         enabled: true,
         reachable: fromEdge ? edgeReachable : tcpOk || deviceReachable,
@@ -4611,12 +4538,7 @@ const updateCameraStatuses = async () => {
       });
       const needsAlwaysOn = Number(c.always_on) === 1;
 
-      let isOn = false;
-      if (readyMap) {
-        isOn = streamReady || tcpOk;
-      } else {
-        isOn = tcpOk;
-      }
+      const isOn = tcpOk;
       const st = isOn ? 'online' : 'offline';
       if (camLastStatus[c.id] && camLastStatus[c.id] !== st) {
         saveLog('System', isOn ? 'Camera Online' : 'Camera Offline', `กล้อง "${c.name}" ${isOn ? 'ออนไลน์' : 'ขาดหาย'}`);
@@ -4686,568 +4608,24 @@ const updateCameraStatuses = async () => {
   });
 };
 
-let nvencAvailable = null;
-const detectNvenc = () => new Promise((resolve) => {
-  if (nvencAvailable !== null) return resolve(nvencAvailable);
-  const ffmpegPath = (typeof FFMPEG_PATH !== 'undefined' ? FFMPEG_PATH : 'ffmpeg').replace(/\\\\/g, '\\');
-  // NVENC rejects tiny frames (64x64). Probe ≥320x240.
-  // On Windows, exec may set err even when encode works — trust stderr markers too.
-  exec(
-    `"${ffmpegPath}" -hide_banner -f lavfi -i color=c=black:s=640x360:d=0.3 -frames:v 1 -c:v h264_nvenc -preset p4 -tune ll -pix_fmt yuv420p -f null -`,
-    { windowsHide: true, timeout: 20000 },
-    (err, _stdout, stderr) => {
-      const msg = `${stderr || ''}${_stdout || ''}`;
-      const driverTooOld = /Driver does not support the required nvenc API|minimum required Nvidia driver/i.test(msg);
-      const tooSmall = /Frame Dimension less than the minimum/i.test(msg);
-      const encodedOk = /encoder\s*:\s*Lavc.*h264_nvenc|Video: h264.*h264_nvenc|frame=\s*[1-9]/i.test(msg);
-      const openFail = /Could not open encoder|InitializeEncoder failed|Error while opening encoder/i.test(msg);
-      nvencAvailable = !driverTooOld && !tooSmall && !openFail && (!err || encodedOk);
-      if (nvencAvailable) {
-        console.log('[Transcode] h264_nvenc probe OK — Main/Sub H.265 use NVENC');
-      } else if (driverTooOld) {
-        console.warn('[Transcode] h264_nvenc DRIVER TOO OLD (need ≥570) — fallback libx264.');
-      } else if (tooSmall) {
-        console.warn('[Transcode] h264_nvenc probe frame too small — use ≥320x240');
-      } else {
-        console.warn(`[Transcode] h264_nvenc probe fail — fallback libx264 (${msg.slice(-220).replace(/\s+/g, ' ')})`);
-      }
-      resolve(nvencAvailable);
-    },
-  );
-});
-
-const videoEncodeFlags = (bitrate, opts = {}) => {
-  // Caller must pass useNvenc only after detectNvenc snapshot — don't re-read global (race)
-  const useNvenc = Boolean(opts.useNvenc);
-  const gpuIdx = Number.isFinite(opts.gpuIdx) ? opts.gpuIdx : 0;
-  if (useNvenc) {
-    // Phase 1: NVENC for Main evidence — keep quality, offload CPU encode
-    // p4 + bf 0 = stable low-latency RTSP (avoid presets that silently die)
-    return [
-      `-c:v h264_nvenc -gpu ${gpuIdx}`,
-      '-preset p4 -tune ll -rc vbr',
-      `-b:v ${bitrate} -maxrate ${bitrate} -bufsize ${bitrate}`,
-      '-profile:v main -pix_fmt yuv420p -g 50 -bf 0',
-    ].join(' ');
-  }
-  return `-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -x264-params repeat-headers=1 -g 25 -b:v ${bitrate}`;
-};
-
-// Map เก็บสตรีมที่ Node กำลัง manage อยู่: key = streamName, value = { proc, rtspUrl, codec, isSub, gpuIdx }
-// นี่คือกลไกเดียวที่ transcode H.265→H.264 ทั้งระบบ (main + sub) — ไม่มี MediaMTX runOnDemand
-// และไม่มี SRS แล้ว ผลลัพธ์ republish กลับเข้า MediaMTX เองเสมอ (RTSP publish)
-const activeStreams = new Map();
-const MTX_RTSP_PUBLISH_PORT = 8554;
-// กล้องที่ always_on=1 ต้องเปิด main stream ค้างไว้ ไม่ใช่ on-demand — ใช้กับกล้องที่มีระบบ
-// ภายนอก (เช่น Edge AI) ดึงสตรีมอยู่ตลอด ให้ทุก consumer อ่านจาก streaming core ที่เดียว
-// ไม่มีใครหลุดไปต่อ NVR/กล้องตรงเอง recompute ใหม่ทุกครั้งที่ syncCamerasToStreamCore รัน
-const alwaysOnMainStreamNames = new Set();
-
-const spawnTranscode = (streamName, rtspUrl, codec, isSub, gpuIdx = 0) => {
-  const args = [];
-  if (codec === 'h265' && nvencAvailable) {
-    // -hwaccel_output_format cuda = เฟรมค้างอยู่บน GPU ตลอดสาย decode→scale→encode ไม่ต้อง
-    // วิ่ง GPU→RAM→CPU scale→RAM→GPU ทุกเฟรมเหมือนเดิม (เดิมไม่ได้ใส่ ทำให้ ffmpeg แต่ละตัว
-    // กิน CPU 30-50% ทั้งที่ decode/encode เป็น GPU แล้ว — พอมี ~20 สตรีมพร้อมกัน load
-    // average ขึ้นไปแตะ 12/12 vCPU) วัดจริงบน VM คลิปทดสอบ 30 วิ: CPU 5.56s → 0.96s
-    // ต้องใช้คู่กับ scale_cuda ข้างล่างเสมอ — ถ้าใส่อันนี้แล้วยังใช้ scale ธรรมดา ffmpeg จะ error
-    args.push('-hwaccel', 'cuda', '-hwaccel_device', String(gpuIdx), '-hwaccel_output_format', 'cuda', '-c:v', 'hevc_cuvid');
-  }
-
-  args.push(
-    '-fflags', '+genpts+discardcorrupt',
-    '-analyzeduration', '1500000',
-    '-probesize', '3000000',
-    '-flags', 'low_delay',
-    '-rtsp_transport', 'tcp',
-    '-i', rtspUrl
-  );
-
-  if (codec === 'h265') {
-    // scale_cuda เมื่อเฟรมอยู่บน GPU (NVENC path ข้างบน), scale ธรรมดาเมื่อ fallback ไป libx264
-    // ซึ่ง encode บน CPU เลยต้องการเฟรมใน system memory — สอง flag นี้ต้องสอดคล้องกันเสมอ
-    const dims = isSub ? "'max(320,min(640,iw))':-2" : "'max(640,min(1280,iw))':-2";
-    args.push('-vf', `${nvencAvailable ? 'scale_cuda' : 'scale'}=${dims}`);
-
-    if (nvencAvailable) {
-      args.push(
-        '-c:v', 'h264_nvenc',
-        '-preset', 'p1',
-        '-gpu', String(gpuIdx)
-      );
-    } else {
-      args.push(
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-tune', 'zerolatency'
-      );
-    }
-    const bitrate = isSub ? '512k' : '3M';
-    args.push('-b:v', bitrate, '-maxrate', bitrate, '-bufsize', isSub ? '1M' : '6M');
-  } else {
-    // H.264: Copy directly (Passthrough)
-    args.push('-c:v', 'copy');
-  }
-
-  // republish H.264 กลับเข้า MediaMTX เอง (RTSP publish) — frontend เรียกผ่าน mediaHlsUrl
-  // ปกติ (ชื่อ path เดียวกับที่ MediaMTX ใช้ native pull ตอนเป็น H.264) ไม่ต้องเพิ่ม routing ใหม่ฝั่ง client
-  args.push('-an', '-f', 'rtsp', '-rtsp_transport', 'tcp', `rtsp://127.0.0.1:${MTX_RTSP_PUBLISH_PORT}/${streamName}`);
-
-  const ffmpegPath = FFMPEG_PATH.replace(/\\\\/g, '\\');
-  console.log(redactUrls(`[Transcode] Spawning FFmpeg for ${streamName}: "${ffmpegPath}" ${args.join(' ')}`));
-
-  // เก็บ stderr ท้ายๆ ไว้ดูสาเหตุตอน FFmpeg ตาย (เดิม stdio:'ignore' → มองไม่เห็น error เลย)
-  // windowsHide: true กัน cmd window โผล่ทุกครั้งที่ spawn/respawn บน Windows
-  const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: true, windowsHide: true });
-  let errTail = '';
-  if (proc.stderr) {
-    proc.stderr.on('data', (d) => { errTail = (errTail + d.toString()).slice(-800); });
-  }
-  proc.on('close', (code) => {
-    if (code !== 0 && code !== null) {
-      console.warn(`[Transcode] ${streamName} exit ${code} | stderr: ${redactUrls(errTail).replace(/\s+/g, ' ').slice(-400)}`);
-    }
-  });
-  proc.unref();
-  return proc;
-};
-
-const startStream = (streamName, rtspUrl, codec, isSub, gpuIdx = 0) => {
-  // go2rtc แปลง H.265 เป็น H.264 ให้เองแล้วผ่าน `ffmpeg:<url>#video=h264#hardware`
-  // (ดู server/gateway/go2rtc-sync.js) การให้ Node ทำซ้ำไม่ได้แค่เปลืองเปล่า — มัน publish
-  // ไปที่ rtsp://127.0.0.1:8554 ซึ่งเป็นพอร์ตของ MediaMTX ที่ถอดออกไปแล้ว ffmpeg จึงตาย
-  // ด้วย "Connection refused" แล้วถูก spawn ใหม่วนไปเรื่อยๆ กิน CPU/GPU ทิ้งโดยไม่มีใครเห็น
-  if (STREAM_CORE === 'go2rtc') return null;
-
-  if (activeStreams.has(streamName)) {
-    return activeStreams.get(streamName);
-  }
-
-  const entry = {
-    proc: null,
-    rtspUrl,
-    codec,
-    isSub,
-    gpuIdx,
-  };
-  activeStreams.set(streamName, entry);
-
-  // Sub = always-on, restart ทุกครั้งที่ตาย (AI/CV daemon ต้องการ feed ตลอด)
-  // Main = on-demand, restart ทุกครั้งที่ตายเหมือนกัน แต่ idle-reaper (ดู readers จาก MediaMTX
-  // จริง แทนการนับ client เอง) จะเป็นคน stopStream() เมื่อไม่มีคนดูแล้ว — ดู ensureMainStreamReaper
-  const FAST_FAIL_MS = 5000;
-  const BASE_RETRY_DELAY_MS = 3000;
-  const MAX_RETRY_DELAY_MS = 60000;
-  entry.consecutiveFastFails = entry.consecutiveFastFails || 0;
-
-  const spawnWithWatch = () => {
-    const spawnedAt = Date.now();
-    const proc = spawnTranscode(streamName, entry.rtspUrl, entry.codec, entry.isSub, entry.gpuIdx);
-    entry.proc = proc;
-
-    proc.on('error', (err) => {
-      console.error(`[Transcode Error] ${streamName}:`, redactUrls(err.message));
-    });
-
-    proc.on('close', (code) => {
-      const aliveMs = Date.now() - spawnedAt;
-      console.log(`[Transcode Close] ${streamName} exited with code ${code} after ${aliveMs}ms`);
-      if (activeStreams.get(streamName) !== entry || entry.proc !== proc) return;
-      entry.proc = null;
-
-      if (aliveMs < FAST_FAIL_MS) {
-        entry.consecutiveFastFails += 1;
-      } else {
-        entry.consecutiveFastFails = 0;
-      }
-
-      const delay = Math.min(
-        BASE_RETRY_DELAY_MS * Math.pow(2, entry.consecutiveFastFails),
-        MAX_RETRY_DELAY_MS
-      );
-      console.log(`[Transcode] Restarting ${streamName} in ${delay}ms (consecutive fast fails: ${entry.consecutiveFastFails})...`);
-      setTimeout(() => {
-        if (activeStreams.get(streamName) === entry && !entry.proc) {
-          spawnWithWatch();
-        }
-      }, delay);
-    });
-  };
-
-  spawnWithWatch();
-  return entry;
-};
-
-const stopStream = (streamName) => {
-  const entry = activeStreams.get(streamName);
-  if (entry) {
-    console.log(`[Transcode] Stopping stream ${streamName}`);
-    if (entry.proc) {
-      try {
-        entry.proc.kill();
-      } catch (e) {
-        console.warn(`Failed to kill process for ${streamName}:`, e.message);
-      }
-    }
-    activeStreams.delete(streamName);
-  }
-};
-
-// Round-robin GPU assignment สำหรับ transcode ใหม่แต่ละตัว (กระจายโหลดข้าม GPU ถ้ามีมากกว่า 1)
-let transcodeGpuRoundRobin = 0;
-const nextGpuIdx = () => transcodeGpuRoundRobin++ % GPU_COUNT;
-
-// ffmpeg ที่รันอยู่ผูกกับ URL ที่ได้รับตอน spawn — ถ้า DB เปลี่ยน (แก้ IP/รหัสผ่าน/พอร์ต/
-// stream path) ตัวที่รันอยู่จะ "ไม่" รับรู้ ต้องหยุดแล้วให้ผู้เรียก start ใหม่ด้วย URL ล่าสุด
-// คืน true เมื่อไม่มีตัวรันอยู่แล้ว (พร้อม start ใหม่ได้เลย)
-const stopIfSourceChanged = (streamName, nextRtsp) => {
-  const existing = activeStreams.get(streamName);
-  if (!existing) return true;
-  if (existing.rtspUrl === nextRtsp) return false;
-  console.log(`[Transcode] ${streamName}: source URL changed in DB — restarting with the new one`);
-  stopStream(streamName);
-  return true;
-};
-
-// Sub H.265 = always-on, Node เป็นคน publish เอง — เรียกซ้ำได้ปลอดภัย (no-op ถ้ารันอยู่แล้ว
-// "ด้วย URL เดิม" — ถ้า URL เปลี่ยนจะ restart ให้ ดู stopIfSourceChanged)
-const ensureAlwaysOnSubTranscode = (subName, subRtsp) => {
-  if (!stopIfSourceChanged(subName, subRtsp)) return;
-  startStream(subName, subRtsp, 'h265', true, nextGpuIdx());
-};
-
-// Main H.265 = always-on เฉพาะกล้องที่ตั้ง always_on=1 — กัน consumer ภายนอกหลุดไปต่อ
-// NVR/กล้องตรงตอน local main ยัง on-demand ไม่พร้อม (สาเหตุ NVR concurrent-session contention ที่เจอจริง
-// วันที่ 2026-07-17) เรียกซ้ำได้ปลอดภัย (no-op ถ้ารันอยู่แล้ว) เหมือน ensureAlwaysOnSubTranscode
-const ensureAlwaysOnMainTranscode = (mainName, mainRtsp) => {
-  if (!stopIfSourceChanged(mainName, mainRtsp)) return;
-  startStream(mainName, mainRtsp, 'h265', false, nextGpuIdx());
-};
-
-// ---- Staleness watchdog (2026-07-17) ----
-// spawnWithWatch (ด้านบน) restart เฉพาะตอน ffmpeg process จบด้วย event 'close' เท่านั้น — ffmpeg ที่
-// ค้างอยู่ใน connect/read syscall แบบไม่ตาย (เช่น ค้างใน do_poll ตอนชนกับ NVR concurrent-session limit,
-// เหตุการณ์จริงที่เจอ 2026-07-17) จะไม่ถูกตรวจจับ/restart เลย เพราะ MediaMTX เองก็ยังเห็น path เป็น
-// ready=true อยู่ (ไม่รู้ว่า upstream หยุดส่งข้อมูลแล้ว) — ต้องเช็ค bytesReceived เองแทน
-const mtxPathBytesHistory = new Map(); // streamName -> { bytes, sameSince }
-const TRANSCODE_STALL_THRESHOLD_MS = Number(process.env.TRANSCODE_STALL_THRESHOLD_MS || 60000);
-
-const fetchMtxPathBytesMap = () => new Promise((resolve) => {
-  http.get({
-    hostname: '127.0.0.1',
-    port: 9997,
-    path: '/v3/paths/list',
-    headers: { 'Accept': 'application/json' }
-  }, (r) => {
-    let d = '';
-    r.on('data', (c) => { d += c; });
-    r.on('end', () => {
-      try {
-        const resObj = JSON.parse(d);
-        const paths = resObj.items || [];
-        const map = {};
-        for (const p of paths) {
-          map[p.name] = Number(p.bytesReceived) || 0;
-        }
-        resolve(map);
-      } catch {
-        resolve(null);
-      }
-    });
-  }).on('error', () => resolve(null));
-});
-
-// เช็ค Node-managed ffmpeg ทุกตัวใน activeStreams: ถ้า bytesReceived ของ path นั้นไม่ขยับต่อเนื่อง
-// เกิน threshold ทั้งที่ process ยังไม่ตาย → SIGKILL (ไม่ใช้ SIGTERM เพราะ process ที่ค้างใน syscall
-// อาจไม่ตอบสนอง) แล้วปล่อยให้ spawnWithWatch's close-handler restart เองตามปกติ — ไม่เรียก
-// stopStream()/activeStreams.delete() เอง เพื่อไม่ไปรบกวน backoff/retry logic ที่มีอยู่แล้ว
-const checkStalledTranscodes = async () => {
-  if (activeStreams.size === 0) return;
-  const bytesMap = await fetchMtxPathBytesMap();
-  if (!bytesMap) return;
-  const now = Date.now();
-  for (const [streamName, entry] of activeStreams.entries()) {
-    if (!entry.proc) continue; // ยังไม่ spawn หรือรอ backoff restart อยู่แล้ว
-    const bytes = bytesMap[streamName];
-    if (bytes === undefined) continue; // path หายจาก MediaMTX ชั่วคราว (เช่น ระหว่าง resync) — ข้ามไปก่อน
-    const hist = mtxPathBytesHistory.get(streamName);
-    if (!hist || hist.bytes !== bytes) {
-      mtxPathBytesHistory.set(streamName, { bytes, sameSince: now });
-      continue;
-    }
-    if (now - hist.sameSince >= TRANSCODE_STALL_THRESHOLD_MS) {
-      console.warn(`[Watchdog] Killing stalled transcode for ${streamName}: bytesReceived unchanged for ${Math.round((now - hist.sameSince) / 1000)}s`);
-      try { entry.proc.kill('SIGKILL'); } catch {}
-      mtxPathBytesHistory.delete(streamName); // กัน kill ซ้ำทันทีตอน process ใหม่เพิ่งเริ่ม bytes ยังต่ำ
-    }
-  }
-};
-
-
-const hashMtxConfig = (config) => {
-  try {
-    return JSON.stringify(config);
-  } catch {
-    return String(Date.now());
-  }
-};
-
-const upsertMtxPath = (pathName, config) => new Promise((resolve) => {
-  const payload = JSON.stringify(config);
-  const doAdd = () => {
-    const reqAdd = http.request({
-      hostname: '127.0.0.1',
-      port: 9997,
-      path: `/v3/config/paths/add/${encodeURIComponent(pathName)}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      res.resume();
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        mtxPathSyncState[pathName] = hashMtxConfig(config);
-      }
-      resolve(res.statusCode || 0);
-    });
-    reqAdd.on('error', (err) => {
-      console.error(`[MediaMTX Sync] add ${pathName}:`, redactUrls(err.message));
-      resolve(0);
-    });
-    reqAdd.write(payload);
-    reqAdd.end();
-  };
-
-  const reqDel = http.request({
-    hostname: '127.0.0.1',
-    port: 9997,
-    path: `/v3/config/paths/delete/${encodeURIComponent(pathName)}`,
-    method: 'DELETE',
-  }, (resDel) => {
-    resDel.resume();
-    doAdd();
-  });
-  reqDel.on('error', () => doAdd());
-  reqDel.end();
-});
-
 /**
- * MediaMTX is a dumb RTSP-in/HLS-out relay — the *only* thing that decides here is codec:
- *
- * - H.264 source → MediaMTX pulls the camera's RTSP natively (no ffmpeg at all).
- *   Sub = always-on pull (AI/CV daemons need it live regardless of viewers).
- *   Main = on-demand pull (MediaMTX's own built-in on-demand, proven reliable).
- * - H.265 source → path is a plain `publisher` target; Node owns the transcode process
- *   entirely (see spawnTranscode/startStream) and republishes H.264 onto this exact path.
- *   MediaMTX never runs a runOnDemand shell command itself — that mechanism proved
- *   unreliable (H.265 main streams wouldn't trigger off HLS reads) and is not used anymore.
- *   Sub H.265 transcode is started always-on at boot (ensureAlwaysOnSubTranscodes);
- *   Main H.265 transcode is started on-demand via POST /api/cameras/:id/stream/start
- *   and reaped by the idle-reaper after no HLS readers remain.
- */
-const buildStreamPathConfig = (pathName, rtspUrl, codec, opts = {}) => {
-  const alwaysOn = Boolean(opts.alwaysOn);
-  const sanitizedRtsp = String(rtspUrl || '').replace(/"/g, '');
-
-  if (codec === 'h265') {
-    return { source: 'publisher' };
-  }
-
-  if (alwaysOn) {
-    return { source: sanitizedRtsp, sourceOnDemand: false };
-  }
-
-  return {
-    source: sanitizedRtsp,
-    sourceOnDemand: true,
-    sourceOnDemandStartTimeout: '45s',
-    sourceOnDemandCloseAfter: '90s',
-  };
-};
-
-const deleteMtxPath = (name) => new Promise((resolve) => {
-  const req = http.request({
-    hostname: '127.0.0.1',
-    port: 9997,
-    path: `/v3/config/paths/delete/${name}`,
-    method: 'DELETE'
-  }, (res) => {
-    res.resume();
-    resolve();
-  });
-  req.on('error', (err) => {
-    console.error(`[MediaMTX Sync] Error deleting path ${name}:`, err.message);
-    resolve();
-  });
-  req.end();
-});
-
-const syncCamerasToMediaMtxOnly = async (reason = '') => {
-  if (mtxSyncInFlight) return;
-  mtxSyncInFlight = true;
-  mtxSyncStartedAt = Date.now();
-
-  db.all("SELECT * FROM cameras", async (err, rows) => {
-    if (err || !rows) {
-      mtxSyncInFlight = false;
-      mtxSyncStartedAt = 0;
-      return;
-    }
-
-    try {
-      // 1. ดึงรายการ path ปัจจุบันจาก MediaMTX API
-      const mtxList = await new Promise((resolve, reject) => {
-        const req = http.get({
-          hostname: '127.0.0.1',
-          port: 9997,
-          path: '/v3/config/paths/list',
-          headers: { 'Accept': 'application/json' }
-        }, (r) => {
-          let d = '';
-          r.on('data', (c) => { d += c; });
-          r.on('end', () => {
-            try {
-              if (r.statusCode && (r.statusCode < 200 || r.statusCode >= 300)) {
-                reject(new Error(`HTTP status ${r.statusCode}`));
-                return;
-              }
-              resolve(JSON.parse(d));
-            } catch (e) {
-              reject(e);
-            }
-          });
-        });
-        req.on('error', reject);
-        req.end();
-      });
-
-      const currentPaths = mtxList.items || [];
-      const currentPathMap = new Map(currentPaths.map(p => [p.name, p]));
-      const validPaths = new Set();
-      let subAlwaysOnCount = 0;
-      let mainOnDemandCount = 0;
-      let changedCount = 0;
-
-      await detectNvenc();
-
-      for (const c of rows) {
-        if (!c.rtsp) continue;
-        const sn = c.id.toLowerCase().replace(/\s+/g, '_');
-        const mainName = sn;
-        const subName = `${sn}_sub`;
-        const mainRtsp = c.rtsp.replace(/"/g, '');
-        const subRtsp = resolveCameraSubRtsp(c);
-
-        validPaths.add(mainName);
-        validPaths.add(subName);
-
-        // ใช้ cache เท่านั้นตอน sync — ห้าม ffprobe ทั้งฟาร์ม (ค้าง/stampede)
-        const mainCodec = codecCache[mainRtsp] || codecCache[c.rtsp] || 'h265';
-        const subCodec = codecCache[subRtsp] || 'h264';
-
-        // กล้องที่ตั้ง always_on=1 ต้องเปิด main ค้างด้วย (ไม่ใช่แค่ sub) — ดู
-        // ensureAlwaysOnMainTranscode ด้านบนสำหรับเหตุผล (NVR session contention ที่เจอจริง)
-        const mainAlwaysOn = Boolean(c.always_on);
-        if (mainAlwaysOn) alwaysOnMainStreamNames.add(mainName);
-        else alwaysOnMainStreamNames.delete(mainName);
-
-        const mainConfig = buildStreamPathConfig(mainName, mainRtsp, mainCodec, { alwaysOn: mainAlwaysOn });
-        const subConfig = buildStreamPathConfig(subName, subRtsp, subCodec, { alwaysOn: true });
-
-        const mainHash = hashMtxConfig(mainConfig);
-        if (!currentPathMap.has(mainName) || mtxPathSyncState[mainName] !== mainHash) {
-          console.log(`[MediaMTX Sync] ${currentPathMap.has(mainName) ? 'Updating' : 'Adding'} main (${mainCodec === 'h265' ? 'Node-managed' : 'native'} ${mainAlwaysOn ? 'always-on' : 'on-demand'}): ${mainName}`);
-          await upsertMtxPath(mainName, mainConfig);
-          changedCount += 1;
-        }
-        mainOnDemandCount += 1;
-
-        const subHash = hashMtxConfig(subConfig);
-        if (!currentPathMap.has(subName) || mtxPathSyncState[subName] !== subHash) {
-          console.log(`[MediaMTX Sync] ${currentPathMap.has(subName) ? 'Updating' : 'Adding'} sub (${subCodec === 'h265' ? 'Node-managed always-on' : 'native always-on pull'}): ${subName}`);
-          await upsertMtxPath(subName, subConfig);
-          changedCount += 1;
-          // กัน RTSP connect พร้อมกันหลายสิบช่อง
-          await new Promise((r) => setTimeout(r, 120));
-        }
-        subAlwaysOnCount += 1;
-
-        // H.265 sub ต้อง Node เป็นคน publish เอง (always-on) — MediaMTX แค่รอรับที่ path นี้
-        if (subCodec === 'h265') {
-          ensureAlwaysOnSubTranscode(subName, subRtsp);
-        } else {
-          // เคสที่ URL เปลี่ยนแล้ว codec ใหม่ยังไม่อยู่ใน cache → subCodec ตกมาเป็น h264 ทำให้
-          // ไม่เข้า ensureAlwaysOnSubTranscode ข้างบน ตัว transcode เก่า (URL เก่า) จะค้างอยู่
-          stopIfSourceChanged(subName, subRtsp);
-        }
-        // H.265 main ของกล้อง always_on=1 ก็ต้องเปิดค้างเหมือนกัน (ไม่รอ viewer)
-        if (mainCodec === 'h265' && mainAlwaysOn) {
-          ensureAlwaysOnMainTranscode(mainName, mainRtsp);
-        } else {
-          // main แบบ on-demand (สตาร์ทตอนมีคนกดดู) ไม่ได้ผ่าน ensureAlwaysOnMainTranscode
-          // เลยต้องเช็ค URL ให้ด้วยตรงนี้ ไม่งั้นคนที่เปิดดูค้างไว้จะได้ภาพจาก URL เก่าต่อไป
-          // หยุดเฉยๆ พอ — รอบถัดไปที่มีคนกดดูจะ start ใหม่ด้วย URL ล่าสุดเอง
-          stopIfSourceChanged(mainName, mainRtsp);
-        }
-      }
-
-      // 3. ลบ path ที่ไม่มีใน DB แล้ว
-      for (const p of currentPaths) {
-        if (p.name === 'all_others') continue;
-        if (!validPaths.has(p.name)) {
-          console.log(`[MediaMTX Sync] Deleting obsolete path: ${p.name}`);
-          await deleteMtxPath(p.name);
-          delete mtxPathSyncState[p.name];
-          stopStream(p.name); // เผื่อเป็น Node-managed H.265 transcode ของกล้องที่ถูกลบ
-        }
-      }
-
-      console.log(
-        `[MediaMTX Sync] complete — cameras=${rows.length} paths=${validPaths.size} `
-        + `sub always-on=${subAlwaysOnCount} main on-demand=${mainOnDemandCount} changed=${changedCount}`
-      );
-    } catch (e) {
-      console.error(`[MediaMTX Sync] Failed to sync paths:`, redactUrls(e.message));
-    } finally {
-      mtxSyncInFlight = false;
-      mtxSyncStartedAt = 0;
-    }
-  });
-};
-
-/**
- * ซิงก์กล้องเข้า streaming core ที่ใช้งานอยู่จริง
- *
- * ทุกจุดที่กล้องเปลี่ยน (เพิ่ม/แก้/ลบ/เปิดปิด AI/resync ด้วยมือ) ต้องเรียกตัวนี้
- * ไม่ใช่เรียก implementation ของ core ใดโดยตรง — ตอนสลับจาก MediaMTX ไป go2rtc
- * เมื่อ 2026-08-20 จุดเรียกที่ยังชี้ตรงไปที่ MediaMTX ทำให้การเพิ่มกล้องไม่เคยไปถึง
- * go2rtc เลย และไม่มี error ที่ไหน กล้องแค่ "ไม่มีภาพ" จนกว่าจะรีสตาร์ต backend
+ * ซิงก์กล้องเข้า streaming core (go2rtc)
  */
 const syncCamerasToStreamCore = (reason = '') => {
   // ทุกเส้นทางที่เพิ่มกล้องผ่านตรงนี้ จึงเป็นที่เดียวที่ออก global ID ให้กล้องใหม่ได้ครบทุกตัว
   identity.assignMissing()
     .then((count) => { if (count > 0) edgeLink?.catalogSoon?.(); })
     .catch((err) => console.warn(`[Identity] ออก global ID ไม่สำเร็จ: ${err.message}`));
-  if (STREAM_CORE === 'go2rtc') {
-    return syncCamerasToGo2rtc(db, resolveCameraSubRtsp).then((result) => {
-      // catalog รอบก่อน sync อาจยังไม่เห็น sub stream ของกล้องใหม่ ส่งซ้ำเฉพาะเมื่อ core เปลี่ยนจริง
-      if (result?.ok && result.added + result.updated + result.removed > 0) edgeLink?.catalogSoon?.();
-      return result;
-    }).catch((err) =>
-      console.warn(`[go2rtc Sync] ล้มเหลว (${reason}): ${redactUrls(err.message)}`),
-    );
-  }
-  return syncCamerasToMediaMtxOnly(reason);
+  return syncCamerasToGo2rtc(db, resolveCameraSubRtsp).then((result) => {
+    // catalog รอบก่อน sync อาจยังไม่เห็น sub stream ของกล้องใหม่ ส่งซ้ำเฉพาะเมื่อ core เปลี่ยนจริง
+    if (result?.ok && result.added + result.updated + result.removed > 0) edgeLink?.catalogSoon?.();
+    return result;
+  }).catch((err) =>
+    console.warn(`[go2rtc Sync] ล้มเหลว (${reason}): ${redactUrls(err.message)}`),
+  );
 };
 
-// เส้นทางเดียวที่ frontend เรียกก่อนเล่น live เสมอ (main หรือ sub) — ถ้ากล้องเป็น H.264
-// ก็ไม่ต้องทำอะไร (MediaMTX จัดการ native pull เองอยู่แล้ว) ถ้าเป็น H.265 จะ start (หรือ
-// reuse ถ้ามีอยู่แล้ว) Node-managed ffmpeg transcode ตัวเดียวที่ republish กลับเข้า MediaMTX
-// ที่ path ชื่อเดียวกับที่ frontend จะเล่นผ่าน mediaHlsUrl พอดี
-// เฉพาะ type=main: รอ (bounded, ดู waitForMtxPathReady) ให้ path พร้อมเล่นจริงก่อนตอบกลับ —
-// กัน frontend ยิง HLS request แรกไปชนช่วงที่ยังไม่มีอะไร publish (สาเหตุ error แดงที่ขึ้นก่อนเสมอ)
-// ไม่แตะ sub (always-on) เลย — ตอบกลับทันทีเหมือนเดิมทุกกรณี
+// เส้นทางเดียวที่ frontend เรียกก่อนเล่น live เสมอ (main หรือ sub)
 app.post('/api/cameras/:id/stream/start', checkAuth, async (req, res) => {
   try {
     const type = req.query.type === 'main' ? 'main' : 'sub';
@@ -5262,150 +4640,24 @@ app.post('/api/cameras/:id/stream/start', checkAuth, async (req, res) => {
 
     const sn = String(req.params.id).toLowerCase().replace(/\s+/g, '_');
 
-    /*
-      go2rtc: ออก token อย่างเดียว (หน้า Live ของเว็บ — src/components/live/LivePlayer.jsx)
-
-      go2rtc เปิดต้นทางเองเมื่อมีผู้เล่นต่อเข้ามา ไม่ต้องตรวจ codec หรือเริ่ม ffmpeg ให้ — ท่อนข้างล่าง
-      (detectCameraCodec + startStream) เป็นของยุค MediaMTX ถ้าปล่อยให้วิ่ง จะ ffprobe กล้องทุกครั้ง
-      ที่เปิดภาพ และกล้อง H.265 จะได้ ffmpeg อีกตัวที่ publish ไปหาพอร์ตที่ไม่มีใครฟัง
-      กล้องที่ไม่มี substream ไม่มีสตรีม `_sub` ใน go2rtc (go2rtc-sync.js) — ขอ sub จึงได้ main แทน
-    */
-    if (STREAM_CORE === 'go2rtc') {
-      let streamName = type === 'main' ? sn : `${sn}_sub`;
-      if (type === 'sub') {
-        try {
-          const live = await streamCoreClient.listStreams();
-          if (!live.has(streamName) && live.has(sn)) streamName = sn;
-        } catch { /* core ไม่ตอบ — ใช้ชื่อ sub ไปก่อน ผู้เล่นจะ retry เอง */ }
-      }
-      const token = streamToken.sign({
-        streamName,
-        clientId: `user:${req.user?.username || ''}`,
-        ttlMs: streamToken.HLS_TTL_MS,
-      });
-      return res.json({ success: true, streamName, streamToken: token, type: streamName === sn ? 'main' : 'sub' });
-    }
-
-    const streamName = type === 'main' ? sn : `${sn}_sub`;
-    const rtspUrl = (type === 'main' ? camera.rtsp : resolveCameraSubRtsp(camera)) || '';
-    const sanitizedRtsp = rtspUrl.replace(/"/g, '');
-    if (!sanitizedRtsp) return res.status(400).json({ error: 'No RTSP URL for camera' });
-
-    let codec = codecCache[sanitizedRtsp];
-    if (!codec) {
-      codec = await detectCameraCodec(sanitizedRtsp);
-      codecCache[sanitizedRtsp] = codec;
-      saveCodecCache();
-    }
-
-    if (codec === 'h265') {
-      let entry = activeStreams.get(streamName);
-      if (!entry) {
-        entry = startStream(streamName, sanitizedRtsp, codec, type === 'sub', nextGpuIdx());
-      }
-      if (type === 'main') markMainStreamRequested(streamName);
-    }
-    // H.264: ไม่ต้องทำอะไร — MediaMTX native pull จัดการอยู่แล้ว, path ชื่อเดียวกันพอดี
-
-    let ready;
-    if (type === 'main' && STREAM_CORE !== 'go2rtc') {
-      // รอให้ MediaMTX report ready จริงก่อนตอบกลับ (bounded) — ปิดช่องที่ frontend
-      // ยิง HLS request แรกไปชนตอนยังไม่มีอะไร publish จนขึ้น error แดงเสมอ ถ้ารอครบ
-      // เวลาแล้วยังไม่ ready ก็ตอบ success ไปเหมือนเดิม (retry logic ฝั่ง client เป็น fallback)
-      ready = await waitForMtxPathReady(streamName);
-    }
-    /*
-      ภายใต้ go2rtc ข้ามการรอนี้ไปเลย
-
-      waitForMtxPathReady วนถาม 127.0.0.1:9997 ซึ่งเป็น API ของ MediaMTX ที่ถอดออกไปแล้ว —
-      ตรวจบน VM แล้วไม่มีอะไรฟังพอร์ตนั้น ทุกรอบจึง ECONNREFUSED แล้ววนจนครบ 8 วินาที
-      (MAIN_STREAM_READY_MAX_WAIT_MS) แล้วคืน false เสมอ ผลคือทุกครั้งที่เปิด main stream
-      ผู้ใช้รอ 8 วินาทีเปล่า ๆ แล้วยังได้ ready:false กลับไปอีก
-
-      go2rtc จัดการ on-demand ของตัวเอง ผู้เล่นต่อเข้าไปแล้วรอเฟรมแรกได้ตรง ๆ ไม่ต้องมีใคร
-      มายืนยันความพร้อมล่วงหน้า — `ready` จึงไม่ถูกส่งกลับในโหมดนี้ ต่างจากการส่ง false
-      ซึ่งเป็นการโกหกว่า "ตรวจแล้วไม่พร้อม" ทั้งที่ไม่เคยตรวจได้เลย
-    */
-    /*
-      คืน stream token มาด้วย เพื่อให้หน้าเว็บของเราเองยังเล่นวิดีโอได้หลังปิด /stream กับ /hls
-
-      หน้าเว็บนี้ยืนยันตัวตนแบบ "คน" (username/password header) ไม่มี API key จึงขอ token จาก
-      /api/v1/cameras/:id/streams ไม่ได้ — และแท็ก <video> ก็ส่ง header ไม่ได้อยู่ดี route นี้
-      ถูกเรียกก่อนเล่นทุกครั้งอยู่แล้ว (ดู LiveStreamPlayer.jsx) จึงเป็นที่ที่ token ควรออกมา
-      โดยไม่ต้องเพิ่ม endpoint ใหม่ให้ client ต้องจำเพิ่ม
-
-      ตรวจ scope ของผู้ใช้ก่อนออก token — ผู้ใช้ที่เห็นได้แค่บางกล้องไม่ควรขอ token ของกล้อง
-      ที่ตัวเองไม่มีสิทธิ์เห็น (ก่อนหน้านี้ไม่มีการตรวจอะไรเลยเพราะ path วิดีโอเปิดสาธารณะ)
-    */
-    if (req.deviceIds instanceof Set && !req.deviceIds.has(camera.id)) {
-      return res.status(403).json({ error: 'ไม่มีสิทธิ์เข้าถึงกล้องนี้' });
+    let streamName = type === 'main' ? sn : `${sn}_sub`;
+    if (type === 'sub') {
+      try {
+        const live = await streamCoreClient.listStreams();
+        if (!live.has(streamName) && live.has(sn)) streamName = sn;
+      } catch { /* core ไม่ตอบ — ใช้ชื่อ sub ไปก่อน ผู้เล่นจะ retry เอง */ }
     }
     const token = streamToken.sign({
       streamName,
       clientId: `user:${req.user?.username || ''}`,
       ttlMs: streamToken.HLS_TTL_MS,
     });
-
-    res.json({ success: true, streamName, codec, streamToken: token, ...(type === 'main' ? { ready } : {}) });
+    return res.json({ success: true, streamName, streamToken: token, type: streamName === sn ? 'main' : 'sub' });
   } catch (e) {
     console.error('[Stream Start] Failed:', redactUrls(e.message));
     res.status(500).json({ error: 'Failed to start stream' });
   }
 });
-
-// Idle-reaper สำหรับ main stream H.265 (on-demand): ปิด ffmpeg เองเมื่อไม่มีคนดูแล้ว โดยเช็ค
-// จาก reader count จริงของ MediaMTX (ไม่ใช้วิธีนับ client เองแบบเดิมที่ผูกกับ SRS webhook)
-const MAIN_STREAM_IDLE_MS = 45000;
-const MAIN_STREAM_REAP_INTERVAL_MS = 15000;
-const mainStreamRequestedAt = new Map(); // streamName -> last POST /stream/start timestamp
-const mainStreamIdleSince = new Map(); // streamName -> timestamp เมื่อเริ่มไม่มี reader
-const markMainStreamRequested = (streamName) => mainStreamRequestedAt.set(streamName, Date.now());
-
-const reapIdleMainStreams = async () => {
-  // ทั้งก้อนนี้เป็นของ MediaMTX (ถาม reader count ที่พอร์ต 9997) ภายใต้ go2rtc มันไม่มีอะไร
-  // ให้กวาดอยู่แล้วเพราะ activeStreams ว่างเสมอ — แต่การพึ่ง "ความบังเอิญว่า map ว่าง" แปลว่า
-  // วันที่มีใครเผลอใส่ของลง activeStreams ตัวนี้จะเริ่มยิงไปพอร์ตที่ไม่มีใครฟังทุก 15 วินาที
-  if (STREAM_CORE === 'go2rtc') return;
-  // ข้าม main stream ของกล้อง always_on=1 — ไม่มีวัน teardown แม้ไม่มี HLS reader เพราะ
-  // consumer จริงคือระบบภายนอกที่ดึงผ่าน Gateway ไม่ใช่ web viewer
-  const mainEntries = [...activeStreams.entries()].filter(([name, e]) => !e.isSub && !alwaysOnMainStreamNames.has(name));
-  if (mainEntries.length === 0) return;
-  const readyMap = await fetchMtxPathReadyMap().catch(() => null);
-  for (const [streamName] of mainEntries) {
-    let hasReader = true;
-    try {
-      const info = await new Promise((resolve, reject) => {
-        http.get({ hostname: '127.0.0.1', port: 9997, path: `/v3/paths/get/${encodeURIComponent(streamName)}` }, (r) => {
-          let d = '';
-          r.on('data', (c) => { d += c; });
-          r.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(e); } });
-        }).on('error', reject);
-      });
-      hasReader = Array.isArray(info.readers) && info.readers.length > 0;
-    } catch {
-      hasReader = true; // ไม่รู้สถานะ → ปลอดภัยไว้ก่อน ไม่ปิด
-    }
-
-    // มีคนขอ stream/start ใหม่ในช่วง idle window ก็นับว่ายัง active (กัน race ตอนเพิ่งเปิด)
-    const recentlyRequested = (Date.now() - (mainStreamRequestedAt.get(streamName) || 0)) < MAIN_STREAM_IDLE_MS;
-
-    if (hasReader || recentlyRequested) {
-      mainStreamIdleSince.delete(streamName);
-      continue;
-    }
-    if (!mainStreamIdleSince.has(streamName)) {
-      mainStreamIdleSince.set(streamName, Date.now());
-      continue;
-    }
-    if (Date.now() - mainStreamIdleSince.get(streamName) >= MAIN_STREAM_IDLE_MS) {
-      console.log(`[Idle Reaper] No readers for ${streamName} — stopping`);
-      stopStream(streamName);
-      mainStreamIdleSince.delete(streamName);
-      mainStreamRequestedAt.delete(streamName);
-    }
-  }
-};
-setInterval(() => { reapIdleMainStreams().catch((e) => console.warn('[Idle Reaper]', e.message)); }, MAIN_STREAM_REAP_INTERVAL_MS);
 
 // รันตรวจจับสถานะทันทีหลังจากเปิดระบบ
 setTimeout(updateCameraStatuses, 3000);

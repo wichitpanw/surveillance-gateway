@@ -28,7 +28,9 @@ namespace SurveillanceGateway.Client.Views;
 /// </summary>
 public partial class VideoWallView : UserControl, IDisposable
 {
-    private static readonly int[] LayoutOptions = { 1, 4, 9, 16, 25 };
+    /// <summary>ผังที่ wall ใช้อยู่ ทั้งแบบช่องเท่ากันและแบบรวมช่อง</summary>
+    private WallLayoutDefinition _layout = WallLayouts.Resolve(null, null, 9);
+    private bool _suppressLayoutBox;
 
     /// <summary>Clipboard format for a camera dragged out of the picker - carries its id.</summary>
     private const string CameraDragFormat = "SurveillanceGateway.CameraId";
@@ -51,10 +53,10 @@ public partial class VideoWallView : UserControl, IDisposable
     private IReadOnlyList<V1Camera> _allCameras = Array.Empty<V1Camera>();
     private VideoTile? _selectedTile;
     private VideoTile? _focusedTile;
-    private GridLength _pickerWidthBeforeFocus;
     private DateTime _lastPollAt = DateTime.UtcNow;
     private bool _disposed;
     private bool _suppressViewChange;
+    private bool _suppressStreamChange;
     private readonly List<ToggleButton> _segments = new();
     private readonly List<ToggleButton> _streamSegments = new();
 
@@ -84,6 +86,7 @@ public partial class VideoWallView : UserControl, IDisposable
         _client = client;
         _settings = settings;
         _libVlc = libVlc;
+        InitialiseWorkspace();
 
         // Grouped through a view rather than by building headers by hand: the ListBox's own
         // GroupStyle then draws the collapsible headers, and the grouping follows the list when
@@ -93,8 +96,10 @@ public partial class VideoWallView : UserControl, IDisposable
         CameraList.ItemsSource = view.View;
         WallStage.SizeChanged += (_, _) => UpdateWallAspect();
         BuildLayoutSegments();
-        _wallStream = _settings.WallStreamMode == "main" ? "main" : "sub";
+        _wallStream = _settings.WallStreamMode is "main" or "auto" ? _settings.WallStreamMode : "sub";
         BuildStreamSegments();
+        DiagnosticButton.Click += (_, _) => ShowDiagnostics();
+        MonitorWallButton.Click += (_, _) => MonitorWallWindow.Open(_client, _settings, _libVlc, Window.GetWindow(this));
 
         PrevPageButton.Click += async (_, _) => await GoToPageAsync(_page - 1).ConfigureAwait(false);
         NextPageButton.Click += async (_, _) => await GoToPageAsync(_page + 1).ConfigureAwait(false);
@@ -181,6 +186,7 @@ public partial class VideoWallView : UserControl, IDisposable
     /// <summary>Rebuilds the text this page builds in code (see the comment where it is attached).</summary>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
+        foreach(var button in _streamSegments) button.Content = Strings.T((string)button.Tag == "auto" ? "wall.streamAuto" : (string)button.Tag == "main" ? "wall.streamMain" : "wall.streamSub");
         CycleButton.Content = Strings.T(_cycling ? "wall.cycleStop" : "wall.cycleStart");
         var selectedStatus = StatusBox.SelectedIndex;
         StatusBox.Items.Clear();
@@ -193,6 +199,7 @@ public partial class VideoWallView : UserControl, IDisposable
         UpdateCameraSummary();
         if (_focusedTile?.Camera is { } focused) FocusCameraStateText.Text = focused.AvailabilityText;
         HintText.Text = Strings.T("wall.hint");
+        RefreshInspector();
     }
 
     /// <summary>
@@ -210,13 +217,19 @@ public partial class VideoWallView : UserControl, IDisposable
     /// The shell reads it when the map opens, so switching to the map lands on the camera the
     /// operator was already looking at rather than on the whole fleet's bounding box.
     /// </summary>
-    public V1Camera? SelectedCamera => CameraList.SelectedItem as V1Camera;
+    public V1Camera? SelectedCamera => _focusedTile?.Camera ?? _selectedTile?.Camera ?? CameraList.SelectedItem as V1Camera;
 
-    public async Task InitialiseAsync()
+    private Task? _initialiseTask;
+
+    // ใช้ initialization เดียวกันเมื่อ shell และการกลับจาก Playback ขอพร้อมกัน
+    public Task InitialiseAsync() => _initialiseTask ??= InitialiseCoreAsync();
+
+    private async Task InitialiseCoreAsync()
     {
         RefreshViewList(null);
-        ApplyLayout(_settings.WallCells);
+        ApplyLayout(WallLayouts.Resolve(_settings.WallLayout, _settings.WallLayouts, _settings.WallCells));
         await ReloadCamerasAsync().ConfigureAwait(true);
+        if (_disposed) return;
 
         /*
           The wall opens empty, on purpose.
@@ -299,6 +312,7 @@ public partial class VideoWallView : UserControl, IDisposable
         UpdateCameraSummary();
         UpdateVisibleGroupSummaries(CameraList);
         if (_focusedTile?.Camera?.Id == camera.Id) FocusCameraStateText.Text = camera.AvailabilityText;
+        if (_inspectorCamera?.Id == camera.Id) InspectorState.Text = camera.AvailabilityText;
         if (StatusBox.SelectedIndex > 0) ApplyFilter();
     }
 
@@ -474,11 +488,19 @@ public partial class VideoWallView : UserControl, IDisposable
         GroupBox.SelectedIndex = index >= 0 ? index : 0;
     }
 
-    private void ApplyLayout(int cells)
+    /// <summary>
+    /// เปลี่ยนผังของ wall: สร้าง/รื้อช่องให้ครบจำนวน แล้ววางช่องตามตำแหน่งและ span ของผัง
+    /// ช่องที่ i ยังคือ slot ที่ i ของหน้าปัจจุบันเหมือนเดิม จึงแบ่งหน้าและบันทึกวิวได้แบบเดิม
+    /// </summary>
+    private void ApplyLayout(WallLayoutDefinition layout)
     {
-        var side = (int)Math.Ceiling(Math.Sqrt(cells));
-        Wall.Rows = side;
-        Wall.Columns = side;
+        if (_focusedTile is not null) ExitFocusedCamera();
+        _layout = layout;
+        var cells = layout.CellCount;
+        Wall.RowDefinitions.Clear();
+        Wall.ColumnDefinitions.Clear();
+        for (var r = 0; r < layout.Rows; r++) Wall.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        for (var c = 0; c < layout.Columns; c++) Wall.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         UpdateWallAspect();
 
         // Cells that fall outside a smaller layout must be torn down, not merely hidden: a
@@ -498,7 +520,7 @@ public partial class VideoWallView : UserControl, IDisposable
 
         while (_tiles.Count < cells)
         {
-            var tile = new VideoTile { Margin = new Thickness(5) };
+            var tile = new VideoTile { Margin = new Thickness(1) };
             tile.Attach(_libVlc);
             tile.Selected += (s, _) => SelectTile((VideoTile)s!);
             tile.ClearRequested += (s, _) =>
@@ -507,6 +529,8 @@ public partial class VideoWallView : UserControl, IDisposable
                 var target = (VideoTile)s!;
                 target.Clear();
                 SetAssignment(IndexOfCell(target), string.Empty, _wallStream);
+                DetachView();
+                RefreshPtzTarget();
             };
             tile.AssignRequested += async (s, _) =>
             {
@@ -560,10 +584,12 @@ public partial class VideoWallView : UserControl, IDisposable
         }
 
         _selectedTile ??= _tiles.FirstOrDefault();
+        PlaceTiles();
         UpdateSelectionMarker();
 
-        SyncLayoutSegments(cells);
+        SyncLayoutSegments();
         _settings.WallCells = cells;
+        _settings.WallLayout = layout.Id;
         _settings.Save();
 
         // A smaller grid does not mean fewer cameras any more - it means more pages. Clamping
@@ -573,64 +599,150 @@ public partial class VideoWallView : UserControl, IDisposable
         UpdatePageBar();
     }
 
+    /// <summary>วางแต่ละช่องลงตำแหน่งและ span ตามผังปัจจุบัน (ช่องที่ i = สี่เหลี่ยมที่ i ของผัง)</summary>
+    private void PlaceTiles()
+    {
+        var rects = _layout.Rects;
+        for (var i = 0; i < _tiles.Count && i < rects.Count; i++)
+        {
+            Grid.SetRow(_tiles[i], rects[i].Row);
+            Grid.SetColumn(_tiles[i], rects[i].Column);
+            Grid.SetRowSpan(_tiles[i], rects[i].RowSpan);
+            Grid.SetColumnSpan(_tiles[i], rects[i].ColumnSpan);
+        }
+    }
+
+    /// <summary>
+    /// จำนวนช่องที่ส่งให้ WallStreamPolicy: ช่องใหญ่ในผังรวมช่องที่กว้างและสูงอย่างน้อยครึ่งผัง
+    /// นับเหมือนผัง 1 ช่อง เพื่อให้โหมด Auto เลือกภาพหลักให้ช่องนั้น ช่องเล็กยังได้ภาพย่อยตามเดิม
+    /// </summary>
+    private int StreamCellsFor(VideoTile tile)
+    {
+        var index = _tiles.IndexOf(tile);
+        var rects = _layout.Rects;
+        if (index < 0 || index >= rects.Count) return _tiles.Count;
+        var rect = rects[index];
+        var merged = rect.RowSpan > 1 || rect.ColumnSpan > 1;
+        return merged && rect.RowSpan * 2 >= _layout.Rows && rect.ColumnSpan * 2 >= _layout.Columns ? 1 : _tiles.Count;
+    }
 
     /*
-      The cell-count control
+      The layout controls
 
-      Built in code rather than declared, because the option list is one array and a hand-written
-      row of five buttons is a second copy of it that drifts. Checking one clears the rest: a
-      segmented control has exactly one answer, and WPF has no built-in for that.
+      The five equal grids stay one click away as a segmented control. Merged layouts - the
+      built-in ones borrowed from the VMS clients the centre already runs, and any the operator
+      drew in the editor - sit in the dropdown beside them. Exactly one of the two shows the
+      current layout: a segment for an equal grid, the dropdown for anything else.
     */
+    private bool _syncingSegments;
+
     private void BuildLayoutSegments()
     {
-        foreach (var option in LayoutOptions)
+        foreach (var option in WallLayouts.Uniform)
         {
             var button = new ToggleButton
             {
                 Style = (Style)FindResource("SegmentButton"),
-                Content = option.ToString(),
-                Tag = option,
-                IsChecked = option == _settings.WallCells,
+                Content = option.Name,
+                Tag = option.Id,
+                IsChecked = false,
             };
 
             button.Checked += async (s, _) =>
             {
-                var cells = (int)((ToggleButton)s!).Tag;
+                if (_syncingSegments) return;
+                var id = (string)((ToggleButton)s!).Tag;
                 foreach (var other in _segments.Where(b => !ReferenceEquals(b, s)))
                 {
                     other.IsChecked = false;
                 }
 
-                if (cells == _tiles.Count)
+                if (id == _layout.Id)
                 {
                     return;
                 }
 
-                ApplyLayout(cells);
-                SetCycling(false);
-
-                // Same cameras, different number of cells - so the same arrangement, re-paged.
-                await RenderPageAsync().ConfigureAwait(true);
+                await ChangeLayoutAsync(WallLayouts.Resolve(id, null, _tiles.Count)).ConfigureAwait(true);
             };
 
             // Clicking the already-selected segment must not leave the control with no answer.
             button.Unchecked += (s, _) =>
             {
-                if (_segments.All(b => b.IsChecked != true)) ((ToggleButton)s!).IsChecked = true;
+                if (_syncingSegments) return;
+                if (_segments.All(b => b.IsChecked != true) && (string)((ToggleButton)s!).Tag == _layout.Id) ((ToggleButton)s!).IsChecked = true;
             };
 
             _segments.Add(button);
             LayoutSegments.Children.Add(button);
         }
+
+        LayoutBox.SelectionChanged += async (_, _) =>
+        {
+            if (_suppressLayoutBox || LayoutBox.SelectedItem is not WallLayoutDefinition chosen || chosen.Id == _layout.Id) return;
+            await ChangeLayoutAsync(chosen).ConfigureAwait(true);
+        };
+        LayoutEditButton.Click += async (_, _) =>
+        {
+            var editor = new WallLayoutEditorWindow(_settings, _layout) { Owner = Window.GetWindow(this) };
+            var apply = editor.ShowDialog() == true ? editor.Result : null;
+            RefreshLayoutBox();
+            if (apply is not null)
+            {
+                await ChangeLayoutAsync(apply).ConfigureAwait(true);
+            }
+            else if (!_layout.IsBuiltIn && _settings.WallLayouts.All(l => l.Id != _layout.Id))
+            {
+                // ผังที่ใช้อยู่ถูกลบในตัวแก้ผัง: ถอยไปผังช่องเท่ากันที่มีจำนวนช่องใกล้เคียง
+                await ChangeLayoutAsync(WallLayouts.Resolve(null, null, _tiles.Count)).ConfigureAwait(true);
+            }
+            else
+            {
+                var current = WallLayouts.Resolve(_layout.Id, _settings.WallLayouts, _tiles.Count);
+                if (!ReferenceEquals(current, _layout)) await ChangeLayoutAsync(current, force: true).ConfigureAwait(true);
+            }
+        };
+        RefreshLayoutBox();
     }
 
-    /// <summary>Moves the segmented control to match the wall, without re-triggering a layout.</summary>
-    private void SyncLayoutSegments(int cells)
+    /// <summary>เปลี่ยนผังจากตัวควบคุม: กล้องชุดเดิมแบ่งหน้าใหม่ตามจำนวนช่องของผังใหม่</summary>
+    private async Task ChangeLayoutAsync(WallLayoutDefinition layout, bool force = false)
     {
+        if (!force && layout.Id == _layout.Id) return;
+        ApplyLayout(layout);
+        SetCycling(false);
+
+        // Same cameras, different cells - so the same arrangement, re-paged.
+        await RenderPageAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>เติม dropdown ด้วยผังรวมช่องสำเร็จรูปและผังของผู้ใช้</summary>
+    private void RefreshLayoutBox()
+    {
+        _suppressLayoutBox = true;
+        LayoutBox.Items.Clear();
+        LayoutBox.Items.Add(new ComboBoxItem { Content = Strings.T("layout.more"), IsEnabled = false });
+        foreach (var layout in WallLayouts.Mixed.Concat(_settings.WallLayouts))
+        {
+            LayoutBox.Items.Add(layout);
+        }
+        _suppressLayoutBox = false;
+        SyncLayoutSegments();
+    }
+
+    /// <summary>Moves the layout controls to match the wall, without re-triggering a layout.</summary>
+    private void SyncLayoutSegments()
+    {
+        _syncingSegments = true;
         foreach (var button in _segments)
         {
-            button.IsChecked = (int)button.Tag == cells;
+            button.IsChecked = (string)button.Tag == _layout.Id;
         }
+        _syncingSegments = false;
+
+        _suppressLayoutBox = true;
+        var listed = LayoutBox.Items.OfType<WallLayoutDefinition>().FirstOrDefault(l => l.Id == _layout.Id);
+        LayoutBox.SelectedItem = listed ?? (LayoutBox.Items.Count > 0 ? LayoutBox.Items[0] : null);
+        _suppressLayoutBox = false;
     }
 
     /// <summary>Names the loaded view beside the layout control, or hides the chip when none is.</summary>
@@ -644,41 +756,21 @@ public partial class VideoWallView : UserControl, IDisposable
     {
         SetCycling(false);
         _selectedTile = tile;
+        RefreshInspector();
         UpdateSelectionMarker();
+        RefreshPtzTarget();
     }
 
-    /// <summary>จัดผังให้อยู่กึ่งกลางและให้แต่ละช่องใกล้สัดส่วน 16:9 โดยไม่ยืดภาพจากกล้อง</summary>
+    /// <summary>
+    /// ผังเต็มพื้นที่ใต้แถบเครื่องมือเสมอ แบบ VMS ทั่วไป: ช่องตามรูปพื้นที่ และ player แต่ละช่อง
+    /// รักษาสัดส่วนภาพของกล้องเองภายในช่อง จึงไม่มีแถบว่างรอบผังและไม่ยืดภาพ
+    /// </summary>
     private void UpdateWallAspect()
     {
-        if (_focusedTile is not null)
-        {
-            WallPanel.Width = double.NaN;
-            WallPanel.Height = double.NaN;
-            WallPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
-            WallPanel.VerticalAlignment = VerticalAlignment.Stretch;
-            Wall.Width = double.NaN;
-            Wall.Height = double.NaN;
-            Wall.HorizontalAlignment = HorizontalAlignment.Stretch;
-            Wall.VerticalAlignment = VerticalAlignment.Stretch;
-            return;
-        }
-
-        const double chrome = 16; // ขอบ 1 px และ padding 7 px ต่อด้าน
-        var availableWidth = Math.Max(0, WallStage.ActualWidth - chrome);
-        var availableHeight = Math.Max(0, WallStage.ActualHeight - chrome);
-        if (availableWidth <= 0 || availableHeight <= 0 || Wall.Rows <= 0 || Wall.Columns <= 0) return;
-
-        var ratio = (16d / 9d) * Wall.Columns / Wall.Rows;
-        var width = Math.Min(availableWidth, availableHeight * ratio);
-        var height = Math.Min(availableHeight, availableWidth / ratio);
-        WallPanel.HorizontalAlignment = HorizontalAlignment.Center;
-        WallPanel.VerticalAlignment = VerticalAlignment.Center;
-        WallPanel.Width = width + chrome;
-        WallPanel.Height = height + chrome;
-        Wall.Width = width;
-        Wall.Height = height;
-        Wall.HorizontalAlignment = HorizontalAlignment.Center;
-        Wall.VerticalAlignment = VerticalAlignment.Center;
+        Wall.Width = double.NaN;
+        Wall.Height = double.NaN;
+        Wall.HorizontalAlignment = HorizontalAlignment.Stretch;
+        Wall.VerticalAlignment = VerticalAlignment.Stretch;
     }
 
     /// <summary>ขยายช่องภาพในหน้า Wall เดิม โดยพักช่องอื่นไว้และเก็บผังเดิมสำหรับคืนกลับ</summary>
@@ -695,55 +787,38 @@ public partial class VideoWallView : UserControl, IDisposable
         _focusedTile = tile;
         FocusCameraNameText.Text = tile.Camera.DisplayName;
         FocusCameraStateText.Text = tile.Camera.AvailabilityText;
-        _pickerWidthBeforeFocus = PickerColumn.Width;
         SelectTile(tile);
         foreach (var other in _tiles.Where(other => !ReferenceEquals(other, tile)))
         {
             Wall.Children.Remove(other);
         }
-        Wall.Rows = 1;
-        Wall.Columns = 1;
+        Grid.SetRow(tile, 0);
+        Grid.SetColumn(tile, 0);
+        Grid.SetRowSpan(tile, Math.Max(1, _layout.Rows));
+        Grid.SetColumnSpan(tile, Math.Max(1, _layout.Columns));
         UpdateWallAspect();
-        PickerPanel.Visibility = Visibility.Collapsed;
-        PickerSplitter.Visibility = Visibility.Collapsed;
-        PickerColumn.MinWidth = 0;
-        PickerColumn.Width = new GridLength(0);
-        PickerDividerColumn.Width = new GridLength(0);
         FocusToolbar.Visibility = Visibility.Visible;
         PageBar.Visibility = Visibility.Collapsed;
-        HintText.Visibility = Visibility.Collapsed;
-        WallArea.Margin = new Thickness(0);
-        WallPanel.Padding = new Thickness(0);
-        await LoadFocusPtzAsync(tile.Camera.Id).ConfigureAwait(true);
+        if (IsAutoTile(tile)) await PlayAsync(tile, tile.Camera, "auto", () => _focusedTile != tile).ConfigureAwait(true);
+        RefreshPtzTarget(expand: true);
     }
 
     /// <summary>คืนผังและตัวควบคุมเดิม; คืน true เมื่อมีภาพที่ขยายอยู่ให้ปิดด้วย Esc</summary>
     public bool ExitFocusedCamera()
     {
         if (_focusedTile is null) return false;
-        if (_ptzMoving) StopFocusMove();
-        _focusedPtzCameraId = null;
-        FocusPtzPanel.Visibility = Visibility.Collapsed;
-        FocusPtzColumn.Width = new GridLength(0);
+        var restoreAuto = IsAutoTile(_focusedTile);
         _focusedTile = null;
         for (var i = 0; i < _tiles.Count; i++)
         {
             if (!Wall.Children.Contains(_tiles[i])) Wall.Children.Insert(i, _tiles[i]);
         }
-        var side = (int)Math.Ceiling(Math.Sqrt(_tiles.Count));
-        Wall.Rows = side;
-        Wall.Columns = side;
+        PlaceTiles();
         UpdateWallAspect();
-        PickerColumn.Width = _pickerWidthBeforeFocus;
-        PickerColumn.MinWidth = 240;
-        PickerDividerColumn.Width = new GridLength(6);
-        PickerPanel.Visibility = Visibility.Visible;
-        PickerSplitter.Visibility = Visibility.Visible;
         FocusToolbar.Visibility = Visibility.Collapsed;
-        HintText.Visibility = Visibility.Visible;
-        WallArea.Margin = new Thickness(12);
-        WallPanel.Padding = new Thickness(7);
         UpdatePageBar();
+        RefreshPtzTarget();
+        if (restoreAuto) _ = RenderPageAsync();
         return true;
     }
 
@@ -775,22 +850,56 @@ public partial class VideoWallView : UserControl, IDisposable
         };
     }
 
-    /// <summary>แสดง PTZ เมื่อกล้องรองรับและ API key มีสิทธิ์สั่งเท่านั้น</summary>
-    private async Task LoadFocusPtzAsync(string cameraId)
+    /// <summary>กล้องที่แผง PTZ สั่งอยู่: ช่องที่ขยายก่อน ไม่มีก็ช่องที่เลือก</summary>
+    private V1Camera? PtzTargetCamera => (_focusedTile ?? _selectedTile)?.Camera;
+
+    /// <summary>
+    /// ผูกแผง PTZ ในแถบซ้ายกับช่องที่เลือก เรียกทุกครั้งที่ช่องที่เลือกหรือกล้องในช่องเปลี่ยน
+    /// เปลี่ยนกล้องระหว่างกดค้างต้องสั่ง stop กล้องเดิมก่อน ไม่งั้นกล้องเดิมหมุนค้าง
+    /// </summary>
+    private void RefreshPtzTarget(bool expand = false)
     {
-        _focusedPtzCameraId = cameraId;
+        var camera = PtzTargetCamera;
+        if (camera?.Id == _focusedPtzCameraId && camera is not null)
+        {
+            if (expand && PtzControls.Visibility == Visibility.Visible) PtzHeader.IsChecked = true;
+            return;
+        }
+
+        if (_ptzMoving) StopFocusMove();
+        _focusedPtzCameraId = null;
+        PtzControls.Visibility = Visibility.Collapsed;
+        PtzEmptyText.Visibility = Visibility.Visible;
+        PtzEmptyText.Text = Strings.T(camera is null ? "ptz.selectCell" : "ptz.checking");
+        PtzTargetText.Text = camera?.DisplayName ?? string.Empty;
+        FocusPtzStatus.Text = string.Empty;
+        if (camera is not null) _ = LoadFocusPtzAsync(camera.Id, expand);
+    }
+
+    /// <summary>แสดง PTZ เมื่อกล้องรองรับและ API key มีสิทธิ์สั่งเท่านั้น</summary>
+    private async Task LoadFocusPtzAsync(string cameraId, bool expand)
+    {
         V1Ptz? ptz;
         try { ptz = await _client.GetPtzAsync(cameraId).ConfigureAwait(true); }
-        catch { return; }
-        if (_focusedTile?.Camera?.Id != cameraId || ptz is null || !ptz.Supported || !ptz.Allowed) return;
-        FocusPad.Visibility = ptz.PanTilt ? Visibility.Visible : Visibility.Collapsed;
+        catch { ptz = null; }
+        if (PtzTargetCamera?.Id != cameraId || _focusedPtzCameraId is not null) return;
+        if (ptz is null || !ptz.Supported || !ptz.Allowed)
+        {
+            PtzEmptyText.Text = Strings.T(ptz is { Supported: true, Allowed: false } ? "ptz.notAllowed" : "ptz.notSupported");
+            return;
+        }
+
+        _focusedPtzCameraId = cameraId;
+        PadRing.Visibility = ptz.PanTilt ? Visibility.Visible : Visibility.Collapsed;
+        FocusSpeed.IsEnabled = ptz.PanTilt || ptz.Zoom;
         FocusZoom.Visibility = ptz.Zoom ? Visibility.Visible : Visibility.Collapsed;
         FocusPresetSection.Visibility = ptz.PresetError is null && ptz.Presets.Count > 0
             ? Visibility.Visible : Visibility.Collapsed;
         FocusPresetBox.ItemsSource = ptz.Presets;
         FocusPresetBox.SelectedIndex = ptz.Presets.Count > 0 ? 0 : -1;
-        FocusPtzColumn.Width = new GridLength(215);
-        FocusPtzPanel.Visibility = Visibility.Visible;
+        PtzEmptyText.Visibility = Visibility.Collapsed;
+        PtzControls.Visibility = Visibility.Visible;
+        if (expand) PtzHeader.IsChecked = true;
     }
 
     private void StartFocusMove(string tag)
@@ -866,6 +975,7 @@ public partial class VideoWallView : UserControl, IDisposable
         var streamType = tile.Camera is null ? _wallStream : tile.StreamType;
         await PlayAsync(tile, camera, streamType).ConfigureAwait(true);
         SetAssignment(IndexOfCell(tile), camera.Id, streamType);
+        DetachView();
     }
 
     /// <summary>Which slot of the arrangement a cell is showing, given the page it is on.</summary>
@@ -1004,18 +1114,19 @@ public partial class VideoWallView : UserControl, IDisposable
     */
     private void BuildStreamSegments()
     {
-        foreach (var option in new[] { "main", "sub" })
+        foreach (var option in new[] { "auto", "main", "sub" })
         {
             var button = new ToggleButton
             {
                 Style = (Style)FindResource("SegmentButton"),
-                Content = Strings.T(option == "main" ? "wall.streamMain" : "wall.streamSub"),
+                Content = Strings.T(option == "auto" ? "wall.streamAuto" : option == "main" ? "wall.streamMain" : "wall.streamSub"),
                 Tag = option,
                 IsChecked = option == _wallStream,
             };
 
             button.Checked += async (sender, _) =>
             {
+                if(_suppressStreamChange) return;
                 var chosen = (string)((ToggleButton)sender!).Tag;
                 foreach (var other in _streamSegments.Where(b => !ReferenceEquals(b, sender)))
                 {
@@ -1027,7 +1138,7 @@ public partial class VideoWallView : UserControl, IDisposable
 
             button.Unchecked += (sender, _) =>
             {
-                if (_streamSegments.All(b => b.IsChecked != true))
+                if (!_suppressStreamChange && _streamSegments.All(b => b.IsChecked != true))
                 {
                     ((ToggleButton)sender!).IsChecked = true;
                 }
@@ -1048,7 +1159,7 @@ public partial class VideoWallView : UserControl, IDisposable
     private async Task SetWallStreamAsync(string streamType)
     {
         SetCycling(false);
-        _wallStream = streamType == "main" ? "main" : "sub";
+        _wallStream = streamType is "main" or "auto" ? streamType : "sub";
         _settings.WallStreamMode = _wallStream;
 
         for (var i = 0; i < _assignmentStreams.Count; i++)
@@ -1058,7 +1169,7 @@ public partial class VideoWallView : UserControl, IDisposable
 
         await RenderPageAsync().ConfigureAwait(true);
 
-        var fellBack = _tiles.Count(t => t.Camera is not null && t.StreamType != _wallStream);
+        var fellBack = _tiles.Count(t => t.Camera is not null && t.StreamType != WallStreamPolicy.Resolve(_wallStream, ReferenceEquals(t, _focusedTile), StreamCellsFor(t)));
         HintText.Text = fellBack > 0
             ? Strings.T("wall.streamSwitched", _wallStream) + " · " + Strings.T("wall.noSubFallback", fellBack)
             : Strings.T("wall.streamSwitched", _wallStream);
@@ -1078,6 +1189,7 @@ public partial class VideoWallView : UserControl, IDisposable
         string streamType = "sub",
         Func<bool>? isStale = null)
     {
+        streamType = WallStreamPolicy.Resolve(streamType, ReferenceEquals(tile, _focusedTile), StreamCellsFor(tile));
         var requested = streamType;
         var effective = streamType;
 
@@ -1104,6 +1216,7 @@ public partial class VideoWallView : UserControl, IDisposable
             ct => ResolveUrlAsync(tile, camera, effective, preferPassthrough: true, ct),
             ct => ResolveUrlAsync(tile, camera, effective, preferPassthrough: false, ct),
             effective == requested ? null : Strings.T("wall.chipFellBack", effective));
+        if (ReferenceEquals(tile, _focusedTile ?? _selectedTile)) RefreshPtzTarget();
     }
 
     /*
@@ -1188,6 +1301,7 @@ public partial class VideoWallView : UserControl, IDisposable
         // Swap, never insert: the wall is a set of positions someone arranged deliberately, and
         // shifting everything after the drop point rearranges cells nobody touched.
         SetAssignment(Math.Max(from, to), string.Empty, _wallStream);
+        DetachView();
         (_assignments[from], _assignments[to]) = (_assignments[to], _assignments[from]);
         (_assignmentStreams[from], _assignmentStreams[to]) = (_assignmentStreams[to], _assignmentStreams[from]);
 
@@ -1224,7 +1338,7 @@ public partial class VideoWallView : UserControl, IDisposable
 
     /// <summary>Reads a per-slot stream type out of a saved array, defaulting to the wall's.</summary>
     private string StreamAt(string[] streams, int index) =>
-        index < streams.Length && (streams[index] == "main" || streams[index] == "sub")
+        index < streams.Length && (streams[index] == "main" || streams[index] == "sub" || streams[index] == "auto")
             ? streams[index]
             : _wallStream;
 
@@ -1273,7 +1387,7 @@ public partial class VideoWallView : UserControl, IDisposable
 
         // A wall built from a group is not one of the saved views, and saying it is would make the
         // chip lie the moment anything is changed.
-        ShowViewChip(null);
+        DetachView();
         HintText.Text = PageCount > 1
             ? Strings.T("wall.groupPaged", group, cameras.Count, PageCount)
             : Strings.T("wall.groupPlayed", group, cameras.Count);
@@ -1308,6 +1422,8 @@ public partial class VideoWallView : UserControl, IDisposable
         }
 
         UpdatePageBar();
+        DetachView();
+        RefreshPtzTarget();
     }
 
 
@@ -1322,6 +1438,21 @@ public partial class VideoWallView : UserControl, IDisposable
       Loading a view is not "the wall now looks like this until I change it": the current wall is
       still saved as the working layout, so switching to a view and back leaves nothing lost.
     */
+
+    /// <summary>
+    /// ปลดการเลือกวิวเมื่อผังไม่ตรงกับวิวที่บันทึกแล้ว (ล้างผัง แก้ หรือสลับช่อง)
+    /// ไม่งั้นวิวเดิมค้างเป็นรายการที่เลือก และการเลือกวิวเดิมซ้ำไม่ยิง SelectionChanged
+    /// จึงเปิดวิวนั้นอีกไม่ได้จนกว่าจะปิดหน้า wall
+    /// ชื่อในช่องชื่อวิวคงไว้ จึงยังบันทึกทับวิวเดิมได้
+    /// </summary>
+    private void DetachView()
+    {
+        if (ViewBox.SelectedItem is null) return;
+        _suppressViewChange = true;
+        ViewBox.SelectedItem = null;
+        _suppressViewChange = false;
+        ShowViewChip(null);
+    }
 
     /// <summary>Rebuilds the view picker. Selection is set without firing a load.</summary>
     private void RefreshViewList(string? selectId)
@@ -1350,6 +1481,8 @@ public partial class VideoWallView : UserControl, IDisposable
         var view = existing ?? new WallView();
         view.Name = name;
         view.Cells = _tiles.Count;
+        view.Layout = _layout.Id;
+        view.Mode = _wallStream;
         // The whole arrangement, every page of it - a view that saved only the visible page would
         // silently shrink a ten-page wall to nine cameras the first time it was reopened.
         view.Cameras = _assignments.ToArray();
@@ -1394,10 +1527,14 @@ public partial class VideoWallView : UserControl, IDisposable
         SetCycling(false);
 
         ViewNameBox.Text = view.Name;
+        _wallStream = view.Mode is "auto" or "main" or "sub" ? view.Mode : view.Streams.Length > 0 && view.Streams.All(s => s == "main") ? "main" : "sub";
+        _suppressStreamChange = true;
+        foreach(var button in _streamSegments) button.IsChecked = (string)button.Tag == _wallStream;
+        _suppressStreamChange = false;
 
         // The cell count comes first: ApplyLayout builds or tears down tiles, and rendering into
         // a tile that is about to be removed wastes a connection to the camera.
-        ApplyLayout(view.Cells);
+        ApplyLayout(WallLayouts.Resolve(view.Layout, _settings.WallLayouts, view.Cells));
 
         _assignments.Clear();
         _assignmentStreams.Clear();

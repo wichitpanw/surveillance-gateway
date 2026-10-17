@@ -378,7 +378,26 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
    * central แอด edge" การเพิ่ม edge คือการรับกล้องทุกตัวของมัน ภาพยังวิ่งเฉพาะตอนมีคนดู การมีแถว
    * อยู่ที่ central จึงไม่กินแบนด์วิดท์ข้ามไซต์
    */
+  const syncLocks = new Map();
+
   async function syncRows(source, node, available, fieldsFor, deletedRefs = []) {
+    while (syncLocks.has(source.id)) {
+      try { await syncLocks.get(source.id); } catch { /* ignore */ }
+    }
+    let resolveLock;
+    const lockPromise = new Promise((resolve) => { resolveLock = resolve; });
+    syncLocks.set(source.id, lockPromise);
+    try {
+      return await doSyncRows(source, node, available, fieldsFor, deletedRefs);
+    } finally {
+      if (syncLocks.get(source.id) === lockPromise) {
+        syncLocks.delete(source.id);
+      }
+      resolveLock();
+    }
+  }
+
+  async function doSyncRows(source, node, available, fieldsFor, deletedRefs = []) {
     /*
       กล้องจังหวัดนอกภาคของ Regional รับเข้าตามปกติ (ผู้ใช้ตัดสินใจ 2026-10-07 — เช่น Edge ทดสอบที่ต่อข้ามภาค)
       เดิมปฏิเสธทั้งชุด (409) ซึ่งเงียบในสาย link: กล้องทุกตัวของ edge นั้นหยุด sync โดยหน้าเว็บไม่บอก
@@ -1227,11 +1246,17 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
       const list = (await client.aiEvents(since, 200))?.events || [];
       for (const ev of list) {
         const cameraId = map.get(ev.cameraId) || cameraIdFor(source.remote_node || '000', ev.cameraId);
-        const snap = ev.hasSnapshot ? await client.aiSnapshot(ev.seq) : null;
-        // ต้นทางประกาศว่ามีภาพ แต่โหลดไม่ได้: ไม่เดิน cursor ทิ้งภาพ รอรอบถัดไป
-        if (ev.hasSnapshot && !snap) throw new EdgeUnavailable('ภาพประกอบ event ' + ev.seq + ' ยังไม่พร้อม');
-        await aiEvents.ingest(sourceId, cameraId, ev, snap);
-        // เดินเคอร์เซอร์ทีละแถวหลัง ingest สำเร็จหรือถูกข้าม — ingest โยน = หยุดตรงนี้ รอบหน้าเริ่มแถวเดิม
+        let snap = null;
+        try {
+          snap = ev.hasSnapshot ? await client.aiSnapshot(ev.seq) : null;
+          // ต้นทางประกาศว่ามีภาพ แต่โหลดไม่ได้: ไม่เดิน cursor ทิ้งภาพ รอรอบถัดไป
+          if (ev.hasSnapshot && !snap) throw new EdgeUnavailable('ภาพประกอบ event ' + ev.seq + ' ยังไม่พร้อม');
+          await aiEvents.ingest(sourceId, cameraId, ev, snap);
+        } catch (evErr) {
+          if (evErr instanceof EdgeUnavailable) throw evErr;
+          console.warn(`[Edge] ${sourceId}: ข้าม event AI ที่ผิดรูปแบบ seq ${ev?.seq} — ${evErr.message}`);
+        }
+        // เดินเคอร์เซอร์ทีละแถวหลัง ingest สำเร็จหรือถูกข้าม
         const seq = Number(ev.seq);
         if (Number.isFinite(seq) && seq > since) {
           since = seq;
@@ -1255,8 +1280,13 @@ function createEdgeSources({ db, saveLog, resyncStreamCore, cameraState, onBefor
           await pullAiEvents(sourceId);
           aiUnsupported.delete(sourceId);
         } catch (err) {
-          if (!aiUnsupported.has(sourceId)) console.warn(`[Edge] ${sourceId}: ดึง event ของ AI ไม่ได้ — ${err.message}`);
-          aiUnsupported.add(sourceId);
+          const isNotSupported = err instanceof EdgeRequestError && (err.status === 404 || err.status === 501);
+          if (isNotSupported) {
+            if (!aiUnsupported.has(sourceId)) console.warn(`[Edge] ${sourceId}: edge ไม่รองรับ AI events (HTTP ${err.status})`);
+            aiUnsupported.add(sourceId);
+          } else {
+            console.warn(`[Edge] ${sourceId}: ดึง event ของ AI ไม่ได้ — ${err.message}`);
+          }
         }
       } while (st.again);
     })().finally(() => { st.running = false; });

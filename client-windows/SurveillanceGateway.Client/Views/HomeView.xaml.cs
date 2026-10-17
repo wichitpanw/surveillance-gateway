@@ -38,12 +38,33 @@ public partial class HomeView : UserControl, IDisposable
         EventList.ItemsSource = _events;
 
         WallCard.Click += (_, _) => Open?.Invoke(this, PageKind.Wall);
+        PlaybackCard.Click += (_, _) => Open?.Invoke(this, PageKind.Playback);
         MapCard.Click += (_, _) => Open?.Invoke(this, PageKind.Map);
+        EventsCard.Click += (_, _) => Open?.Invoke(this, PageKind.Events);
         DevicesCard.Click += (_, _) => Open?.Invoke(this, PageKind.Devices);
+        DiagnosticsCard.Click += (_, _) => DiagnosticsRequested?.Invoke(this, EventArgs.Empty);
+
+        WallArt.Content = IsoArt.Wall();
+        PlaybackArt.Content = IsoArt.Playback();
+        MapArt.Content = IsoArt.Map();
+        EventsArt.Content = IsoArt.Events();
+        DevicesArt.Content = IsoArt.Devices();
+        DiagnosticsArt.Content = IsoArt.Diagnostics();
+        CardGrid.SizeChanged += (_, e) => FitColumns(e.NewSize.Width);
 
         Strings.Current.LanguageChanged += OnLanguageChanged;
         RefreshText();
     }
+
+    /// <summary>สามคอลัมน์เมื่อกว้างพอ ไม่งั้นสองคอลัมน์ เพื่อให้ภาพในการ์ดยังอ่านออกบนจอ 1366 px</summary>
+    private void FitColumns(double width)
+    {
+        var columns = width >= 720 ? 3 : 2;
+        if (CardGrid.Columns != columns) CardGrid.Columns = columns;
+    }
+
+    /// <summary>การ์ดตรวจระบบถูกกด: shell เปิดหน้าต่าง Diagnostics ของ wall</summary>
+    public event EventHandler? DiagnosticsRequested;
 
     private void OnLanguageChanged(object? sender, EventArgs e) => RefreshText();
 

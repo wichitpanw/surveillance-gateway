@@ -4,8 +4,8 @@
  * แนวทางมาจาก D:\AI cam project\camera-watch\dss.py ที่เฝ้า DSS เครื่องเดียวกันอยู่แล้ว + ทดสอบเพิ่ม:
  *   login    POST /brms/api/v1.0/accounts/authorize สองขั้น (ขั้นแรกส่งแค่ userName ได้ realm/randomKey → ขั้นสองส่ง signature)
  *            clientType ต้องเป็น "WEB" (DSS v8 ปฏิเสธ WINPC ด้วย 110001) · token อายุ ~30 วิ → keepalive ทุก 20 วิ
- *   กล้อง    POST /brms/api/v1.1/device/channel/list { ids: ["<deviceCode>$1$0$0", …] } — device/page ใช้ไม่ได้ (1001)
- *            จึงไล่ช่วงรหัสอุปกรณ์เหมือน camera-watch
+ *   กล้อง    POST /brms/api/v1.0/tree/devices → units ชนิดวิดีโอ → channelCode จริง
+ *            แล้ว POST /brms/api/v1.1/device/channel/list แบ่งครั้งละ 400 ช่อง (ไม่เดารหัส/ไม่ใช้ device/page)
  *   สด       POST /brms/api/v1.0/MTS/Video/StartVideo → url + token · **URL ใช้ได้ครั้งเดียว** (เปิดซ้ำ = 401)
  *            streamType 1 = main (1920x1080), 2 = sub (704x576)
  *   ย้อนหลัง  POST /brms/api/v1.0/SS/Record/QueryRecords (recordSource 3) → StartPlaybackByFile เริ่มกลางไฟล์ได้
@@ -99,9 +99,7 @@ async function firstReachable(urls, { timeoutMs = 4000, log = console } = {}) {
 }
 
 const KEEPALIVE_MS = 20_000;
-const SCAN_START = 1000000;
-const SCAN_BATCH = 400;
-const SCAN_HEADROOM = 800;
+const CHANNEL_BATCH = 400;
 
 class DssClient {
   /** @param {{host:string, port?:number, user:string, pass:string, secure?:boolean, timeoutMs?:number}} opts */
@@ -217,30 +215,47 @@ class DssClient {
   /** ช่องตามรายการ id (แบ่งคำขอละ ≤ 400) */
   async channels(ids) {
     const out = [];
-    for (let i = 0; i < ids.length; i += SCAN_BATCH) {
-      const data = await this.api('/brms/api/v1.1/device/channel/list', { ids: ids.slice(i, i + SCAN_BATCH) });
+    for (let i = 0; i < ids.length; i += CHANNEL_BATCH) {
+      const data = await this.api('/brms/api/v1.1/device/channel/list', { ids: ids.slice(i, i + CHANNEL_BATCH) });
       out.push(...(data?.results || []));
     }
     return out;
   }
 
   /**
-   * ทุกช่องใน DSS — ไล่รหัสอุปกรณ์ตั้งแต่ 1000000 ไปจนเลยรหัสสูงสุดที่เจอ SCAN_HEADROOM ตัว
-   * (รหัสของ DSS เดินขึ้นเรื่อย ๆ และบัญชีระดับ operator เรียก device/list ไม่ได้)
+   * รายชื่อช่องวิดีโอจาก device tree ตามสิทธิ์บัญชี — ใช้ ID ที่ DSS ส่งมาเท่านั้น
+   * unitType 1 = วิดีโอ; ไม่รวม alarm/access control และไม่ตัดช่อง offline ออก
+   * อ่านรายละเอียดผ่าน channel/list เดิมเพื่อคงชื่อกลุ่มและสถานะรูปแบบเดียวกัน
    */
   async listAllChannels() {
-    const out = [];
-    let ceiling = SCAN_START + SCAN_HEADROOM;
-    for (let start = SCAN_START; start < ceiling && start < SCAN_START + 200_000; start += SCAN_BATCH) {
-      const ids = Array.from({ length: SCAN_BATCH }, (_, i) => `${start + i}$1$0$0`);
-      const found = await this.channels(ids);
-      out.push(...found);
-      for (const c of found) {
-        const code = Number(c.deviceCode);
-        if (Number.isFinite(code)) ceiling = Math.max(ceiling, code + SCAN_HEADROOM);
+    const data = await this.api('/brms/api/v1.0/tree/devices', {
+      categories: ['1'], containVirtualDevice: '1', resourceTypes: [],
+    });
+    if (!Array.isArray(data?.devices)) throw new DssUnavailable('DSS ไม่ส่งรายการ devices ใน device tree');
+    const ids = new Set();
+    for (const device of data.devices) {
+      if (!Array.isArray(device?.units)) throw new DssUnavailable('DSS device tree ไม่ส่งรายการ units ของอุปกรณ์');
+      for (const unit of device.units) {
+        if (String(unit?.unitType) !== '1') continue;
+        if (!Array.isArray(unit.channels)) throw new DssUnavailable('DSS device tree ไม่ส่งรายการช่องวิดีโอ');
+        for (const channel of unit.channels) {
+          const id = channel?.channelCode;
+          if (typeof id !== 'string' || !id.trim()) throw new DssUnavailable('DSS device tree ไม่ส่ง channelCode ของช่องวิดีโอ');
+          ids.add(id);
+        }
       }
     }
-    return out;
+    // ไม่ส่งต่อ device tree เพราะมี credential ของอุปกรณ์; คืนเฉพาะรายละเอียดช่องจาก API เดิม
+    const details = await this.channels([...ids]);
+    const byId = new Map();
+    for (const channel of details) {
+      if (!ids.has(channel?.channelId)) throw new DssUnavailable('DSS ส่งรายละเอียดช่องที่ไม่อยู่ใน device tree');
+      byId.set(channel.channelId, channel);
+    }
+    if (byId.size !== ids.size) {
+      throw new DssUnavailable(`DSS ส่งรายละเอียดช่องวิดีโอไม่ครบ (${byId.size}/${ids.size}) — ยังไม่ใช้รายการที่ขาด`);
+    }
+    return [...ids].map((id) => byId.get(id));
   }
 
   /** URL ภาพสดใช้ครั้งเดียว (รวม token แล้ว) · stream = 'main' | 'sub' */

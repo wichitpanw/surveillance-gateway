@@ -7,6 +7,10 @@ edge ที่ติดตั้งด้วยชุดนี้ต่อ paren
 ตั้งแต่ระบบสามชั้น (2026-09-30) parent ของ edge คือ **Regional ของภาค** — ขั้น "ที่ central" ในเอกสารนี้ทำที่หน้า Edge Nodes ของ Regional
 (ดาวน์โหลดชุดติดตั้งได้จากทั้ง Central และ Regional ซึ่ง mirror ไว้)
 
+## สถานะแพ็กเกจ (2026-10-12)
+
+ตรวจ manifest อัปเดต windows-x64/linux-x64/linux-arm64 เป็น `a0d8867`; offline kit ใน `kits.json` ยังเป็น `5005316` ต้องอัปเดตผ่านสายหลังติดตั้ง ไม่ได้ยืนยันการติดตั้ง Raspberry Pi จริง; ผู้ดูแลให้รอทดสอบภายหลัง
+
 ## ภาพรวม
 
 ```
@@ -144,11 +148,13 @@ Linux: `sudo bash uninstall-linux.sh` — ลบ service `gw-edge`, cron backup,
 - ffmpeg ในชุดเป็น build GPL ใช้ภายในองค์กร
 - Surveillance Gateway Client ยังมีแค่ Windows — บน Linux ใช้เว็บ Live ของ central (client Linux พักไว้ก่อน)
 
-## รุ่นที่เผยแพร่ตอนนี้ (2026-10-07)
+## รุ่นที่เผยแพร่ตอนนี้ (ตรวจ 2026-10-11)
 
-- แพ็กเกจอัปเดตผ่านสาย (`server/edge-updates/`): `d645ed9` ทั้งสามแพลตฟอร์ม — Edge 101/102 ติดตั้งแล้ว
-- **ชุดติดตั้ง offline (`server/edge-kits/kits.json`): ยังเป็น `e12f958` (2026-09-30)** — `deploy.ps1` publish เฉพาะแพ็กเกจอัปเดต (`-UpdatesOnly`) ไม่สร้างชุดใหม่
-  ก่อนติดตั้ง edge ใหม่ (เช่น 103) ให้รัน `build-edge-kit.ps1 -Publish` จาก shell admin หรือติดตั้งชุดเดิมแล้วกดอัปเดตทันทีหลังต่อสาย
+- แพ็กเกจอัปเดตผ่านสาย: manifest ใน `server/edge-updates/` ทั้ง Windows x64/Linux x64/Linux arm64 = `48f4298`; ผู้ดูแลยืนยัน Edge ได้รับรุ่นนี้แล้ว
+- ชุดติดตั้ง offline (`server/edge-kits/kits.json`) ทั้งสามแพลตฟอร์ม = `5005316` (ชุดชื่อ `Edge-<platform>-5005316`) มีตัวถอนติดตั้ง Windows/Linux และใช้ชื่อกลางไม่มี vendor branding
+- offline kit ยังไม่มี ONVIF Media2 fallback ของ `48f4298`; หลังติดตั้งต้องอัปเดตผ่านสายก่อนใช้กล้องที่ต้องใช้ Media2 หรือสร้างชุดใหม่ด้วย `build-edge-kit.ps1 -Publish` จาก shell admin
+- `deploy.ps1` publish แบบ `-UpdatesOnly` จึงไม่ได้สร้าง offline kit ใหม่ทุกครั้ง; รุ่น kit กับรุ่น update ต้องตรวจแยกกัน
+
 ## AI ในชุดปัจจุบัน (ตั้งแต่ 2026-10-02)
 
 หลังติดตั้งแอดกล้อง แล้วเปิด receiver ใน AI Sources ต่อกล้อง

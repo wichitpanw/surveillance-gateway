@@ -1,6 +1,7 @@
 # ตั้ง Surveillance Gateway Edge บน Linux (Ubuntu 24)
 
-> สถานะปัจจุบัน 2026-10-07: Ubuntu เดิมเปลี่ยนเป็น Edge **102** ต่อ Regional ภาคกลาง node 100, เว็บ **:5173**, service **gw-edge**; Gateway d645ed9 (156 กล้อง ณ 2026-10-07) ไม่มี inference worker ใช้ AI Sources รับผลภายนอก
+> บันทึกสถานะ Ubuntu เมื่อ 2026-10-11: Ubuntu เดิมเปลี่ยนเป็น Edge **102** ต่อ Regional ภาคกลาง node 100, เว็บ **:5173**, service **gw-edge**; ผู้ดูแลยืนยัน Edge ได้รับ Gateway 48f4298 แล้ว (ไม่ได้ตรวจ build รายเครื่องรอบนี้); 156 กล้องเป็นยอด ณ 2026-10-07 ไม่มี inference worker ใช้ AI Sources รับผลภายนอก
+> อัปเดต 2026-10-12: แพ็กเกจ Linux x64/arm64 ที่ publish เป็น `a0d8867`; ผู้ดูแลยืนยันอัปเดตแล้ว แต่ไม่ได้ตรวจ build Ubuntu รายเครื่องรอบนี้ และ Raspberry Pi รอทดสอบภายหลัง
 > รีสตาร์ตเมื่อจำเป็นด้วย `sudo systemctl restart gw-edge` ห้ามรัน pm2 ด้วยมือบนเครื่องนี้ ตาราง/ขั้นติดตั้งด้านล่างเป็นวิธีเดิมของปี 2026-09 ก่อนย้าย Regional; เครื่องใหม่ใช้ [EDGE-KIT.md](EDGE-KIT.md)
 
 edge บน Linux คือโค้ดชุดเดียวกับที่รันบน Windows ต่างกันที่ค่าของเครื่อง (`<state>/edge.json`) และวิธีรันตอนบูต (systemd)

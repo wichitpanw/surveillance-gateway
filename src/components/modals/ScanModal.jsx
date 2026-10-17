@@ -81,7 +81,7 @@ const ScanModal = ({
                        {scannedDevices.map((device, idx) => (
                           <div key={idx} className="p-5 flex items-center justify-between hover:bg-muted/40 transition-all group animate-in slide-in-from-left-2 duration-300">
                              <div className="flex items-center gap-5">
-                                <div className="size-12 rounded-xl bg-muted flex items-center justify-center text-primary border shadow-sm group-hover:scale-110 transition-transform">
+                                <div className="size-12 rounded-xl bg-muted flex items-center justify-center text-primary border shadow-xs group-hover:scale-110 transition-transform">
                                   <Cctv className="size-6" />
                                 </div>
                                 <div className="flex flex-col gap-0.5">

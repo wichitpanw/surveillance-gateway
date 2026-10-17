@@ -1,4 +1,4 @@
-> สถานะปัจจุบัน 2026-10-07: Gateway d645ed9 / Client 1.9.5; รับ AI ภายนอก ไม่มี inference worker ดู [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> สถานะปัจจุบัน 2026-10-12: Gateway a0d8867 (Central/Regional ตรวจ API; ผู้ดูแลยืนยันอัปเดตแล้ว) / Client 1.11.0 (ตรวจ full/delta feed); Map worker hotfix ปิดงานแล้ว ดู [WINDOWS-CLIENT-WORKSPACE.md](WINDOWS-CLIENT-WORKSPACE.md); รับ AI ภายนอก ไม่มี inference worker
 > เอกสารนี้เขียนตอนระบบสองชั้น คำว่า "central" ในหัวข้อการทำงาน/link หมายถึง **parent ของ edge** — ปัจจุบันคือ Regional (และ Regional เป็นลูกของ Central แบบเดียวกัน) ดู [REGIONAL-PLAN.md](REGIONAL-PLAN.md)
 
 # Edge ↔ Central — การทำงาน ข้อตกลง และงานที่เหลือ
@@ -7,7 +7,7 @@
 > เฟส 5 ข้อ D อธิบาย receiver ปัจจุบัน; ข้อ A/C และผลทดสอบตามวันที่เดิมเป็นประวัติ
 
 
-อัปเดต 2026-10-07 · Central → Regional ภาคกลาง (100) → Edge 101/102 ใช้จริงแล้ว (Edge 103 จองแล้ว ยังไม่ต่อ); สาย link ไม่มี TLS ใช้ LAN/VPN
+อัปเดต 2026-10-12 · Central → Regional ภาคกลาง (100) → Edge ใช้จริงแล้ว; Edge 103 เป็น Edge ทดสอบจังหวัดทดสอบที่ตั้งใจต่อภาคกลาง (สถานะสายล่าสุดยังไม่ได้ตรวจ); สาย link ไม่มี TLS ใช้ LAN/VPN
 · ติดตั้ง edge ใหม่จากชุด offline และอัปเดตผ่านสายด้วยปุ่มในหน้า Edge Nodes ([EDGE-KIT.md](EDGE-KIT.md)) · เฟส 5: รับ AI event พร้อม JPEG จากต้นทางผ่าน AI Sources; ลบ inference worker แล้ว · ดูย้อนหลังดึงจากอุปกรณ์ (AXIS S30 / Uniview ใช้จริง · Hikvision / Dahua / ONVIF Profile G รอทดสอบ)
 
 ## ภาพรวม
@@ -148,6 +148,12 @@ edge ตรวจลายเซ็น โหลดทาง HTTP ด้วย t
 | Health / sync | 60 วินาที / 10 นาที |
 | เวลา | ISO-8601 `+07:00` · ไม่ตั้ง NTP (ตัดสินใจแล้ว 2026-09-23) — เวลาของแต่ละเครื่องอาจคลาดกันได้ อย่าใช้เวลาข้ามเครื่องเทียบลำดับเหตุการณ์ |
 | รหัสจังหวัด | `server/data/thai-regions.csv` (กรมการปกครอง / มอก. 1099) |
+
+## งานที่ปิดล่าสุด (2026-10-08–11)
+
+- Avigilon H.265: ONVIF Media1 → Media2 fallback ใน `48f4298`; ผู้ดูแลยืนยันเมื่อ 2026-10-11 ว่าทดสอบใช้งานแล้วภาพมา
+- DSS: fallback host หลัง NAT ใช้ทั้งสด/ย้อนหลัง; DSS จังหวัดทดสอบต้องใช้ `playbackType` และยืนยันย้อนหลัง 2026-10-09
+- ชุดติดตั้ง Edge มีตัวถอนติดตั้ง Windows/Linux และล้างชุดเก่าตอน publish
 
 ## งานที่ยังไม่ได้ทำ
 

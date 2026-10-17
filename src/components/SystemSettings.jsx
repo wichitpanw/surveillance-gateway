@@ -121,7 +121,7 @@ const SystemSettings = ({
       </div>
 
       {/* Map Configuration Area */}
-      <Card className="border shadow-sm overflow-hidden bg-card mt-2">
+      <Card className="border shadow-xs overflow-hidden bg-card mt-2">
         <CardHeader className="bg-muted/10 border-b p-6">
           <CardTitle className="text-sm font-bold tracking-tight uppercase flex items-center gap-2">
             <Settings className="size-4 text-primary" />
@@ -158,7 +158,7 @@ const SystemSettings = ({
                   }
                   setIsLoading(false);
                 }}
-                className="h-10 px-3 rounded-lg border bg-background text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary w-full"
+                className="h-10 px-3 rounded-lg border bg-background text-xs font-bold text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary w-full"
               >
                 <option value="satellite">Satellite (Esri World Imagery)</option>
                 <option value="openstreetmap">{t('mapOsmOption')}</option>
@@ -279,7 +279,7 @@ const SystemSettings = ({
       </Card>
 
       {/* Maintenance Area - Claude Style */}
-      <Card className="border shadow-sm overflow-hidden bg-card mt-2">
+      <Card className="border shadow-xs overflow-hidden bg-card mt-2">
         <CardHeader className="bg-muted/10 border-b p-6">
           <CardTitle className="text-sm font-bold tracking-tight uppercase flex items-center gap-2">
             <Settings className="size-4 text-primary" />

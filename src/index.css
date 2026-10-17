@@ -1,9 +1,12 @@
 /* Fonts and the --font-* stacks live in fonts.css, shared with the client's map page. */
-@import './fonts.css';
+@import './fonts.css' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+@source './';
+@source '../index.html';
+@source '../edge.html';
+@source '../regional.html';
+@config '../tailwind.config.js';
 
 @layer base {
   :root {
@@ -139,13 +142,13 @@
 }
 /* Google Maps Overrides */
 .gm-style-iw {
-  @apply !bg-card !p-0 !rounded-lg !border-border !shadow-lg;
+  @apply bg-card! p-0! rounded-lg! border-border! shadow-lg!;
 }
 .gm-style-iw-d {
-  @apply !overflow-hidden !max-h-none;
+  @apply overflow-hidden! max-h-none!;
 }
 .gm-ui-hover-effect {
-  @apply !top-2 !right-2 !bg-background/80 !rounded-full !flex !items-center !justify-center;
+  @apply top-2! right-2! bg-background/80! rounded-full! flex! items-center! justify-center!;
 }
 /* .animate-fade-in ถูกใช้ทั่วทั้งแอปมาตั้งแต่ต้น แต่ไม่เคยมี keyframes จริงมาก่อน (dead class) —
    เพิ่ม transition เข้าหน้า/การ์ดจริงตรงนี้ที่เดียว มีผลทุกหน้าที่ใช้ class นี้อยู่แล้วทันที */

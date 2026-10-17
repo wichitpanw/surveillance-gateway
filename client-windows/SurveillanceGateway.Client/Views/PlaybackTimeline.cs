@@ -23,6 +23,7 @@ public sealed class PlaybackTimeline : FrameworkElement
 
     private IReadOnlyList<(double Start, double End)> _ranges = Array.Empty<(double, double)>();
     private double? _playhead;
+    public (double Start, double End)? Selection { get; set; }
     private double? _hover;
     private double _viewStart;
     private double _viewEnd = Day;
@@ -147,6 +148,13 @@ public sealed class PlaybackTimeline : FrameworkElement
             var x1 = Math.Max(0, ToX(start));
             var x2 = Math.Min(width, ToX(end));
             dc.DrawRectangle(data, null, new Rect(x1, barTop + 5, Math.Max(2, x2 - x1), BarHeight - 10));
+        }
+
+        if (Selection is { } selected && selected.End > selected.Start)
+        {
+            var left = Math.Clamp(ToX(selected.Start), 0, width);
+            var right = Math.Clamp(ToX(selected.End), 0, width);
+            if(right > left) dc.DrawRectangle(null, new Pen(accent, 2), new Rect(left, barTop+1, right-left, BarHeight-2));
         }
 
         // ขีดเวลา

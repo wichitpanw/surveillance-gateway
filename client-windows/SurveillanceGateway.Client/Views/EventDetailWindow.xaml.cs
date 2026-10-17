@@ -18,17 +18,24 @@ namespace SurveillanceGateway.Client.Views;
 /// </summary>
 public partial class EventDetailWindow : Window
 {
+    private readonly Action<V1AiEvent, bool>? _investigate;
     private readonly GatewayClient _client;
     private readonly IList<EventsView.EventRow> _rows;
     private long _seq;
     private int _loadVersion;
+    private System.Threading.CancellationTokenSource? _snapshotRequest;
 
-    private EventDetailWindow(GatewayClient client, IList<EventsView.EventRow> rows, long seq)
+    private EventDetailWindow(GatewayClient client, IList<EventsView.EventRow> rows, long seq, Action<V1AiEvent, bool>? investigate)
     {
+        _investigate = investigate;
         _client = client;
         _rows = rows;
         _seq = seq;
         InitializeComponent();
+        LiveButton.Click += (_, _) => Investigate(false);
+        PlaybackButton.Click += (_, _) => Investigate(true);
+        MaxWidth = SystemParameters.WorkArea.Width;
+        MaxHeight = SystemParameters.WorkArea.Height;
         CloseButton.Click += (_, _) => Close();
         PrevButton.Click += (_, _) => Step(-1);
         NextButton.Click += (_, _) => Step(+1);
@@ -42,18 +49,27 @@ public partial class EventDetailWindow : Window
         {
             if (e.ButtonState == MouseButtonState.Pressed) DragMove();
         };
+        Closed += (_, _) => { ++_loadVersion; _snapshotRequest?.Cancel(); _snapshotRequest?.Dispose(); SnapshotImage.Source = null; };
         ShowEvent(seq);
     }
 
     /// <summary>Opens the popup on the row with this seq, centred on the main window.</summary>
-    public static void Open(GatewayClient client, IList<EventsView.EventRow> rows, long seq)
+    public static void Open(GatewayClient client, IList<EventsView.EventRow> rows, long seq, Action<V1AiEvent, bool>? investigate = null)
     {
         var owner = Application.Current?.MainWindow;
-        var window = new EventDetailWindow(client, rows, seq);
+        var window = new EventDetailWindow(client, rows, seq, investigate);
         if (owner is { IsLoaded: true }) window.Owner = owner;
         else window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         window.Show();
         window.Activate();
+    }
+
+    private void Investigate(bool playback)
+    {
+        var index = IndexOf(_seq);
+        if (index < 0 || _investigate is null) return;
+        _investigate(_rows[index].Event, playback);
+        Close();
     }
 
     private int IndexOf(long seq)
@@ -73,11 +89,15 @@ public partial class EventDetailWindow : Window
 
     private void ShowEvent(long seq)
     {
+        _snapshotRequest?.Cancel(); _snapshotRequest?.Dispose();
+        _snapshotRequest = new System.Threading.CancellationTokenSource();
         var index = IndexOf(seq);
         if (index < 0) { Close(); return; }
         _seq = seq;
         var row = _rows[index];
         var e = row.Event;
+        LiveButton.IsEnabled = _investigate is not null && !string.IsNullOrEmpty(e.CameraId);
+        PlaybackButton.IsEnabled = LiveButton.IsEnabled && DateTimeOffset.TryParse(e.Ts, out _);
 
         TitleText.Text = row.Title;
         SubtitleText.Text = $"{e.CameraName ?? e.CameraId ?? "-"} · {LocalTime(e.Ts, "yyyy-MM-dd HH:mm:ss")}";
@@ -117,15 +137,15 @@ public partial class EventDetailWindow : Window
             return;
         }
         SnapshotText.Text = Strings.T("events.loading");
-        _ = LoadSnapshotAsync(e.Seq, version);
+        _ = LoadSnapshotAsync(e.Seq, version, _snapshotRequest.Token);
     }
 
-    private async System.Threading.Tasks.Task LoadSnapshotAsync(long seq, int version)
+    private async System.Threading.Tasks.Task LoadSnapshotAsync(long seq, int version, System.Threading.CancellationToken ct)
     {
         BitmapImage? image = null;
         try
         {
-            var bytes = await _client.GetAiSnapshotAsync(seq).ConfigureAwait(true);
+            var bytes = await _client.GetAiSnapshotAsync(seq, ct).ConfigureAwait(true);
             if (bytes is not null)
             {
                 image = new BitmapImage();
@@ -164,5 +184,5 @@ public partial class EventDetailWindow : Window
     }
 
     private static string LocalTime(string? iso, string format) =>
-        DateTimeOffset.TryParse(iso, out var t) ? t.ToLocalTime().ToString(format) : "-";
+        DateTimeOffset.TryParse(iso, out var t) ? t.ToOffset(TimeSpan.FromHours(7)).ToString(format) : "-";
 }

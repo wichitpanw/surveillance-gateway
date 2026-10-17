@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Cctv,
   Trash2,
@@ -60,7 +59,6 @@ const CameraManagement = ({
   canLive = false,
 }) => {
   const { language, t } = useLanguage();
-  const [confirmState, setConfirmState] = useState({ isOpen: false, type: '', data: null });
   /* กล้องที่กำลังเปิดดูภาพนิ่ง — null = ยังไม่ได้เปิด */
   const [snapshotCamera, setSnapshotCamera] = useState(null);
   /* กล้องที่กำลังเปิดดูภาพสด + PTZ */
@@ -153,17 +151,6 @@ const CameraManagement = ({
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
-  const triggerConfirm = (type, data = null) => {
-    setConfirmState({ isOpen: true, type, data });
-  };
-
-  const executeConfirm = () => {
-    if (confirmState.type === 'bulk_delete') handleBulkDelete();
-    if (confirmState.type === 'delete_group') handleDeleteGroup(confirmState.data);
-    if (confirmState.type === 'configure') openEditModal(confirmState.data);
-    setConfirmState({ isOpen: false, type: '', data: null });
-  };
-
   const allCameras = Object.values(groupedCameras).flat();
   const onlineCount = allCameras.filter(cam => !cam.source_missing_at && cameraStatus[cam.id] === 'online').length;
   const offlineCount = allCameras.length - onlineCount;
@@ -224,7 +211,7 @@ const CameraManagement = ({
           {selectedCamerasForDelete.length > 0 && (
             <Button
               variant="destructive"
-              onClick={() => triggerConfirm('bulk_delete')}
+              onClick={handleBulkDelete}
               className="h-10 px-4 text-xs font-bold uppercase tracking-widest gap-2 animate-in zoom-in duration-200"
             >
               <Trash2 className="size-4" />
@@ -349,7 +336,7 @@ const CameraManagement = ({
                     {!readOnly && <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => triggerConfirm('delete_group', groupName)}
+                      onClick={() => handleDeleteGroup(groupName)}
                       className="h-8 text-[10px] font-bold text-destructive hover:bg-destructive/10 uppercase"
                     >
                       {t('deleteGroup')}
@@ -548,7 +535,7 @@ const CameraManagement = ({
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                triggerConfirm('configure', cam);
+                                openEditModal(cam);
                               }}
                               className="h-8 text-[10px] font-bold uppercase tracking-widest gap-2 hover:bg-primary hover:text-primary-foreground"
                             >
@@ -570,32 +557,6 @@ const CameraManagement = ({
       </div>
 
       {areaSelection && <BulkCameraRegionModal cameras={areaSelection.cameras} label={areaSelection.label} onClose={() => setAreaSelection(null)} onSaved={onCamerasChanged} />}
-      <ConfirmationDialog
-        isOpen={confirmState.isOpen}
-        onClose={() => setConfirmState({ isOpen: false, type: '', data: null })}
-        onConfirm={executeConfirm}
-        title={
-          confirmState.type === 'bulk_delete' ? t('confirmBulkDeleteTitle') :
-          confirmState.type === 'delete_group' ? t('confirmGroupDeleteTitle') :
-          t('confirmConfigureTitle')
-        }
-        description={
-          confirmState.type === 'bulk_delete'
-            ? (language === 'th'
-                ? `คุณแน่ใจหรือไม่ที่จะลบกล้องที่เลือกทั้ง ${selectedCamerasForDelete.length} ตัว? การลบนี้ไม่สามารถย้อนกลับได้`
-                : `Delete the ${selectedCamerasForDelete.length} selected camera${selectedCamerasForDelete.length !== 1 ? 's' : ''}? This cannot be undone.`)
-            : confirmState.type === 'delete_group'
-            ? (language === 'th'
-                ? `คุณแน่ใจหรือไม่ที่จะลบกลุ่ม "${confirmState.data}" และกล้องทั้งหมดในกลุ่มนี้?`
-                : `Delete the group "${confirmState.data}" and every camera in it?`)
-            : (language === 'th'
-                ? `คุณต้องการเข้าสู่โหมดปรับแต่งการตั้งค่าของกล้อง "${confirmState.data?.name}" ใช่หรือไม่?`
-                : `Enter configuration mode for camera "${confirmState.data?.name}"?`)
-        }
-        confirmText={confirmState.type === 'configure' ? t('enterSetup') : t('terminateAsset')}
-        cancelText={t('abort')}
-        variant={confirmState.type === 'configure' ? "default" : "destructive"}
-      />
 
       <SnapshotModal
         camera={snapshotCamera}

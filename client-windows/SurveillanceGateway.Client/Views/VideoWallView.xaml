@@ -5,6 +5,7 @@
              xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
     <UserControl.Resources>
         <views:StatusDotConverter x:Key="StatusDot" />
+        <BooleanToVisibilityConverter x:Key="Shown" />
         <Style x:Key="WallControlsToggle" TargetType="ToggleButton">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -18,72 +19,133 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!--
+            Section header of the left rail, in the manner of the VMS clients operators already
+            know: a full-width bar with a chevron, and the sections stacked so that cameras, views
+            and PTZ are all one click away without leaving the live page.
+        -->
+        <Style x:Key="SectionHeader" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bar" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,0,0,1" Padding="14,0,10,0" Height="40">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Path x:Name="Chevron" Width="8" Height="8" Stretch="Uniform" Margin="0,0,10,0"
+                                      VerticalAlignment="Center" Fill="{DynamicResource MutedForegroundBrush}"
+                                      Data="M0 0 L8 4 L0 8 Z" />
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chevron" Property="Data" Value="M0 0 L8 0 L4 8 Z" />
+                                <Setter TargetName="Chevron" Property="Fill" Value="{DynamicResource BrandYellowBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bar" Property="Background" Value="{DynamicResource MutedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="PadButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+        <Style x:Key="ToolbarDivider" TargetType="Border">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Margin" Value="6,0,10,0" />
+            <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </UserControl.Resources>
 
     <Grid Background="{DynamicResource BackgroundBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="PickerColumn" Width="270" MinWidth="240" MaxWidth="420" />
-            <ColumnDefinition x:Name="PickerDividerColumn" Width="6" />
+            <ColumnDefinition x:Name="PickerColumn" Width="300" MinWidth="240" MaxWidth="460" />
+            <ColumnDefinition x:Name="PickerDividerColumn" Width="4" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Camera picker. Its list scrolls; the wall beside it must not. -->
-        <Border x:Name="PickerPanel" Grid.Column="0" Style="{StaticResource Card}" Margin="12,12,0,12" Padding="12,14,8,12">
+        <!--
+            Left rail: Cameras, Views and PTZ stacked as sections. Cameras takes the remaining
+            height while open; the other two size to their content. The rail runs edge to edge so
+            the live area beside it can too.
+        -->
+        <Border x:Name="PickerPanel" Grid.Column="0" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
+                    <RowDefinition x:Name="CamerasRow" Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="RailFillerRow" Height="0" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="0,0,6,10">
-                    <Grid>
+                <!-- Cameras -->
+                <Grid Grid.Row="0">
+                    <ToggleButton x:Name="CamerasHeader" Style="{StaticResource SectionHeader}" IsChecked="True">
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{svc:T wall.cameras}" />
+                    </ToggleButton>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0">
                         <ToggleButton x:Name="LibraryControls" Style="{StaticResource WallControlsToggle}" IsChecked="True"
-                                      Margin="0,0,65,0" ToolTip="{svc:T wall.toggleFilters}"
+                                      Margin="0,0,8,0" ToolTip="{svc:T wall.toggleFilters}"
                                       AutomationProperties.Name="{svc:T wall.toggleFilters}">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Width="10" Height="6" Stretch="Uniform" Margin="0,0,6,0"
-                                      Stroke="{DynamicResource MutedForegroundBrush}" StrokeThickness="1.5">
-                                    <Path.Style>
-                                        <Style TargetType="Path">
-                                            <Setter Property="Data" Value="M2 1 L6 5 L10 1" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsChecked, ElementName=LibraryControls}" Value="True">
-                                                    <Setter Property="Data" Value="M2 5 L6 1 L10 5" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Path.Style>
-                                </Path>
-                                <TextBlock Style="{StaticResource EyebrowText}" VerticalAlignment="Center"
-                                           Text="{svc:T wall.library}" />
-                            </StackPanel>
+                            <Path Width="13" Height="12" Stretch="Uniform" Fill="{DynamicResource MutedForegroundBrush}"
+                                  Data="M0 0 H16 L10 7 V13 L6 15 V7 Z" />
                         </ToggleButton>
                         <!-- A camera added at Central appears here without restarting the client. -->
-                        <Button x:Name="RefreshButton"
-                                Style="{StaticResource GhostButton}"
-                                HorizontalAlignment="Right"
-                                Padding="9,4"
-                                FontSize="11.5"
-                                Content="{svc:T wall.reload}" />
-                    </Grid>
-                    <!-- Two ways to narrow the same list: pick a group, or type. A site with
-                         forty cameras needs the first; one camera whose name you know needs the
-                         second. -->
+                        <Button x:Name="RefreshButton" Style="{StaticResource GhostButton}" Padding="8,3"
+                                FontSize="11" Content="{svc:T wall.reload}" />
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="1" Margin="12,10,6,8"
+                      Visibility="{Binding IsChecked, ElementName=CamerasHeader, Converter={StaticResource Shown}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
                     <!-- หุบเฉพาะสรุป/ค้นหา/ตัวกรอง โดยคงค่าที่เลือกและพื้นที่รายการกล้องไว้ -->
-                    <StackPanel x:Name="LibraryFilters">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsChecked, ElementName=LibraryControls}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        <TextBlock x:Name="ScopeText" Style="{StaticResource MonoText}" Margin="2,8,0,0" Text="" />
-                        <WrapPanel Margin="2,5,0,0">
+                    <StackPanel x:Name="LibraryFilters" Margin="0,0,6,8"
+                                Visibility="{Binding IsChecked, ElementName=LibraryControls, Converter={StaticResource Shown}}">
+                        <Grid>
+                            <TextBox x:Name="SearchBox" Style="{StaticResource FieldInput}" />
+                            <TextBlock x:Name="SearchHint" Style="{StaticResource LabelText}" Margin="12,0,0,0"
+                                       VerticalAlignment="Center" IsHitTestVisible="False"
+                                       Foreground="{DynamicResource FaintForegroundBrush}" Text="{svc:T wall.search}" />
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <ComboBox x:Name="GroupBox" Style="{StaticResource FieldCombo}" Tag="{svc:T wall.allGroups}" />
+                            <ComboBox x:Name="StatusBox" Grid.Column="2" Style="{StaticResource FieldCombo}" />
+                        </Grid>
+                        <Grid Margin="2,9,0,0">
+                            <CheckBox x:Name="FavoritesOnlyBox" Foreground="{DynamicResource MutedForegroundBrush}"
+                                      Content="{svc:T wall.favorites}" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="ScopeText" Style="{StaticResource MonoText}" Margin="2,9,0,0" Text="" />
+                        <WrapPanel Margin="2,3,0,0">
                             <TextBlock x:Name="OnlineCountText" Style="{StaticResource MonoText}"
                                        Foreground="{DynamicResource StatusOkBrush}" Margin="0,0,8,0" />
                             <TextBlock x:Name="OfflineCountText" Style="{StaticResource MonoText}"
@@ -91,330 +153,274 @@
                             <TextBlock x:Name="OtherCountText" Style="{StaticResource MonoText}"
                                        Foreground="{DynamicResource FaintForegroundBrush}" />
                         </WrapPanel>
-                        <Grid Margin="0,12,0,0">
-                            <TextBox x:Name="SearchBox" Style="{StaticResource FieldInput}" />
-                            <TextBlock x:Name="SearchHint"
-                                       Style="{StaticResource LabelText}"
-                                       Margin="12,0,0,0"
-                                       VerticalAlignment="Center"
-                                       IsHitTestVisible="False"
-                                       Foreground="{DynamicResource FaintForegroundBrush}"
-                                       Text="{svc:T wall.search}" />
-                        </Grid>
-                        <ComboBox x:Name="GroupBox" Style="{StaticResource FieldCombo}"
-                                  Margin="0,8,0,0" Tag="{svc:T wall.allGroups}" />
-                        <ComboBox x:Name="StatusBox" Style="{StaticResource FieldCombo}" Margin="0,8,0,0" />
-                        <CheckBox x:Name="FavoritesOnlyBox" Margin="2,10,0,0"
-                                  Foreground="{DynamicResource MutedForegroundBrush}"
-                                  Content="{svc:T wall.favorites}" />
                     </StackPanel>
-                    <StackPanel Margin="0,13,0,0">
-                            <TextBlock Style="{StaticResource EyebrowText}" Foreground="{DynamicResource MutedForegroundBrush}"
-                                       Text="{svc:T wall.layout}" />
-                            <Border Background="{DynamicResource BackgroundBrush}"
-                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusControl}" Padding="3"
-                                    HorizontalAlignment="Left" Margin="0,6,0,0">
-                                <StackPanel x:Name="LayoutSegments" Orientation="Horizontal" />
-                            </Border>
-                            <TextBlock Style="{StaticResource EyebrowText}" Foreground="{DynamicResource MutedForegroundBrush}"
-                                       Margin="0,10,0,0"
-                                       Text="{svc:T wall.stream}" />
-                            <Grid Margin="0,6,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border Background="{DynamicResource BackgroundBrush}"
-                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                        CornerRadius="{StaticResource RadiusControl}" Padding="3"
-                                        HorizontalAlignment="Left">
-                                    <StackPanel x:Name="StreamSegments" Orientation="Horizontal" />
-                                </Border>
-                                <Button x:Name="ClearAllButton" Grid.Column="1"
-                                        Style="{StaticResource GhostButton}" FontSize="10.5"
-                                        Padding="7,7" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                        Margin="6,0,0,0" Content="{svc:T wall.clearAll}" />
-                            </Grid>
-                    </StackPanel>
-                </StackPanel>
 
-                <!--
-                    Grouped by the camera group the gateway already reports, and collapsible.
-                    A key scoped to several sites lists cameras from all of them, and a flat list
-                    of that makes an operator read every row to find one site.
-                -->
-                <ListBox x:Name="CameraList"
-                         Grid.Row="1"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.GroupStyle>
-                        <GroupStyle>
-                            <GroupStyle.ContainerStyle>
-                                <Style TargetType="GroupItem">
+                    <!--
+                        Grouped by the camera group the gateway already reports, and collapsible.
+                        A key scoped to several sites lists cameras from all of them, and a flat list
+                        of that makes an operator read every row to find one site.
+                    -->
+                    <Grid Grid.Row="1">
+                        <ListBox x:Name="CameraList"
+                                 Grid.Row="1"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.ContainerStyle>
+                                        <Style TargetType="GroupItem">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="GroupItem">
+                                                        <Expander IsExpanded="False"
+                                                                  Tag="CameraGroup"
+                                                                  Loaded="OnCameraGroupLoaded"
+                                                                  Background="Transparent"
+                                                                  BorderThickness="0"
+                                                                  Margin="0,4,0,2">
+                                                        <Expander.Header>
+                                                            <Grid Width="232">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0"
+                                                                           Style="{StaticResource EyebrowText}"
+                                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                                           Text="{Binding Name}" />
+                                                                <TextBlock Grid.Column="1" Tag="GroupRatio"
+                                                                           Style="{StaticResource MonoText}" Margin="7,0,0,0"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource FaintForegroundBrush}" />
+                                                                <Button Grid.Column="2"
+                                                                        Style="{StaticResource IconButton}"
+                                                                        Width="22" Height="22" Margin="4,0,0,0"
+                                                                        Tag="{Binding Name}" Click="OnPlayGroup"
+                                                                        ToolTip="{svc:T wall.playGroup}">
+                                                                    <Path Width="10" Height="10" Stretch="Uniform"
+                                                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}"
+                                                                          Data="M6 4 L18 12 L6 20 Z" />
+                                                                </Button>
+                                                            </Grid>
+                                                            </Expander.Header>
+                                                            <ItemsPresenter Margin="0,4,0,0" />
+                                                        </Expander>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </GroupStyle.ContainerStyle>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0,0,5,3" />
+                                    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
                                     <Setter Property="Template">
                                         <Setter.Value>
-                                            <ControlTemplate TargetType="GroupItem">
-                                                <Expander IsExpanded="False"
-                                                          Tag="CameraGroup"
-                                                          Loaded="OnCameraGroupLoaded"
-                                                          Background="Transparent"
-                                                          BorderThickness="0"
-                                                          Margin="0,4,0,2">
-                                                <Expander.Header>
-                                                    <Grid Width="190">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0"
-                                                                   Style="{StaticResource EyebrowText}"
-                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                                                   Text="{Binding Name}" />
-                                                        <TextBlock Grid.Column="1" Tag="GroupRatio"
-                                                                   Style="{StaticResource MonoText}" Margin="7,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   Foreground="{DynamicResource FaintForegroundBrush}" />
-                                                        <Button Grid.Column="2"
-                                                                Style="{StaticResource IconButton}"
-                                                                Width="22" Height="22" Margin="4,0,0,0"
-                                                                Tag="{Binding Name}" Click="OnPlayGroup"
-                                                                ToolTip="{svc:T wall.playGroup}">
-                                                            <Path Width="10" Height="10" Stretch="Uniform"
-                                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}"
-                                                                  Data="M6 4 L18 12 L6 20 Z" />
-                                                        </Button>
-                                                    </Grid>
-                                                    </Expander.Header>
-                                                    <ItemsPresenter Margin="0,4,0,0" />
-                                                </Expander>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="Row"
+                                                        Background="Transparent"
+                                                        BorderBrush="Transparent"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{StaticResource RadiusControl}"
+                                                        Padding="8,7">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
+                                                        <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Setter.Value>
                                     </Setter>
                                 </Style>
-                            </GroupStyle.ContainerStyle>
-                        </GroupStyle>
-                    </ListBox.GroupStyle>
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="0" />
-                            <Setter Property="Margin" Value="0,0,5,3" />
-                            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="Row"
-                                                Background="Transparent"
-                                                BorderBrush="Transparent"
-                                                BorderThickness="1"
-                                                CornerRadius="{StaticResource RadiusControl}"
-                                                Padding="8,7">
-                                            <ContentPresenter />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
-                                            </Trigger>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource MutedBrush}" />
-                                                <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!--
-                                The dot is fed by the gateway's event stream, so it changes without
-                                the list being reloaded. Grey means no event yet, not offline.
-                            -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Ellipse Grid.Column="0"
-                                         Width="7" Height="7"
-                                         Margin="0,0,10,0"
-                                         VerticalAlignment="Center"
-                                         Fill="{Binding Availability, Converter={StaticResource StatusDot}}"
-                                         ToolTip="{Binding AvailabilityText}" />
-                                <StackPanel Grid.Column="1">
-                                    <TextBlock Style="{StaticResource BodyText}" FontSize="12.5"
-                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding DisplayName}" Text="{Binding DisplayName}" />
-                                    <TextBlock Style="{StaticResource LabelText}" FontSize="10.5"
-                                               Foreground="{DynamicResource FaintForegroundBrush}"
-                                               Text="{Binding AvailabilityText}" />
-                                </StackPanel>
-                                <Button Grid.Column="2" Style="{StaticResource GhostButton}"
-                                        Padding="4,0" Content="☆" Tag="{Binding}"
-                                        Loaded="OnFavoriteLoaded" Click="OnFavoriteClick"
-                                        ToolTip="{svc:T wall.favoriteAdd}" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <Border Grid.Row="2" Margin="0,9,6,0" Padding="0,9,0,0"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-                <StackPanel>
-                    <ToggleButton x:Name="WallControls" Style="{StaticResource WallControlsToggle}" IsChecked="False">
-                        <StackPanel Orientation="Horizontal">
-                            <Border Width="18" Height="18" CornerRadius="9"
-                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                <Path Width="10" Height="6" Stretch="Uniform" StrokeThickness="1.4"
-                                      Stroke="{DynamicResource ForegroundBrush}">
-                                    <Path.Style>
-                                        <Style TargetType="Path">
-                                            <Setter Property="Data" Value="M2 5 L6 1 L10 5" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsChecked, ElementName=WallControls}" Value="True">
-                                                    <Setter Property="Data" Value="M2 1 L6 5 L10 1" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Path.Style>
-                                </Path>
-                            </Border>
-                            <TextBlock Style="{StaticResource EyebrowText}"
-                                       Foreground="{DynamicResource ForegroundBrush}"
-                                       VerticalAlignment="Center" Margin="6,0,0,0"
-                                       Text="{svc:T wall.controls}" />
-                        </StackPanel>
-                    </ToggleButton>
-                    <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <ScrollViewer.Style>
-                            <Style TargetType="ScrollViewer">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsChecked, ElementName=WallControls}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ScrollViewer.Style>
-                        <StackPanel Margin="0,8,4,3">
-                            <TextBlock Style="{StaticResource EyebrowText}" Foreground="{DynamicResource MutedForegroundBrush}"
-                                       Text="{svc:T wall.view}" />
-                            <Border x:Name="ViewChip" Visibility="Collapsed" Margin="0,6,0,0"
-                                    Background="{DynamicResource BrandYellowSoftBrush}"
-                                    BorderBrush="{DynamicResource BrandYellowLineBrush}" BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusPill}" Padding="8,4">
-                                <TextBlock x:Name="ViewChipText" Style="{StaticResource MonoText}"
-                                           Foreground="{DynamicResource BrandYellowTextBrush}" />
-                            </Border>
-                            <ComboBox x:Name="ViewBox" Style="{StaticResource FieldCombo}"
-                                      Margin="0,6,0,0" Tag="{svc:T wall.noViews}" />
-                            <Grid Margin="0,7,0,0">
-                                <TextBox x:Name="ViewNameBox" Style="{StaticResource FieldInput}"
-                                         ToolTip="{svc:T wall.viewName}" />
-                                <TextBlock x:Name="ViewNameHint" Style="{StaticResource LabelText}"
-                                           Margin="12,0,0,0" VerticalAlignment="Center"
-                                           IsHitTestVisible="False" Foreground="{DynamicResource FaintForegroundBrush}"
-                                           Text="{svc:T wall.viewName}" />
-                            </Grid>
-                            <Button x:Name="SaveViewButton" Style="{StaticResource GhostButton}"
-                                    Margin="0,7,0,0" Content="{svc:T wall.saveView}" />
-                            <Button x:Name="DeleteViewButton" Style="{StaticResource GhostButton}"
-                                    Margin="0,6,0,0" Content="{svc:T wall.deleteView}" />
-                        </StackPanel>
-                    </ScrollViewer>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <!--
+                                        The dot is fed by the gateway's event stream, so it changes without
+                                        the list being reloaded. Grey means no event yet, not offline.
+                                    -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0"
+                                                 Width="7" Height="7"
+                                                 Margin="0,0,10,0"
+                                                 VerticalAlignment="Center"
+                                                 Fill="{Binding Availability, Converter={StaticResource StatusDot}}"
+                                                 ToolTip="{Binding AvailabilityText}" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Style="{StaticResource BodyText}" FontSize="12.5"
+                                                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding DisplayName}" Text="{Binding DisplayName}" />
+                                            <TextBlock Style="{StaticResource LabelText}" FontSize="10.5"
+                                                       Foreground="{DynamicResource FaintForegroundBrush}"
+                                                       Text="{Binding AvailabilityText}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Style="{StaticResource GhostButton}"
+                                                Padding="4,0" Content="☆" Tag="{Binding}"
+                                                Loaded="OnFavoriteLoaded" Click="OnFavoriteClick"
+                                                ToolTip="{svc:T wall.favoriteAdd}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Grid>
+
+                <!-- Views -->
+                <ToggleButton x:Name="ViewsHeader" Grid.Row="2" Style="{StaticResource SectionHeader}" IsChecked="False">
+                    <Grid>
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{svc:T wall.views}" />
+                        <Border x:Name="ViewChip" Visibility="Collapsed" HorizontalAlignment="Right" Margin="8,0,0,0"
+                                Background="{DynamicResource BrandYellowSoftBrush}"
+                                BorderBrush="{DynamicResource BrandYellowLineBrush}" BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusPill}" Padding="8,2" MaxWidth="150">
+                            <TextBlock x:Name="ViewChipText" Style="{StaticResource MonoText}" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource BrandYellowTextBrush}" />
+                        </Border>
+                    </Grid>
+                </ToggleButton>
+                <StackPanel Grid.Row="3" Margin="14,10,14,12"
+                            Visibility="{Binding IsChecked, ElementName=ViewsHeader, Converter={StaticResource Shown}}">
+                    <ComboBox x:Name="ViewBox" Style="{StaticResource FieldCombo}" Tag="{svc:T wall.noViews}" />
+                    <Grid Margin="0,7,0,0">
+                        <TextBox x:Name="ViewNameBox" Style="{StaticResource FieldInput}" ToolTip="{svc:T wall.viewName}" />
+                        <TextBlock x:Name="ViewNameHint" Style="{StaticResource LabelText}" Margin="12,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource FaintForegroundBrush}" Text="{svc:T wall.viewName}" />
+                    </Grid>
+                    <Grid Margin="0,7,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="6" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Button x:Name="SaveViewButton" Style="{StaticResource GhostButton}" Content="{svc:T wall.saveView}" />
+                        <Button x:Name="DeleteViewButton" Grid.Column="2" Style="{StaticResource GhostButton}" Content="{svc:T wall.deleteView}" />
+                    </Grid>
                 </StackPanel>
-                </Border>
+
+                <!-- PTZ: always drives the selected cell (or the enlarged one) -->
+                <ToggleButton x:Name="PtzHeader" Grid.Row="4" Style="{StaticResource SectionHeader}" IsChecked="False">
+                    <Grid>
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{svc:T ptz.title}" />
+                        <TextBlock x:Name="PtzTargetText" Style="{StaticResource LabelText}" HorizontalAlignment="Right"
+                                   MaxWidth="170" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="8,0,0,0" />
+                    </Grid>
+                </ToggleButton>
+                <StackPanel x:Name="FocusPtzPanel" Grid.Row="5" Margin="14,12,14,14"
+                            Visibility="{Binding IsChecked, ElementName=PtzHeader, Converter={StaticResource Shown}}">
+                    <TextBlock x:Name="PtzEmptyText" Style="{StaticResource LabelText}" TextWrapping="Wrap"
+                               Text="{svc:T ptz.selectCell}" />
+                    <StackPanel x:Name="PtzControls" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <!-- จอยสติ๊ก 8 ทิศในวงกลม ปุ่มกลางกลับตำแหน่งเริ่มต้น -->
+                            <Border x:Name="PadRing" Width="146" Height="146" CornerRadius="73" HorizontalAlignment="Center"
+                                    Background="{DynamicResource MutedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                <UniformGrid x:Name="FocusPad" Rows="3" Columns="3" Margin="6">
+                                    <Button Style="{StaticResource PadButton}" Tag="-1,1,0" ToolTip="{svc:T ptz.upLeft}" Content="↖" />
+                                    <Button Style="{StaticResource PadButton}" Tag="0,1,0" ToolTip="{svc:T ptz.up}" Content="▲" />
+                                    <Button Style="{StaticResource PadButton}" Tag="1,1,0" ToolTip="{svc:T ptz.upRight}" Content="↗" />
+                                    <Button Style="{StaticResource PadButton}" Tag="-1,0,0" ToolTip="{svc:T ptz.left}" Content="◀" />
+                                    <Button x:Name="FocusHomeButton" Style="{StaticResource PadButton}" Content="⌂" ToolTip="{svc:T ptz.home}" />
+                                    <Button Style="{StaticResource PadButton}" Tag="1,0,0" ToolTip="{svc:T ptz.right}" Content="▶" />
+                                    <Button Style="{StaticResource PadButton}" Tag="-1,-1,0" ToolTip="{svc:T ptz.downLeft}" Content="↙" />
+                                    <Button Style="{StaticResource PadButton}" Tag="0,-1,0" ToolTip="{svc:T ptz.down}" Content="▼" />
+                                    <Button Style="{StaticResource PadButton}" Tag="1,-1,0" ToolTip="{svc:T ptz.downRight}" Content="↘" />
+                                </UniformGrid>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource LabelText}" HorizontalAlignment="Center" Text="{svc:T ptz.speed}" />
+                                <Slider x:Name="FocusSpeed" Orientation="Vertical" Height="104" Minimum="0.1" Maximum="1" Value="0.5"
+                                        HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel x:Name="FocusZoom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                            <TextBlock Style="{StaticResource LabelText}" VerticalAlignment="Center" Margin="0,0,8,0" Text="{svc:T ptz.zoom}" />
+                            <Button Style="{StaticResource PadButton}" Width="44" Tag="0,0,-1" ToolTip="{svc:T ptz.zoomOut}" Content="−" />
+                            <Button Style="{StaticResource PadButton}" Width="44" Tag="0,0,1" ToolTip="{svc:T ptz.zoomIn}" Content="+" />
+                        </StackPanel>
+                        <StackPanel x:Name="FocusPresetSection" Margin="0,10,0,0">
+                            <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T ptz.presets}" />
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="FocusPresetBox" Style="{StaticResource FieldCombo}" />
+                                <Button x:Name="FocusPresetGo" Grid.Column="1" Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                                        Padding="12,6" Content="{svc:T ptz.go}" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock x:Name="FocusPtzStatus" Style="{StaticResource LabelText}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                </StackPanel>
             </Grid>
         </Border>
 
-        <GridSplitter x:Name="PickerSplitter" Grid.Column="1"
-                      Width="4"
-                      Margin="2,12,0,12"
-                      HorizontalAlignment="Stretch"
-                      VerticalAlignment="Stretch"
-                      ResizeDirection="Columns"
-                      ResizeBehavior="PreviousAndNext"
-                      Background="{DynamicResource BorderBrush}" />
-        <Grid x:Name="WallArea" Grid.Column="2" Margin="12,12,12,12">
+        <GridSplitter x:Name="PickerSplitter" Grid.Column="1" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                      ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Background="Transparent" />
+
+        <Grid x:Name="WallArea" Grid.Column="2">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="InspectorColumn" Width="0"/></Grid.ColumnDefinitions>
 
             <!--
-                The wall sits in a panel too, with the cells inset from its edge. The cells are
-                HWNDs and cannot be rounded themselves, so the panel is what gives the grid the
-                same edge as everything else on the page.
-
-                A fixed UniformGrid, never a ScrollViewer: an HWND does not clip to a scroll
-                viewport, so a scrolled tile would paint straight over the surrounding UI.
-                Layouts change the grid, they never make it scroll.
+                One toolbar row above the wall: paging on the left, layout and stream on the right.
+                Every control the wall has lives here or in the left rail, so the video area below
+                is nothing but video.
             -->
-            <Grid x:Name="WallStage" Grid.Row="1">
-            <Border x:Name="WallPanel" Style="{StaticResource Card}" Padding="7"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1" Padding="10,6" MinHeight="46">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="FocusPtzColumn" Width="0" />
-                    </Grid.ColumnDefinitions>
-                    <Grid x:Name="WallViewport" Grid.Column="0" Background="{DynamicResource VideoGroundBrush}">
-                        <UniformGrid x:Name="Wall" Rows="3" Columns="3"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Grid>
-                    <Border x:Name="FocusPtzPanel" Grid.Column="1" Margin="8,0,0,0" Padding="10"
-                            Visibility="Collapsed" Background="{DynamicResource PanelBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T ptz.title}" />
-                                <TextBlock Style="{StaticResource LabelText}" Margin="0,6,0,12"
-                                           TextWrapping="Wrap" Text="{svc:T ptz.hold}" />
-                                <UniformGrid x:Name="FocusPad" Rows="3" Columns="3">
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="-1,1,0" ToolTip="{svc:T ptz.upLeft}" Content="↖" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="0,1,0" ToolTip="{svc:T ptz.up}" Content="↑" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="1,1,0" ToolTip="{svc:T ptz.upRight}" Content="↗" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="-1,0,0" ToolTip="{svc:T ptz.left}" Content="←" />
-                                    <Button x:Name="FocusHomeButton" Style="{StaticResource GhostButton}" Height="34" Margin="2" Content="⌂" ToolTip="{svc:T ptz.home}" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="1,0,0" ToolTip="{svc:T ptz.right}" Content="→" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="-1,-1,0" ToolTip="{svc:T ptz.downLeft}" Content="↙" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="0,-1,0" ToolTip="{svc:T ptz.down}" Content="↓" />
-                                    <Button Style="{StaticResource GhostButton}" Height="34" Margin="2" Tag="1,-1,0" ToolTip="{svc:T ptz.downRight}" Content="↘" />
-                                </UniformGrid>
-                                <StackPanel x:Name="FocusZoom" Orientation="Horizontal" Margin="0,12,0,0">
-                                    <TextBlock Style="{StaticResource LabelText}" VerticalAlignment="Center" Text="{svc:T ptz.zoom}" />
-                                    <Button Style="{StaticResource GhostButton}" Width="40" Height="34" Margin="8,0,2,0" Tag="0,0,-1" ToolTip="{svc:T ptz.zoomOut}" Content="−" />
-                                    <Button Style="{StaticResource GhostButton}" Width="40" Height="34" Margin="2,0" Tag="0,0,1" ToolTip="{svc:T ptz.zoomIn}" Content="+" />
-                                </StackPanel>
-                                <TextBlock Style="{StaticResource LabelText}" Margin="0,12,0,4" Text="{svc:T ptz.speed}" />
-                                <Slider x:Name="FocusSpeed" Minimum="0.1" Maximum="1" Value="0.5" />
-                                <StackPanel x:Name="FocusPresetSection" Margin="0,14,0,0">
-                                    <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T ptz.presets}" />
-                                    <ComboBox x:Name="FocusPresetBox" Style="{StaticResource FieldCombo}" Margin="0,6,0,0" />
-                                    <Button x:Name="FocusPresetGo" Style="{StaticResource GhostButton}" Margin="0,6,0,0"
-                                            Content="{svc:T ptz.go}" />
-                                </StackPanel>
-                                <TextBlock x:Name="FocusPtzStatus" Style="{StaticResource LabelText}" Margin="0,12,0,0"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-                        </ScrollViewer>
-                    </Border>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <!--
+                        Pages, not a bigger grid. Asking for a group of eighty-five used to grow the wall
+                        to twenty-five cells and drop the other sixty; the layout is a decision about how
+                        much of the screen one camera gets, and it should not be overruled by how many
+                        cameras were asked for. Only the page on screen holds a decoder.
+                    -->
+                    <StackPanel x:Name="PageBar" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <Button x:Name="PrevPageButton" Style="{StaticResource GhostButton}" Padding="9,4" Content="◀" ToolTip="{svc:T wall.prevPage}" />
+                        <TextBlock x:Name="PageText" Style="{StaticResource MonoText}" Margin="10,0" VerticalAlignment="Center" Text="" />
+                        <Button x:Name="NextPageButton" Style="{StaticResource GhostButton}" Padding="9,4" Content="▶" ToolTip="{svc:T wall.nextPage}" />
+                        <Button x:Name="CycleButton" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="9,4" Content="{svc:T wall.cycleStart}" />
+                        <ComboBox x:Name="CycleSecondsBox" Style="{StaticResource FieldCombo}" Width="72" Margin="6,0,0,0" />
+                    </StackPanel>
+                    <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <StackPanel x:Name="LayoutSegments" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,6,2"/>
+                        <ComboBox x:Name="LayoutBox" Style="{StaticResource FieldCombo}" MinWidth="128" Margin="0,2,6,2"
+                                  ToolTip="{svc:T layout.more}" VerticalAlignment="Center"/>
+                        <Button x:Name="LayoutEditButton" Style="{StaticResource GhostButton}" Content="{svc:T layout.edit}" Padding="8,5" Margin="0,2,0,2"/>
+                        <Border Style="{StaticResource ToolbarDivider}" />
+                        <StackPanel x:Name="StreamSegments" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,0,2"/>
+                        <Border Style="{StaticResource ToolbarDivider}" />
+                        <Button x:Name="ClearAllButton" Style="{StaticResource GhostButton}" Content="{svc:T wall.clearAll}" Padding="8,5" Margin="0,2,6,2"/>
+                        <ToggleButton x:Name="InspectorToggle" Style="{StaticResource SegmentButton}" Content="{svc:T workspace.inspect}" Margin="0,2,6,2"/>
+                        <Button x:Name="DiagnosticButton" Style="{StaticResource GhostButton}" Content="{svc:T diagnostic.title}" Padding="8,5" Margin="0,2,6,2"/>
+                        <Button x:Name="MonitorWallButton" Style="{StaticResource GhostButton}" Content="{svc:T monitor.title}" Padding="8,5" Margin="0,2,0,2"/>
+                    </WrapPanel>
                 </Grid>
             </Border>
-            </Grid>
 
-            <Border x:Name="FocusToolbar" Grid.Row="0" Style="{StaticResource Card}"
-                    Padding="12,8" Margin="0,0,0,8" Visibility="Collapsed">
+            <Border x:Name="FocusToolbar" Grid.Row="1" Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,6" Visibility="Collapsed">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="FocusBackButton" Style="{StaticResource GhostButton}"
-                                Content="{svc:T wall.backToWall}" />
+                        <Button x:Name="FocusBackButton" Style="{StaticResource GhostButton}" Content="{svc:T wall.backToWall}" />
                         <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
                             <TextBlock Style="{StaticResource EyebrowText}" Text="{svc:T wall.focus}" />
                             <TextBlock x:Name="FocusCameraNameText" Style="{StaticResource HeadingText}"
@@ -426,46 +432,43 @@
                 </Grid>
             </Border>
 
-            <!--
-                Pages, not a bigger grid. Asking for a group of eighty-five used to grow the wall
-                to twenty-five cells and drop the other sixty; the layout is a decision about how
-                much of the screen one camera gets, and it should not be overruled by how many
-                cameras were asked for. Only the page on screen holds a decoder, so a wall of ten
-                pages costs exactly what one page costs.
-            -->
-            <StackPanel Grid.Row="2"
-                        x:Name="PageBar"
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Center"
-                        Margin="0,10,0,0"
-                        Visibility="Collapsed">
-                <Button x:Name="PrevPageButton"
-                        Style="{StaticResource GhostButton}"
-                        Padding="12,4"
-                        Content="◀"
-                        ToolTip="{svc:T wall.prevPage}" />
-                <TextBlock x:Name="PageText"
-                           Style="{StaticResource MonoText}"
-                           Margin="14,0"
-                           VerticalAlignment="Center"
-                           Text="" />
-                <Button x:Name="NextPageButton"
-                        Style="{StaticResource GhostButton}"
-                        Padding="12,4"
-                        Content="▶"
-                        ToolTip="{svc:T wall.nextPage}" />
-                <Button x:Name="CycleButton" Style="{StaticResource GhostButton}"
-                        Margin="12,0,0,0" Padding="10,4"
-                        Content="{svc:T wall.cycleStart}" />
-                <ComboBox x:Name="CycleSecondsBox" Style="{StaticResource FieldCombo}"
-                          Width="78" Margin="6,0,0,0" />
-            </StackPanel>
+            <Border x:Name="InspectorPanel" Grid.Column="1" Grid.RowSpan="4" Padding="14" Background="{DynamicResource SurfaceBrush}"
+                    Visibility="Collapsed" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="{svc:T workspace.inspect}" Style="{StaticResource EyebrowText}" Margin="0,0,0,16"/>
+                        <TextBlock x:Name="InspectorName" Text="{svc:T workspace.select}" Style="{StaticResource HeadingText}" FontSize="18" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="InspectorGroup" Style="{StaticResource LabelText}" Margin="0,6,0,16"/>
+                        <TextBlock x:Name="InspectorState" Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{svc:T workspace.cameraId}" Style="{StaticResource EyebrowText}" Margin="0,20,0,6"/>
+                        <TextBlock x:Name="InspectorId" Style="{StaticResource MonoText}" TextWrapping="Wrap"/>
+                        <Button x:Name="InspectorPlayback" Style="{StaticResource GhostButton}" Content="{svc:T workspace.openPlayback}" Margin="0,20,0,0" IsEnabled="False"/>
+                        <Button x:Name="InspectorFocus" Style="{StaticResource GhostButton}" Content="{svc:T workspace.controls}" Margin="0,8,0,0" IsEnabled="False"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
 
-            <TextBlock x:Name="HintText"
-                       Grid.Row="3"
-                       Style="{StaticResource MonoText}"
-                       Margin="4,10,0,0"
-                       Text="{svc:T wall.hint}" />
+            <!--
+                The wall fills everything below the toolbar, edge to edge, like the VMS clients do:
+                the cells take the shape of the space and each player keeps its camera's aspect
+                inside its own cell.
+
+                A fixed Grid, never a ScrollViewer: an HWND does not clip to a scroll viewport, so a
+                scrolled tile would paint straight over the surrounding UI. Rows/columns and spans
+                are set in code from the chosen WallLayoutDefinition.
+            -->
+            <Grid x:Name="WallStage" Grid.Row="2">
+                <Border x:Name="WallPanel" Background="{DynamicResource VideoGroundBrush}" Padding="1">
+                    <Grid x:Name="WallViewport" Background="{DynamicResource VideoGroundBrush}">
+                        <Grid x:Name="Wall" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,1,0,0" Padding="10,4">
+                <TextBlock x:Name="HintText" Style="{StaticResource MonoText}" TextTrimming="CharacterEllipsis" Text="{svc:T wall.hint}" />
+            </Border>
         </Grid>
     </Grid>
 </UserControl>

@@ -42,7 +42,7 @@
 
     <Style x:Key="LabelText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
         <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -50,7 +50,7 @@
     <!-- Section labels: small, spaced, upper. Used where a heading would be too loud. -->
     <Style x:Key="EyebrowText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeTiny}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeTiny}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource FaintForegroundBrush}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
@@ -58,14 +58,14 @@
 
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style x:Key="HeadingText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeLarge}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeLarge}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     </Style>
@@ -73,20 +73,20 @@
     <!-- The one big line on a page. Only ever one per screen. -->
     <Style x:Key="DisplayText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeDisplay}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeDisplay}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     </Style>
 
     <Style x:Key="MonoText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
         <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}" />
     </Style>
 
     <Style x:Key="PrimaryButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource BrandYellowInkBrush}" />
         <Setter Property="Background" Value="{DynamicResource BrandYellowBrush}" />
@@ -118,7 +118,7 @@
 
     <Style x:Key="GhostButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}" />
         <Setter Property="Background" Value="{DynamicResource CardBrush}" />
@@ -325,7 +325,7 @@
     -->
     <Style x:Key="PageTab" TargetType="ToggleButton">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}" />
         <Setter Property="Cursor" Value="Hand" />
@@ -365,7 +365,7 @@
     <!-- Segmented control, for choices that are one of a small fixed set - the wall's cell count. -->
     <Style x:Key="SegmentButton" TargetType="ToggleButton">
         <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}" />
         <Setter Property="MinWidth" Value="38" />
@@ -483,7 +483,7 @@
 
     <Style x:Key="FieldInput" TargetType="TextBox">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
@@ -512,7 +512,7 @@
 
     <Style x:Key="FieldPassword" TargetType="PasswordBox">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
@@ -548,7 +548,7 @@
     -->
     <Style x:Key="FieldCombo" TargetType="ComboBox">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
         <Setter Property="Padding" Value="11,7" />
         <Setter Property="Cursor" Value="Hand" />
@@ -558,7 +558,7 @@
                     <Setter Property="Padding" Value="10,7" />
                     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
                     <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-                    <Setter Property="FontSize" Value="{StaticResource FontSizeBase}" />
+                    <Setter Property="FontSize" Value="{DynamicResource FontSizeBase}" />
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ComboBoxItem">
@@ -634,7 +634,7 @@
                                    IsHitTestVisible="False"
                                    Visibility="Collapsed"
                                    FontFamily="{StaticResource UiFont}"
-                                   FontSize="{StaticResource FontSizeBase}"
+                                   FontSize="{DynamicResource FontSizeBase}"
                                    Foreground="{DynamicResource FaintForegroundBrush}"
                                    Text="{TemplateBinding Tag}" />
 

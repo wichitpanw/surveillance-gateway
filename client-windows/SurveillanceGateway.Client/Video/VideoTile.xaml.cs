@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -289,6 +290,20 @@ public partial class VideoTile : UserControl, IDisposable
 
     /// <summary>Replaces the stream name on the codec chip. Null means "use StreamType".</summary>
     private string? _streamNote;
+
+    public StreamDiagnostic CaptureDiagnostic()
+    {
+        uint width = 0, height = 0;
+        _renderer?.Player.Size(0, ref width, ref height);
+        using var media = _renderer?.Player.Media;
+        var tracks = media?.Tracks;
+        var track = tracks?.FirstOrDefault(t => t.TrackType == TrackType.Video);
+        var codec = track.HasValue ? media?.CodecDescription(TrackType.Video, track.Value.Codec) : null;
+        return new StreamDiagnostic(Camera?.Id ?? "", Camera?.GlobalId, StreamType, State.ToString(),
+            _renderer?.Fps ?? 0, _renderer?.LostPictures ?? 0, _renderer?.Reconnects ?? 0, width, height,
+            codec, _renderer?.Player.EnableHardwareDecoding ?? false, Strings.T("diagnostic.decoderUnknown"),
+            _usingFallback, _renderer?.LastFailure);
+    }
 
     public VideoState State => _renderer?.State ?? VideoState.Idle;
 

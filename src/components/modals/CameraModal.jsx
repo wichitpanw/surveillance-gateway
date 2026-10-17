@@ -164,7 +164,7 @@ const CameraModal = ({
                       }}
                       className={cn(
                         "w-full h-9 rounded-lg text-xs font-bold transition-all",
-                        formData.type === type ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        formData.type === type ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
                       )}
                     >
                       {type === 'manual' ? 'Manual RTSP' : type === 'onvif_cam' ? 'ONVIF Camera' : type === 'onvif_nvr' ? 'ONVIF NVR' : type === 'api' ? 'API' : 'VMS'}

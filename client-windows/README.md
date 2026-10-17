@@ -1,14 +1,19 @@
 # Windows client (SurveillanceGateway)
 
-Release status 2026-10-07: Client **1.9.5** (released 2026-10-06) · Gateway **d645ed9**
-1.9.5 adds a per-tile speaker button for cameras whose Edge has audio enabled; tiles always start muted — see [docs/CAMERA-AUDIO.md](../docs/CAMERA-AUDIO.md)
-AI Events shows thumbnails and full images with Edge / Group / origin filters (1.9.3) · the Camera Library filter panel can be collapsed (1.9.4)
-Build and offscreen WPF rendering pass; the real client window and real audio after installing this release are not yet confirmed
+Current version: Client **1.14.2** (`SurveillanceGateway.Client.csproj`) · Gateway **651549d**
+- **1.14.2** (`c361c33`): Hardened Live ↔ Playback investigation state and catalog scope cleanup
+- **1.14.1** (`4b86c7f`): Reopen a saved wall view after the wall has been cleared
+- **1.14.0** (`9516b91`): VMS-style Live view with 1 px tile dividers, single-row toolbar, and left-hand `Cameras` / `Views` / `PTZ` accordion rail (PTZ available immediately for the selected tile)
+- **1.13.0** (`2f8a23e`): Isometric Home landing page (`Views/IsoArt.cs`)
+- **1.12.0** (`e26d24f`): Merged-cell wall layouts (`1+3`, `1+5`, `1+7`, `1+9`, `2+8`, `1+12`) and custom layout editor (`WallLayoutEditorWindow`, up to 25 cells; `Auto` stream promotes the primary merged cell to `main`)
+- **1.11.0** (`1a4ba1c`): Shell / Live / Playback workspace redesign, Graphite Dark & Light themes, Compact / Comfortable density, `Ctrl+F` search focus — see [docs/WINDOWS-CLIENT-WORKSPACE.md](../docs/WINDOWS-CLIENT-WORKSPACE.md)
+- **1.10.0** (`bb58d2d`): Diagnostics (`DiagnosticsWindow` + whitelisted JSON export), multi-monitor walls (`MonitorWallWindow`), `Auto` stream policy, AI Event → Live/Playback navigation, and Playback evidence export with `.evidence.json` + SHA256 — see [docs/WINDOWS-CLIENT-1.10.0.md](../docs/WINDOWS-CLIENT-1.10.0.md)
+- **1.9.5**: Per-tile speaker button for cameras whose Edge has audio enabled; tiles always start muted — see [docs/CAMERA-AUDIO.md](../docs/CAMERA-AUDIO.md)
 
 The user's camera viewer — connects to **Surveillance Gateway Regional** or **Surveillance Gateway Central** with the API key of the target machine, then plays video, builds video walls, shows the map, and sends PTZ commands
 
 Clients inside a region should be set to that region's Regional URL and API key directly, so viewing within the region continues when the Regional–Central link is down; nationwide viewers use Central and a key issued by Central
-It is a "consumer" of `/api/v1` and a reference implementation, not another way into the cameras · .NET 8 / WPF · Updated 2026-10-07 (v1.9.5)
+It is a "consumer" of `/api/v1` and a reference implementation, not another way into the cameras · .NET 8 / WPF · Updated October 2026 (v1.14.2)
 
 ## Why this program exists
 
@@ -37,7 +42,7 @@ Releasing to users: [../docs/CLIENT-RELEASES.md](../docs/CLIENT-RELEASES.md)
 - Live status: `GET /api/v1/events` (SSE), a single connection feeding the status dots on every page — a status nobody has reported yet is gray, not offline
   The initial status is read from `state.reachable` in `/api/v1/cameras` (1.3.4) — `streams.main.ready` is unusable because it stays true even when the camera is unplugged
   The client reads `camera_state` to distinguish online/offline/edge unreachable/awaiting RTSP/disabled, and adjusts the Home counts according to events
-- The Home page shows a warning bar when an edge's build does not match central (`edges[]` in `/api/v1/health`, 1.3.4)
+- The Home page shows a warning bar when an edge's build does not match central (`edges[]` in `/api/v1/cameras` / `/api/v1/health`, 1.3.4)
 - Cameras from an edge carry `origin.reachable` in `/api/v1/cameras` (edge unreachable ≠ camera down), and the client reads this field
 - PTZ: `GET/POST /api/v1/cameras/:id/ptz` — the PTZ buttons appear only for cameras that can rotate and when the key has `allow_ptz`
 
@@ -47,16 +52,16 @@ The screen layout matches the Central/Edge web UI (`src/components/shell/AppShel
 
 | Part | Details |
 |---|---|
-| Sidebar | Always dark, with Overview / Monitoring / Devices sections, a yellow bar on the selected page, collapsible to icons (☰ button) |
-| Title bar / Navbar | Dark top bar with minimize/maximize/close buttons · breadcrumb (Surveillance Gateway Client › section › page) · server address + key chip · update, full screen (F11), sign out |
+| Sidebar | Navigation rail (64 / 188 px, without width animation so HWNDs do not reflow) with Overview / Monitoring / Devices sections, a yellow bar on the selected page |
+| Title bar / Navbar | Top bar with minimize/maximize/close buttons · breadcrumb · server address + key chip · Diagnostics, update, full screen (F11), sign out |
 | Tabs | Pages open as tabs and views are kept as long as the tab is open (an arranged wall is not lost) · closing a tab = destroying the view and stopping decoding |
-| Home | A prominent Live Wall card, with Map / Camera details and a Total / Online / Offline / Other panel plus recent events |
-| Video wall | 1/4/9/16/25 cells, camera selection, Layout and Stream in the camera bar, Clear all cells beside Stream, saved views in Wall Controls at the bottom, status filter, favorites, manually started automatic page cycling, status dot + fps + codec · right-click for a cell menu · double-click enlarges the video within the existing Wall, with the PTZ panel beside the video when permitted |
-| Map | Camera pins on a 3D map in WebView2 from central's `/client-map.html` (that page does not hold a key) |
+| Home | Isometric landing page (1.13.0) with Live Wall, Playback, Map, Camera details, AI Events, Total / Online / Offline / Other counts, and recent events |
+| Video wall | VMS-style Live view (1.14.0): 1 px tile dividers, left-hand `Cameras` / `Views` / `PTZ` accordion rail, single-row toolbar · 1/4/9/16/25 grids + merged-cell layouts (`1+3`, `1+5`, `1+7`, `1+9`, `2+8`, `1+12`, custom layout editor ≤ 25 cells, 1.12.0), `Auto`/main/sub stream mode, multi-monitor secondary walls, saved views (reopenable after clearing, 1.14.1), status filter, favorites, page cycling |
+| Map | Camera pins on a 3D map in WebView2 from central's `/client-map.html` (with bundled MapLibre worker) |
 | Camera details | Camera information, streams, tracks |
 | Player window | One window per camera, draggable to another screen · PTZ panel beside the video (hold = rotate) |
-| Playback | A one-day VMS-style recording timeline (`Views/PlaybackTimeline.cs`, 1.8.4) · MP4 download of up to 30 minutes (`PlaybackDownloadWindow`, 1.9.1) · the key needs `allow_playback` · video is pulled from the devices at the edge |
-| AI events | Events from cameras / NVRs / VMS / external APIs, relayed Edge → Regional / Central, for the last 24 hours (`GET /api/v1/ai/events`) + new events over SSE · thumbnails load one at a time · clicking a row opens `EventDetailWindow` (full image, details, ←/→ to move, Esc to close) |
+| Playback | One-day VMS-style recording timeline (`Views/PlaybackTimeline.cs`) · start/end evidence markers and MP4 + `.evidence.json` SHA256 export (`PlaybackDownloadWindow`) · header return to Live · requires `allow_playback` |
+| AI events | Events from cameras / NVRs / VMS / external APIs for the last 24 hours (`GET /api/v1/ai/events`) + new events over SSE · `EventDetailWindow` supports jumping directly to Live or Playback at the event timestamp |
 
 The Home and Camera details pages slide in with a fade-transform, while the wall and map do not animate, because **video (libVLC) and WebView2 are HWNDs —
 WPF cannot draw over them or move/fade them** · for the same reason the content host shows one page at a time, and views are added/removed rather than hidden with Visibility

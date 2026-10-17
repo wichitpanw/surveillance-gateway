@@ -58,6 +58,11 @@ public sealed class WallView
     [JsonPropertyName("cells")]
     public int Cells { get; set; } = 9;
 
+    /// <summary>id ของผัง (ช่องเท่ากันหรือรวมช่อง); วิวรุ่นก่อนไม่มีค่านี้ จึงใช้ <see cref="Cells"/> แทน</summary>
+    [JsonPropertyName("layout")]
+    public string? Layout { get; set; }
+    public string? Mode { get; set; }
+
     /// <summary>Camera ids in cell order. Empty entries are empty cells, and are kept.</summary>
     [JsonPropertyName("cameras")]
     public string[] Cameras { get; set; } = Array.Empty<string>();
@@ -82,6 +87,7 @@ public sealed class WallView
 /// </summary>
 public sealed class AppSettings
 {
+    public string WorkspaceDensity { get; set; } = "compact";
     private const string EntropyLabel = "SurveillanceGateway.Client/credentials/v1";
 
     /// <summary>UTF-8 with no byte order mark: the file is JSON other tools read too.</summary>
@@ -127,6 +133,14 @@ public sealed class AppSettings
     [JsonPropertyName("wallCells")]
     public int WallCells { get; set; } = 9;
 
+    /// <summary>id ของผังล่าสุด; ว่าง = ผังเท่ากันตาม <see cref="WallCells"/> (ไฟล์ตั้งค่ารุ่นก่อน)</summary>
+    [JsonPropertyName("wallLayout")]
+    public string? WallLayout { get; set; }
+
+    /// <summary>ผังรวมช่องที่ผู้ใช้สร้างเองในเครื่องนี้</summary>
+    [JsonPropertyName("wallLayouts")]
+    public List<WallLayoutDefinition> WallLayouts { get; set; } = new();
+
     /// <summary>
     /// The stream the whole wall is set to, and the one a newly placed camera starts on.
     ///
@@ -140,6 +154,9 @@ public sealed class AppSettings
     /// <summary>Saved wall arrangements the operator can switch between.</summary>
     [JsonPropertyName("wallViews")]
     public List<WallView> WallViews { get; set; } = new();
+
+    public bool RestoreMonitorWalls { get; set; }
+    public List<MonitorWallPlacement> MonitorWalls { get; set; } = new();
 
     [JsonPropertyName("favoriteCameraIds")]
     public List<string> FavoriteCameraIds { get; set; } = new();
@@ -312,6 +329,10 @@ public sealed class AppSettings
     /// </summary>
     private void Migrate()
     {
+        MonitorWalls ??= new();
+        MonitorWalls = MonitorWalls.Where(p => p is not null && !string.IsNullOrEmpty(p.ViewId)).ToList();
+        WallLayouts = (WallLayouts ?? new()).Where(l => l is not null && !string.IsNullOrEmpty(l.Id))
+            .Select(Services.WallLayouts.Normalise).OfType<WallLayoutDefinition>().ToList();
         if (string.IsNullOrEmpty(LegacyProtectedApiKey) || string.IsNullOrEmpty(LegacyServerUrl))
         {
             LegacyServerUrl = null;

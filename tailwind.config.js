@@ -1,3 +1,6 @@
+import animate from 'tailwindcss-animate';
+import plugin from 'tailwindcss/plugin';
+
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ["class"],
@@ -104,12 +107,12 @@ export default {
   	}
   },
   plugins: [
-    require("tailwindcss-animate"),
+    animate,
     // variant `coarse:` = อุปกรณ์ที่ชี้ตำแหน่งแบบหยาบ (นิ้ว) เช่น iPad — ใช้เปิดปุ่มที่ปกติ
     // ซ่อนอยู่หลัง group-hover: ให้มองเห็นได้ เพราะ hover ไม่มีอยู่จริงบนหน้าจอสัมผัส
-    // ต้องประกาศเองเพราะ Tailwind รุ่นนี้คือ 3.4 ซึ่งยังไม่มี pointer-coarse: ในตัว (เป็นของ v4)
+    // คงชื่อ coarse: เดิมเพื่อให้ปุ่มสัมผัสใช้งานเหมือนเดิมหลังย้ายเป็น Tailwind 4
     // ผลต่อ CSS ฝั่งเดสก์ท็อป: ไม่มีเลย ทุกอย่างอยู่ในบล็อก @media (pointer: coarse)
-    require("tailwindcss/plugin")(({ addVariant }) => {
+    plugin(({ addVariant }) => {
       addVariant('coarse', '@media (pointer: coarse)');
     }),
   ],

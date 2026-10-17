@@ -100,35 +100,48 @@ function createGatewayAdminRouter({
        FROM api_clients ORDER BY created_at DESC`,
       (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(
-          (rows || []).map((row) => ({
-            id: row.id,
-            name: row.name,
-            keyHint: row.key_hint,
-            scopeGroups: parseScope(row.scope_groups),
-            enabled: Boolean(row.enabled),
-            allowPtz: Boolean(row.allow_ptz),
-            allowPlayback: Boolean(row.allow_playback),
-            allowEventWrite: Boolean(row.allow_event_write),
-            allowPublic: Boolean(row.allow_public),
-            createdAt: row.created_at,
-            createdBy: row.created_by,
-            lastSeenAt: row.last_seen_at,
-            /*
-              มีกี่ตัวที่กำลังใช้ key ใบนี้อยู่ตอนนี้
+        const list = rows || [];
+        // ถ้าผู้เรียกถูกจำกัดขอบเขตกล้อง: ให้เห็นเฉพาะ key ที่ scope อยู่ในขอบเขตกล้องของตัวเอง
+        const filterRows = (cb) => {
+          if (!(req.deviceIds instanceof Set)) return cb(list);
+          db.all('SELECT id, group_name FROM cameras', (cErr, camRows) => {
+            if (cErr) return cb([]);
+            const cameras = camRows || [];
+            const allowed = list.filter((row) => {
+              const scope = parseScope(row.scope_groups);
+              if (scope === null || !scope.length) return false; // ทุกกลุ่ม = กว้างกว่าขอบเขต
+              return scope.every((g) => {
+                const groupCams = cameras.filter((c) => c.group_name === g);
+                return groupCams.length > 0 && groupCams.every((c) => req.deviceIds.has(c.id));
+              });
+            });
+            cb(allowed);
+          });
+        };
 
-              ต่างจาก lastSeenAt คนละเรื่อง: lastSeenAt บอกว่า "ใบนี้เคยถูกใช้ล่าสุดเมื่อไร"
-              ซึ่งใบที่ถูกแจกไปสิบเครื่องกับใบที่ใช้เครื่องเดียวให้ค่าเท่ากันหมด ส่วนตัวเลขนี้
-              บอกจำนวนเครื่องที่ยังทำงานอยู่จริง ซึ่งเป็นสิ่งที่ต้องรู้ก่อนจะเพิกถอนใบไหน
-
-              เก็บในหน่วยความจำ จึงเริ่มนับใหม่ทุกครั้งที่รีสตาร์ต backend — ถูกต้องตาม
-              ความหมาย เพราะตอนนั้นไม่มีใครเชื่อมต่ออยู่จริง
-            */
-            activeInstances: listActiveInstances ? listActiveInstances(row.id).length : null,
-            // เปิดดูตัว key ซ้ำได้ไหม — ใบที่ออกก่อนมีระบบเก็บคีย์จะเป็น false ตลอดไป
-            recoverable: Boolean(row.recoverable),
-          })),
-        );
+        filterRows((visibleRows) => {
+          res.json(
+            visibleRows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              keyHint: row.key_hint,
+              scopeGroups: parseScope(row.scope_groups),
+              enabled: Boolean(row.enabled),
+              allowPtz: Boolean(row.allow_ptz),
+              allowPlayback: Boolean(row.allow_playback),
+              allowEventWrite: Boolean(row.allow_event_write),
+              allowPublic: Boolean(row.allow_public),
+              createdAt: row.created_at,
+              createdBy: row.created_by,
+              lastSeenAt: row.last_seen_at,
+              /*
+                มีกี่ตัวที่กำลังใช้ key ใบนี้อยู่ตอนนี้
+              */
+              activeInstances: listActiveInstances ? listActiveInstances(row.id).length : null,
+              recoverable: Boolean(row.recoverable),
+            })),
+          );
+        });
       },
     );
   });
@@ -204,7 +217,7 @@ function createGatewayAdminRouter({
       ],
       (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        invalidateCache();
+        invalidateCache(id);
         logAction?.(req, 'API_KEY_CREATE', `ออก API key "${name}" (${hint})`);
         res.status(201).json({
           id,
@@ -257,20 +270,22 @@ function createGatewayAdminRouter({
    * ตอบจากหน่วยความจำล้วน ไม่แตะฐานข้อมูล
    */
   router.get('/:id/instances', (req, res) => {
-    if (!listActiveInstances) {
-      return res.json({ id: req.params.id, instances: [], available: false });
-    }
+    loadManageableKey(req, res, () => {
+      if (!listActiveInstances) {
+        return res.json({ id: req.params.id, instances: [], available: false });
+      }
 
-    const instances = listActiveInstances(req.params.id).map((entry) => ({
-      instanceId: entry.instanceId,
-      label: entry.label,
-      address: entry.address,
-      userAgent: entry.userAgent,
-      firstSeenAt: new Date(entry.firstSeen).toISOString(),
-      lastSeenAt: new Date(entry.lastSeen).toISOString(),
-    }));
+      const instances = listActiveInstances(req.params.id).map((entry) => ({
+        instanceId: entry.instanceId,
+        label: entry.label,
+        address: entry.address,
+        userAgent: entry.userAgent,
+        firstSeenAt: new Date(entry.firstSeen).toISOString(),
+        lastSeenAt: new Date(entry.lastSeen).toISOString(),
+      }));
 
-    res.json({ id: req.params.id, instances, available: true });
+      res.json({ id: req.params.id, instances, available: true });
+    });
   });
 
   /**
@@ -335,7 +350,7 @@ function createGatewayAdminRouter({
     db.run(`UPDATE api_clients SET ${sets.join(', ')} WHERE id = ?`, [...params, req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       if (!this.changes) return res.status(404).json({ error: 'ไม่พบ key นี้' });
-      invalidateCache();
+      invalidateCache(req.params.id);
       logAction?.(req, 'API_KEY_UPDATE', `${notes.join(', ')} API key ${req.params.id}`);
       res.json({ success: true });
     });
@@ -346,7 +361,7 @@ function createGatewayAdminRouter({
       db.run('DELETE FROM api_clients WHERE id = ?', [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         if (!this.changes) return res.status(404).json({ error: 'ไม่พบ key นี้' });
-        invalidateCache();
+        invalidateCache(req.params.id);
         logAction?.(req, 'API_KEY_DELETE', `เพิกถอน API key ${req.params.id}`);
         res.json({ success: true });
       });

@@ -40,6 +40,8 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
     private CancellationTokenSource? _attempt;
     private string? _ownerKey;
     private int _retryCount;
+    public int Reconnects { get; private set; }
+    public string? LastFailure { get; private set; }
     private long _lastDisplayed;
     private double _framelessSeconds;
     private bool _disposed;
@@ -127,6 +129,8 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
         {
             _ownerKey = ownerKey;
             _retryCount = 0;
+            Reconnects = 0;
+            LastFailure = null;
         }
 
         _urlProvider = urlProvider;
@@ -315,6 +319,8 @@ public sealed class LibVlcVideoRenderer : IVideoRenderer
         }
 
         _retryCount++;
+        Reconnects++;
+        LastFailure = reason;
         var failedAttempt = _attempt;
         SetState(VideoState.Retrying, string.Format(Strings.T("video.retrying"), reason, _retryCount, MaxRetries));
         // StateChanged อาจสั่ง fallback/stop ทันที; ห้าม timer ของงานเก่าแทรกงานใหม่

@@ -10,18 +10,19 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google-cloud/vertexai": "^1.10.0",
-    "@google/generative-ai": "^0.24.1",
-    "axios": "^1.16.0",
+    "axios": "1.20.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "fast-xml-parser": "^5.11.0",
     "form-data": "^4.0.5",
-    "multer": "^2.1.1",
+    "multer": "2.4.0",
     "node-onvif": "^0.1.7",
     "os-utils": "^0.0.14",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "6.0.1",
     "ws": "^8.21.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

@@ -1,7 +1,7 @@
 # CAMERA-QUIRKS — ปัญหาเฉพาะยี่ห้อ/รุ่นที่เจอแล้ว
 
 กล้องในระบบนี้คือ "ชุด firmware" ไม่ใช่ชุดกล้อง — Tiandy, Uniview, Dahua, Hikvision และ NVR ยี่ห้อทั่วไปต่างอ้างว่ารองรับ
-ONVIF/RTSP และต่างก็ทำผิดสเปกคนละมุม ไฟล์นี้บันทึกปัญหาที่เจอจริง วิธีแก้ และวิธีไล่ปัญหาตัวถัดไป · อัปเดต 2026-10-02
+ONVIF/RTSP และต่างก็ทำผิดสเปกคนละมุม ไฟล์นี้บันทึกปัญหาที่เจอจริง วิธีแก้ และวิธีไล่ปัญหาตัวถัดไป · อัปเดต 2026-10-11
 
 ## หลักคิดก่อนดูรายการ
 
@@ -169,6 +169,23 @@ segment ออกมาเป็นเสียง mp3 ล้วนแม้ pro
   และ server แก้แถวเดิมให้ตอนเริ่ม) · ขอเสียง `&audio=1` ได้ 503 เมื่อกล้องไม่ส่งเสียงให้ S30
 - สแกนหลาย host ตอบ 401 กับทุกคำสั่ง ONVIF ยกเว้น `GetSystemDateAndTime` → การสแกนใช้คำสั่งนั้นตรวจว่าเป็น ONVIF
 
+### Avigilon (2.0C-H5SL-D1-IR, fw 3.30.0.38, 203.0.113.15) — ตั้ง H.265 แล้ว ONVIF Media 1 ปฏิเสธ GetProfiles
+
+- ทดสอบ 2026-10-09 · ONVIF ด้วยบัญชีเว็บ (`admin`) ได้ · device/media service อยู่ `/onvif/device_service`, `/onvif/media_service`
+  (Media 1 และ Media 2 ใช้ XAddr เดียวกัน)
+- Media 1 `GetProfiles` ตอบ `400 InvalidConfiguration` — Detail: `Invalid VideoEncoding H265 for Media 1`
+  (Media 1 ไม่มีนิยาม H.265) → `node-onvif` init ล้มทั้งตัว และระบบเคยถอยไปเดา `/onvif1` ซึ่งไม่มีภาพ
+- **แก้แล้ว:** `server/onvif_patch.js` ถอยไป Media 2 (`GetServices` หา ver20/media → `GetProfiles Type=All` → `GetStreamUri`/`GetSnapshotUri` ของ Media 2)
+  เฉพาะเมื่อ Media 1 ตอบ fault 400/500 ที่ไม่ใช่เรื่องสิทธิ์ · log `Media1 GetProfiles failed … trying Media2` · จำ host:port ไว้ตลอด process
+  ครั้งถัดไปไป Media 2 ตรง (1 วิ → 0.1 วิ) · ใช้ได้กับกล้อง H.265 ทุกยี่ห้อที่เข้มแบบนี้ ไม่ต้องมียี่ห้อ Avigilon แยก
+- RTSP: `rtsp://<user>:<pass>@<ip>/defaultPrimary?streamType=u` (HEVC 1920×1080 30fps) · `defaultSecondary?streamType=u` (HEVC 720×480)
+  ทั้งคู่มีเสียง PCMU 8 kHz และ data track 2 เส้น · snapshot `http://<ip>/media/cam0/still.jpg` (digest)
+- token ของ VideoSourceConfiguration (`camCfg0`) ไม่ตรงกับ VideoSource (`cam0`) — การสแกนจับคู่ด้วย `SourceToken` ด้วย (`videoSourceToken`)
+  ไม่งั้นได้แถวออฟไลน์เกินหนึ่งแถว
+- นาฬิกากล้องเป็นปี 2016 แม้ตั้ง NTP — WS-Security ยังผ่านเพราะ node-onvif ชดเชย `time_diff`
+- **ยืนยันใช้งานจริงแล้ว 2026-10-11:** ผู้ดูแลทดสอบ Avigilon แล้วภาพมา และยืนยัน Edge ได้รับ `48f4298`; ปิดงานรอทดสอบภาพใช้งานจริงหลัง Media2 fallback · การทดสอบก่อนหน้านี้ ffmpeg ถอด HEVC → H.264 + AAC ได้
+- ยังไม่ได้ยืนยันกรณี Avigilon หลัง NAT; รุ่นนี้เป็น bullet ไม่มี PTZ จึงไม่มีรายการรอทดสอบ PTZ ของรุ่นนี้
+
 ### Dahua init ONVIF ไม่ผ่าน
 
 กล้อง "พหลฯ" (203.0.113.147) ทำให้ `node-onvif` พังตอนอ่าน `Width` ของ profile ที่ไม่มีความละเอียด — ยังไม่ได้แก้ (ใช้ RTSP ตรงได้)
@@ -224,3 +241,23 @@ segment ออกมาเป็นเสียง mp3 ล้วนแม้ pro
 - Profile M ไม่ได้แนบ JPEG ให้โดยอัตโนมัติ และการมี ONVIF ไม่รับประกันว่า AI กฎเดียวกันรองรับทุกยี่ห้อ
 - UNV ต้องชดเชยเวลาเครื่อง; เหตุช้ากว่า 3 วินาทีหรือภาพโหลดเกิน 5 วินาทีไม่เผยแพร่เป็นเหตุพร้อมภาพ; ไม่รีบูตกล้องเพื่อแก้ช่อง JPEG ค้างตามคำสั่งผู้ใช้
 - ขอบเขตที่รองรับและหลักฐานสามชั้น: [EXTERNAL-AI.md](EXTERNAL-AI.md)
+
+### DSS: ดึงรายชื่อกล้องจาก device tree (ทดสอบ 2026-10-15)
+
+- `server/vms/dss.js` ใช้ `POST /brms/api/v1.0/tree/devices` พร้อม `categories: ["1"]`, `containVirtualDevice: "1"`, `resourceTypes: []` แล้วอ่าน `devices[].units[]` เฉพาะ `unitType = 1` และใช้ `channels[].channelCode` ตามที่ DSS ส่งมา
+- ดึงรายละเอียด/ชื่อกลุ่ม/สถานะผ่าน `device/channel/list` ครั้งละไม่เกิน 400 ID; ไม่ไล่เลข device code หรือประกอบ channel ID เอง จึงรองรับหลายช่องของ NVR และเลขที่อยู่นอกช่วงเดิมได้
+- ไม่กรอง offline; ไม่ส่ง device tree ดิบออก API เพราะมี credential ของอุปกรณ์ ไม่แก้ source_ref หรือ Global ID ของกล้องเดิม
+- tree ผิดรูป, สิทธิ์ไม่พอ, API ไม่รองรับ หรือรายละเอียดช่องขาด → ตอบ error ไม่ใช้รายการที่ขาดและไม่ fallback กลับไปเดา ID
+- ทดสอบอ่านจริงกับ DSS `203.0.113.50` ด้วยบัญชีเดิมของ Edge: 187 ช่อง ตรงรายการเดิมทั้งหมด รวม offline 30 ช่อง; หนึ่งรอบหลัง login ใช้ประมาณ 128 ms เทียบวิธีเดิม 1000 ms (เป็นผลวัดครั้งเดียว ไม่ใช่ benchmark); ยังไม่ได้ทดสอบ DSS จังหวัดทดสอบหรือทุก role/version
+- fixture `node scripts/check-dss-discovery.cjs`: loopback พอร์ตสุ่ม ไม่แตะ DB/อุปกรณ์จริง; ตรวจหลายช่อง/ID ซ้ำ/ช่อง alarm/offline, batch 805 ช่อง, response ผิดรูป/ขาด/สิทธิ์ไม่พอ/API ไม่รองรับ
+- จุดเริ่มต้นของ endpoint/payload: [source client](https://github.com/borlafu/dahua-dss-client/blob/main/dahua_dss/client.py) และ [device tree fields](https://github.com/borlafu/dahua-dss-client/blob/main/dahua_dss/cli.py); รูปแบบและผลนับยืนยันกับ DSS จริงข้างต้น ไม่ได้มาจากการ decompile DPSDK ที่ยังไม่เสร็จ
+### ONVIF: SourceToken และ XAddr เต็ม (2026-10-15)
+
+- จัดกลุ่ม main/sub ด้วย `VideoSourceConfiguration.SourceToken` ของกล้องจริงก่อน configuration token; อุปกรณ์เก่าที่ไม่ส่ง SourceToken ใช้ fallback เดิม และ Milestone profile ที่ไม่มี source ยังแยกกัน
+- rescan จับคู่ profile URI อื่นของกล้องเดียวกันด้วย เพื่อรู้จักแถวที่เคยเก็บ sub เป็น main; bulk import กันซ้ำด้วย main/sub/profiles ไม่รวม/ลบแถวเก่าที่เคยซ้ำหรือเปลี่ยน Global ID เอง
+- multicast discovery เก็บ XAddrs ที่ใช้ได้ทั้งหมด (สูงสุด 16) พร้อม scheme/host/port/path/query; hostname และ IPv6 ไม่ถูกตัดด้วย IPv4 regex และ HTTPS ไม่มี port ใช้ 443
+- ส่ง XAddrs ผ่านฟอร์มไป probe/import แล้วเก็บ JSON ใน `cameras.onvif_xaddrs`; มี migration สำหรับ DB ใหม่/เดิม ใช้ต่อเมื่อ snapshot/PTZ/status หรือเปิดฟอร์มใหม่ ไม่ส่ง endpoint ให้ผู้ไม่มี `device.secrets` หรือผ่าน SAFE_CAMERA_COLUMNS ของ `/api/v1`
+- endpoint ที่เก็บห้ามมี user/password ใน URL; query อาจมีข้อมูลลับจึงอยู่ใน CAMERA_SECRET_FIELDS เมื่อผู้ไม่มี secrets แก้ metadata ให้ละ field นี้เพื่อคง DB เดิม
+- SOAP คง query ของ service endpoint; ลอง XAddr ที่พบก่อน HTTP/HTTPS path มาตรฐานเดิม ถ้าคนเปลี่ยน host/port ในฟอร์มให้ใช้ปลายทางที่แก้แล้ว
+- ไม่เปลี่ยน subnet unicast scanner, นโยบาย NAT, auth retry หรือเพิ่ม HTTP Digest รอบนี้
+- หลักฐาน: `node scripts/check-onvif-source-grouping.cjs` และ `node scripts/check-onvif-endpoints.cjs` เป็น fixtures (HTTP/HTTPS loopback พอร์ตสุ่ม, DB memory); ไม่ใช่การทดสอบกล้องจริง, browser หรือ native Client

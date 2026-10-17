@@ -2,6 +2,24 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services">
+    <UserControl.Resources>
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+            <Setter Property="FontSize" Value="17"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="CardState" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="#DCE8F5"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource BackgroundBrush}">
         <Grid Margin="26,23,26,30">
             <Grid.ColumnDefinitions>
@@ -21,68 +39,85 @@
                                Foreground="{DynamicResource StatusWarnBrush}" TextWrapping="Wrap" />
                 </Border>
                 <TextBlock Style="{StaticResource EyebrowText}" Margin="0,26,0,11" Text="{svc:T home.quickAccess}" />
-                <Button x:Name="WallCard" Style="{StaticResource LandingCard}" Background="#263432" Padding="24" Height="252">
-                    <Grid>
-                        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <Border Width="88" Height="88" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                CornerRadius="22" Background="#344B47" Margin="0,0,15,0">
-                            <Path Width="45" Height="45" Stretch="Uniform" Stroke="#A7E2CD" StrokeThickness="1.7"
-                                  Data="M3 4 H11 V11 H3 Z M13 4 H21 V11 H13 Z M3 13 H11 V20 H3 Z M13 13 H21 V20 H13 Z" />
-                        </Border>
-                        <StackPanel VerticalAlignment="Top">
-                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="#A7E2CD" Text="{svc:T home.liveWorkspace}" />
-                            <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="28" FontWeight="SemiBold"
-                                       Foreground="White" Margin="0,12,0,0" Text="{svc:T shell.navWall}" />
-                            <TextBlock FontFamily="{StaticResource UiFont}" FontSize="12.5" Foreground="#D1E0DB"
-                                       TextWrapping="Wrap" MaxWidth="310" HorizontalAlignment="Left"
-                                       Margin="0,8,0,0" Text="{svc:T home.wallBlurb}" />
-                        </StackPanel>
-                        <Grid Grid.Row="1">
-                            <TextBlock x:Name="WallState" FontFamily="{StaticResource MonoFont}" FontSize="11"
-                                       Foreground="#C8DBD2" VerticalAlignment="Bottom" />
-                            <TextBlock HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="25"
-                                       Foreground="#A7E2CD" Text="&#x2197;" />
-                        </Grid>
-                    </Grid>
-                </Button>
-                <Grid Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <Button x:Name="MapCard" Grid.Column="0" Style="{StaticResource LandingCard}"
-                            Background="#314257" Margin="0,0,6,0" Padding="20" Height="213">
+                <!--
+                    Cards in the style of a VMS start page: a full-colour tile, an isometric picture in the middle
+                    and the page name underneath. The pictures are drawn in code (IsoArt), so they stay sharp at
+                    any DPI and there is no image file to ship. The column count follows the page width.
+                -->
+                <UniformGrid x:Name="CardGrid" Columns="3" Margin="0,0,-10,0">
+                    <Button x:Name="WallCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T shell.navWall}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#2F6FD6" Offset="0"/><GradientStop Color="#1E4FA8" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                            <StackPanel>
-                                <Path Width="40" Height="40" HorizontalAlignment="Left" Stretch="Uniform"
-                                      Stroke="#BED8F4" StrokeThickness="1.7"
-                                      Data="M9 4 L15 6 L20 4 V18 L15 20 L9 18 L4 20 V6 Z M9 4 V18 M15 6 V20" />
-                                <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold"
-                                           Foreground="White" Margin="0,15,0,0" Text="{svc:T shell.navMap}" />
-                                <TextBlock FontFamily="{StaticResource UiFont}" FontSize="12" Foreground="#D7E3F0"
-                                           TextWrapping="Wrap" Margin="0,6,0,0" Text="{svc:T home.mapBlurb}" />
-                            </StackPanel>
-                            <TextBlock x:Name="MapState" Grid.Row="1" FontFamily="{StaticResource MonoFont}"
-                                       FontSize="10.5" Foreground="#D7E3F0" TextWrapping="Wrap" />
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="WallArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T shell.navWall}"/>
+                            <TextBlock x:Name="WallState" Grid.Row="2" Style="{StaticResource CardState}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DevicesCard" Grid.Column="1" Style="{StaticResource LandingCard}"
-                            Background="#48406A" Margin="6,0,0,0" Padding="20" Height="213">
+                    <Button x:Name="PlaybackCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T shell.navPlayback}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#6A5BD8" Offset="0"/><GradientStop Color="#4B3DAA" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                            <StackPanel>
-                                <Path Width="40" Height="40" HorizontalAlignment="Left" Stretch="Uniform"
-                                      Stroke="#DCD3FB" StrokeThickness="1.7"
-                                      Data="M3 6 H21 V12 H3 Z M3 14 H21 V19 H3 Z" />
-                                <TextBlock FontFamily="{StaticResource DisplayFont}" FontSize="21" FontWeight="SemiBold"
-                                           Foreground="White" Margin="0,15,0,0" Text="{svc:T shell.navDetail}" />
-                                <TextBlock FontFamily="{StaticResource UiFont}" FontSize="12" Foreground="#E1DDF0"
-                                           TextWrapping="Wrap" Margin="0,6,0,0" Text="{svc:T home.devicesBlurb}" />
-                            </StackPanel>
-                            <TextBlock x:Name="DevicesState" Grid.Row="1" FontFamily="{StaticResource MonoFont}"
-                                       FontSize="10.5" Foreground="#E1DDF0" />
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="PlaybackArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T shell.navPlayback}"/>
+                            <TextBlock x:Name="PlaybackState" Grid.Row="2" Style="{StaticResource CardState}" Text="{svc:T home.playbackState}"/>
                         </Grid>
                     </Button>
-                </Grid>
+                    <Button x:Name="MapCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T shell.navMap}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#1FA7A0" Offset="0"/><GradientStop Color="#127C78" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="MapArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T shell.navMap}"/>
+                            <TextBlock x:Name="MapState" Grid.Row="2" Style="{StaticResource CardState}"/>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="EventsCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T shell.navEvents}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#D9545A" Offset="0"/><GradientStop Color="#A83A42" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="EventsArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T shell.navEvents}"/>
+                            <TextBlock x:Name="EventsState" Grid.Row="2" Style="{StaticResource CardState}" Text="{svc:T home.eventsState}"/>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="DevicesCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T shell.navDetail}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#4C7FAF" Offset="0"/><GradientStop Color="#355E86" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="DevicesArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T shell.navDetail}"/>
+                            <TextBlock x:Name="DevicesState" Grid.Row="2" Style="{StaticResource CardState}"/>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="DiagnosticsCard" Style="{StaticResource LandingCard}" Margin="0,0,10,10" Padding="16,14" Height="236"
+                            AutomationProperties.Name="{svc:T home.diagnostics}">
+                        <Button.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#2E9E6A" Offset="0"/><GradientStop Color="#1E7550" Offset="1"/></LinearGradientBrush>
+                        </Button.Background>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <ContentControl x:Name="DiagnosticsArt" Margin="10,4,10,10" Focusable="False"/>
+                            <TextBlock Grid.Row="1" Style="{StaticResource CardTitle}" Text="{svc:T home.diagnostics}"/>
+                            <TextBlock x:Name="DiagnosticsState" Grid.Row="2" Style="{StaticResource CardState}" Text="{svc:T home.diagnosticsState}"/>
+                        </Grid>
+                    </Button>
+                </UniformGrid>
             </StackPanel>
             <Border Grid.Column="1" Background="{DynamicResource PanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"

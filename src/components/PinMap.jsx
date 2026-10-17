@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from '@/lib/maplibre';
 import MapBaseToggle from './MapBaseToggle';
 import { getMapBase, mapStyleUrl } from '@/lib/map-style';
 

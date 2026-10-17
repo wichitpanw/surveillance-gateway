@@ -1,7 +1,7 @@
 # ปล่อยเวอร์ชันใหม่ของ Windows client
 
 สคริปต์เดียวจบ ไม่ต้องอัปโหลด ไม่ต้อง restart server — central เสิร์ฟโฟลเดอร์ `client-updates/` ของ repo นี้ที่ `/client-updates`
-และ client ที่ติดตั้งแล้วอ่าน feed นั้นเอง · อัปเดต 2026-10-07 (release ล่าสุด 1.9.5 · 2026-10-06)
+และ client ที่ติดตั้งแล้วอ่าน feed นั้นเอง · อัปเดต 2026-10-17 (release ล่าสุดใน feed 1.14.2; งานเปลี่ยนชื่อ/branding 2026-10-09)
 รุ่นที่ release จริงดูจาก `client-updates/releases.win.json` เสมอ — ตัวเลขในเอกสารนี้อาจตามไม่ทัน
 
 **เวอร์ชัน 1.8.5 (release 2026-09-29):** แก้ตามผลตรวจทั้งระบบ — Playback ขอภาพเป็นก้อนที่ไม่เกินปลายช่วงบันทึกและเที่ยงคืน
@@ -27,11 +27,26 @@ GET /api/v1/cameras/:id/download.mp4?start=<ISO-8601>&duration=<1–1800> (ต�
 · ตรวจโครงสร้าง fragmented MP4 ก่อนย้ายไฟล์ .part เป็น MP4 · ต้อง deploy backend ที่ส่ง failure ของแหล่งภาพผ่านทุก relay และตรวจช่วงดาวน์โหลดคร่อมไฟล์บันทึกก่อน release
 · ช่วงที่อุปกรณ์ส่งไม่ครบจากคลิปเดียวจะตอบ 416 พร้อมความยาวสูงสุดให้เลือกใหม่ แทนส่งไฟล์สั้นแล้วแจ้งสำเร็จ
 · ตรวจ build และ regression จำลองแล้ว ยังต้องยืนยัน WPF/กล้องจริง และเลือกช่วงบันทึกจริงผ่าน Central/Regional
-## รุ่นปัจจุบัน (1.9.5)
+## รุ่นปัจจุบัน (1.14.2; ตรวจ feed 2026-10-17)
+
+- **1.10.0:** Diagnostics, multi-monitor walls, Auto stream, AI event navigation, evidence export/SHA256 — [ผลตรวจ](WINDOWS-CLIENT-1.10.0.md)
+- **1.11.0:** Shell/Live/Playback redesign, Dark/Light, Compact/Comfortable และ Ctrl+F — [ผลตรวจและการปิดงาน](WINDOWS-CLIENT-WORKSPACE.md)
+- **1.12.0:** ผังรวมช่อง (1+3, 1+5, 1+7, 1+9, 2+8, 1+12) และตัวแก้ผังของเครื่อง (≤ 25 ช่อง)
+- **1.13.0:** หน้า Home โฉมใหม่แบบการ์ด isometric ของ VMS (`Views/IsoArt.cs`)
+- **1.14.0:** หน้า Live แบบ VMS พร้อมผังเต็มพื้นที่ (เส้นแบ่ง 1 px) และแถบซ้าย Cameras / Views / PTZ แบบ accordion
+- **1.14.1:** เปิด saved wall view ซ้ำได้หลังจากกด Clear all cells
+- **1.14.2:** ปรับความเสถียรการซิงก์สถานะการเล่นและการตรวจสอบย้อนหลัง
+- **Map hotfix Gateway a0d8867:** bundle MapLibre worker แก้แผนที่ค้าง; ไม่ต้องออกรุ่น Client ใหม่; ผู้ดูแลยืนยันอัปเดตเรียบร้อยแล้ว 2026-10-12
+
+### ประวัติ 1.9.x
 
 - **1.9.3:** รับ AI event จากกล้อง/NVR/VMS/API ผ่าน Edge → Regional/Central พร้อมภาพ; กรอง Edge/กลุ่ม/ที่มาและเปิดรายละเอียดภาพเต็ม
 - **1.9.4:** คลิกหัว Camera Library เพื่อหุบ/เปิดส่วนตัวกรอง; คง Search, Group, Status, Favorites และไม่ซ่อนรายชื่อกล้องหรือ layout/stream
 - **1.9.5 (release 2026-10-06 พร้อม Gateway d645ed9):** เสียงจากกล้องที่ Edge เปิด `audio_enabled` — ปุ่มลำโพงต่อ tile เริ่มปิดเสียงเสมอ; กล้องไม่มีเสียงและ Playback ใส่ `:no-audio` ต่อ media แทน `--no-audio` ทั้งแอป · full/delta อยู่ใน feed แล้ว · dotnet build ผ่าน ยังไม่ได้ทดสอบหน้าต่าง/เสียงจริง ([CAMERA-AUDIO.md](CAMERA-AUDIO.md))
+- **1.9.6 (2026-10-08):** ทดลองเปิดภาพเป็น popup ข้างหมุด แต่พบปัญหาภาพไม่ขึ้น จึงแทนด้วยหน้าต่างแยกใน 1.9.7
+- **1.9.7 (2026-10-08):** คืนหน้าต่าง player แยกเมื่อคลิกกล้องบนแผนที่
+- **1.9.8 (งาน 2026-10-09):** ชื่อหน้าต่าง/sidebar/breadcrumb/exit prompt และ installer เป็น Surveillance Gateway Client; ถอด vendor branding · `SurveillanceGateway` namespace/packId และที่อยู่ติดตั้งภายในคงเดิมเพื่อรองรับเครื่องเดิม
+- ตรวจ `/client-updates/releases.win.json` เมื่อ 2026-10-11 พบ full/delta 1.9.8; การมีแพ็กเกจใน feed ไม่ยืนยันว่า Client ทุกเครื่องติดตั้งแล้ว
 
 ## ประวัติ UI ที่ตกลงแล้ว (1.8.2)
 
@@ -101,3 +116,11 @@ build เป็น self-contained (มี .NET runtime ในตัว) เค�
 - **ห้ามลบ `.nupkg` ของเวอร์ชันที่ยังอาจมี client ใช้อยู่** — ขาดตัวกลางทำให้ต้องโหลด full, ขาด full ของเวอร์ชันตัวเองทำให้อัปเดตไม่ได้เลย
 - **build จากซอร์สหรือ portable อัปเดตตัวเองไม่ได้** — client บอก "ไม่มีระบบอัปเดต" ไม่ใช่ "ไม่มีเวอร์ชันใหม่"
 - client ไม่ restart ตัวเอง — โหลดเบื้องหลังแล้วโชว์ปุ่ม **อัปเดต** ที่ navbar เพราะบนจอ wall การรีสตาร์ทเองคือภาพดับกลางกะ
+
+## Release 1.10.0 (2026-10-11)
+
+Diagnostics, multi-monitor walls, Auto stream, AI event navigation และ evidence export พร้อม SHA256 อยู่ใน release 1.10.0; ปล่อย feed รุ่น 1.10.0 ในรอบนี้. รายละเอียดและข้อจำกัด: [WINDOWS-CLIENT-1.10.0](WINDOWS-CLIENT-1.10.0.md).
+
+## Release 1.11.0 (2026-10-11)
+
+Workspace redesign สำหรับ Shell/Live/Playback: Graphite, density, camera inspector และการส่งบริบท Live ↔ Playback; ตรวจ fixture 41 PASS. ดู [ผลตรวจและข้อจำกัด](WINDOWS-CLIENT-WORKSPACE.md).

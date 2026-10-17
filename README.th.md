@@ -1,14 +1,39 @@
 [English](README.md) | **ไทย**
 
-# Surveillance Gateway
+# CCTV API Platform
 
 ระบบรวมศูนย์ภาพกล้องวงจรปิดหลายยี่ห้อ (ONVIF / NVR / RTSP / Digifort) ให้ระบบอื่นดึงไปใช้ผ่าน API เดียว
 ทำงานในวงแลนทั้งหมด ไม่พึ่ง cloud
 
-อัปเดตล่าสุด: 2026-10-07 · ถ้าเอกสารไหนขัดกับไฟล์นี้ ให้ยึดไฟล์นี้ + [../CONTRIBUTING.md](docs/CONTRIBUTING.md)
+อัปเดตล่าสุด: 2026-10-17 · ถ้าเอกสารไหนขัดกับไฟล์นี้ ให้ยึดไฟล์นี้ + [../CONTRIBUTING.md](docs/CONTRIBUTING.md)
 
-ระบบจริงใช้ **Central → Regional → Edge** แล้ว · Gateway build `d645ed9` ตรงกันทั้ง Central, Regional 100, Edge 101/102 (deploy 2026-10-06) · Windows Client `1.9.5`
-· 163 กล้อง (Edge 101: 7, Edge 102: 156 — ตัวเลข ณ 2026-10-07) · สถานะและผลตรวจอยู่ใน [REGIONAL-PLAN.md](docs/th/REGIONAL-PLAN.md)
+ระบบจริงใช้ **Central → Regional → Edge** แล้ว · Gateway `651549d` — ตรวจ `/api/instance` ของ Central :5173 และ Regional :5273 และแพ็กเกจ `server/edge-updates/*/manifest.json` ทั้ง 3 แพลตฟอร์มเมื่อ 2026-10-17 = `651549d` · Windows Client `1.14.2` เผยแพร่ full/delta ใน `client-updates/releases.win.json` แล้ว (ตรวจ 2026-10-17)
+· จำนวนกล้องที่บันทึกไว้ล่าสุด: 163 กล้อง (Edge 101: 7, Edge 102: 156 ณ 2026-10-07; ยังไม่ได้ตรวจยอดปัจจุบัน) · สถานะและผลตรวจอยู่ใน [REGIONAL-PLAN.md](docs/th/REGIONAL-PLAN.md)
+
+## ปิดงานรอบ Gateway `651549d` และ Client `1.12.0–1.14.2` — 2026-10-17
+
+- **Client 1.12.0–1.14.2**: ผังรวมช่องและตัวแก้ผัง (`1.12.0`), หน้า Home แบบการ์ด isometric (`1.13.0`), หน้า Live แบบ VMS พร้อมแถบซ้าย Cameras/Views/PTZ แบบ accordion (`1.14.0`), เปิด saved view ซ้ำหลัง Clear all (`1.14.1`), และปรับความเสถียรสถานะการเล่น/ตรวจสอบ (`1.14.2`); ปล่อยแพ็กเกจ full/delta `1.14.2` ใน `client-updates/` แล้ว
+- **ONVIF & DSS Discovery (`2513ee1`–`a5201a2`)**: ดึงรายการกล้อง DSS จาก device tree, เก็บ ONVIF service endpoints (`onvif_xaddrs`) และจัดกลุ่มตาม `SourceToken`, คงเอกลักษณ์ช่อง NVR ตอน import, เติมข้อมูล encoder จาก Media2 เมื่อ Media1 ไม่ครบ, และสแกน subnet ข้ามพอร์ตที่ไม่ใช่ ONVIF
+- **Hardening & Cleanup (`507641f`–`651549d`)**: ลบกล้องแบบ atomic พร้อมกรอง scope ของสถานะกล้อง, ป้องกันลบกล้อง Edge/Public ผิดชั้น, ปรับปรุง SQLite concurrency/edge updater idempotency, ถอดโค้ด MediaMTX transcode เก่าออก และแก้ลูปรีเซ็ต session ตอน login (`651549d`)
+
+## ปิดงานรอบ Client และ Map — 2026-10-12
+
+- Client 1.10.0 (`bb58d2d`): Diagnostics, multi-monitor walls, Auto stream, AI event navigation และ evidence export พร้อม SHA256
+- Client 1.11.0 (`1a4ba1c`): Shell/Live/Playback redesign; Release build 0 warnings / 0 errors และ fixture PASS 41 / FAIL 0
+- Gateway `a0d8867`: แก้แผนที่ค้าง Loading เพราะ MapLibre 6 worker ไม่ถูกปล่อยไปกับ Vite build; ใช้ `src/lib/maplibre.js` และ `worker.format: es` ให้ bundle worker พร้อมไฟล์ release
+- ตรวจหน้า client-map บน production ผ่าน browser เห็นถนน/อาคาร 3D และ worker ตอบ HTTP 200 ทั้ง Central/Regional; ผู้ดูแลยืนยันอัปเดตเรียบร้อยแล้ว
+- แก้ Map ที่หน้าเว็บของ Gateway ไม่ต้องเพิ่มเวอร์ชัน Client; ปิดแท็บ Map แล้วเปิดใหม่ หรือเปิด Client ใหม่เพื่อโหลด bundle ใหม่
+- ปิดขอบเขตที่ส่งมอบรอบนี้; ผล fixture/browser ไม่แทนการทดสอบ native Client ทุกกรณี โดยเฉพาะ multi-monitor/mixed DPI, HWND/video/audio และ update/uninstall
+- Linux บน Raspberry Pi รอทดสอบภายหลัง; Events/Map inspector และ Settings/Dialogs redesign รอบถัดไปยังไม่ได้ทำ ไม่รวมในงานที่ปิดรอบนี้
+
+## งานล่าสุดที่ปิด (2026-10-07–11)
+
+- Avigilon H.265: ONVIF Media1 → Media2 fallback ใน `48f4298`; ผู้ดูแลยืนยันเมื่อ 2026-10-11 ว่าทดสอบใช้งานแล้วภาพมา · รายละเอียด [CAMERA-QUIRKS.md](docs/th/CAMERA-QUIRKS.md)
+- DSS: fallback ไป host ที่ตั้งไว้เมื่อ URL media หลัง NAT เข้าไม่ถึง ทั้งสด/ย้อนหลัง; จำ `playbackType` ต่อเครื่องเมื่อ DSS ต้องใช้ (จังหวัดทดสอบยืนยันภาพย้อนหลัง 2026-10-09)
+- Public Cam: Central รับกล้องสาธารณะอุดรธานี 37 กล้องตามข้อมูลต้นทางวันที่ 2026-10-07; สิทธิ์ `allow_public` แยกจาก scope กล้องทั่วไป — [PUBLIC-CAMS.md](docs/th/PUBLIC-CAMS.md)
+- ชุด Edge มีตัวถอนติดตั้ง Windows/Linux และล้างชุดรุ่นเก่าตอน publish; offline kit ที่ตรวจวันที่ 2026-10-11 = `5005316` ต้องอัปเดตผ่านสายเป็น `a0d8867` หลังติดตั้ง (ตรวจ manifest 2026-10-12)
+- Client `1.9.7` เปิดภาพจากหมุดเป็นหน้าต่างแยก; `1.9.8` ใช้ชื่อ Surveillance Gateway Client และถอด vendor branding จากหน้าผู้ใช้
+- คู่มือ Surveillance-Manual.docx/.pdf rebuild 2026-10-09 หลังปรับข้อความและภาพเพื่อลบ branding; สไลด์เก่ายังคงเป็นเอกสารตามวันที่เดิม
 
 ## รับ AI จากอุปกรณ์ต้นทาง (2026-10-02)
 
@@ -16,7 +41,7 @@
 เริ่มจาก Tiandy perimeter 203.0.113.12 ที่ Edge 101, Global ID TH-10-101-00001
 รองรับ Tiandy MODEL-A Perimeter และ UNV IPC2325SB LineCrossing กล้องเดี่ยวช่อง 1 พร้อมภาพ; Client 1.9.3+ รองรับภาพเหตุและตัวกรอง Edge/กลุ่ม/ที่มา; 1.9.4 หุบแผงตัวกรอง Camera Library ได้
 กล้องใหม่ต้องเปิด receiver ที่ AI Sources เอง; เลือกอุปกรณ์ต้นทางเมื่อ adapter รองรับ หรือ API ภายนอก
-เสียงจากกล้อง (ใช้จริง 2026-10-06): ปิดเป็นค่าตั้งต้น เปิดรายกล้องที่ Edge ปุ่ม "เสียง" แล้วผู้ชมกดลำโพงเอง (เว็บ และ Client 1.9.5) — [docs/CAMERA-AUDIO.md](docs/th/CAMERA-AUDIO.md)
+เสียงจากกล้อง (ใช้จริง 2026-10-06): ปิดเป็นค่าตั้งต้น เปิดรายกล้องที่ Edge ปุ่ม "เสียง" แล้วผู้ชมกดลำโพงเอง (เว็บ และ Client 1.9.5+) — [docs/CAMERA-AUDIO.md](docs/th/CAMERA-AUDIO.md)
 AXIS S30 (2026-10-06): ช่องที่นำเข้าได้ sub 640x360 จาก `resolution=` ของเครื่องบันทึก แทนการใช้ main ซ้ำ — [docs/CAMERA-QUIRKS.md](docs/th/CAMERA-QUIRKS.md)
 ดู [EXTERNAL-AI.md](docs/th/EXTERNAL-AI.md) สำหรับสถานะ/วิธีใช้/ข้อจำกัด
 ภาพรวม [Architecture](docs/architecture.html) · ขั้นตอน [Camera Onboarding](docs/camera-onboarding.html)
@@ -34,7 +59,7 @@ AXIS S30 (2026-10-06): ช่องที่นำเข้าได้ sub 640x
 | Surveillance Gateway Central | เพิ่ม Regional และรวมกล้องทุกภาค; ออก key ระดับประเทศ | `203.0.113.80:5173` / `203.0.113.112:5173` |
 | Surveillance Gateway Regional | เพิ่ม Edge ในภาคและออก key ให้ Client ในภาค | ภาคกลาง node `100`: เครื่องเดียวกันพอร์ต `5273` |
 | Surveillance Gateway Edge | แอดกล้อง ถือรหัสและข้อมูลพื้นที่; ส่งต่อภาพตามคำขอ | Windows Edge `101` (site office) และ Ubuntu Edge `102` (`203.0.113.80:5173`) · `103` "Edge ทดสอบ" = Edge ทดสอบ ต่อ Regional ภาคกลางโดยตั้งใจ (2026-10-07) |
-| Surveillance Gateway Client | ดูภาพผ่าน Central หรือ Regional ด้วย API key; บันทึกหลาย Gateway ได้ เลือกใช้ทีละ Gateway | Windows Client `1.9.5`; ดาวน์โหลดจากหน้า login |
+| Surveillance Gateway Client | ดูภาพผ่าน Central หรือ Regional ด้วย API key; บันทึกหลาย Gateway ได้ เลือกใช้ทีละ Gateway | Windows Client `1.14.2`; ดาวน์โหลดจากหน้า login |
 
 **Central เพิ่มได้เฉพาะ Regional · Regional เพิ่มได้เฉพาะ Edge · Edge เพิ่มกล้อง** — บังคับที่ API ด้วย
 จังหวัดเดียวติดตั้งหลาย Edge ได้ ระบุที่ตั้งด้วย Remark; ไม่มี Sub-edge และไม่ใช้ IP เป็นตัวระบุกล้องข้ามไซต์

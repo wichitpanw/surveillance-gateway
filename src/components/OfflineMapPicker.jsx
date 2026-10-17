@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from '@/lib/maplibre';
 import MapBaseToggle from './MapBaseToggle';
 import { getMapBase, mapStyleUrl } from '@/lib/map-style';
 
@@ -57,7 +57,7 @@ const OfflineMapPicker = ({ lat, lng, onChange, theme }) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     const el = document.createElement('div');
     el.style.cssText = 'width:14px; height:14px; border-radius:50%; background-color:#0066cc; border:2px solid white; box-shadow:0 4px 12px rgba(0, 102, 204, 0.4);';
-    marker.current = new maplibregl.Marker(el).setLngLat([lng || MAP_CENTER.lng, lat || MAP_CENTER.lat]).addTo(map.current);
+    marker.current = new maplibregl.Marker({ element: el }).setLngLat([lng || MAP_CENTER.lng, lat || MAP_CENTER.lat]).addTo(map.current);
     map.current.flyTo({ center: [lng || MAP_CENTER.lng, lat || MAP_CENTER.lat], speed: 2 });
   }, [lat, lng]);
 

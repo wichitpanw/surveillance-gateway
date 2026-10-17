@@ -38,7 +38,7 @@ import { useLanguage } from "@/lib/i18n";
 
 /**
  * Event Logs Component - Monochrome Shadcn Style
- * ปรับปรุงการแยกประเภทและระบบตัวกรองให้ละเอียดขึ้นตามคำขอของคุณบีมค่ะ 👓✨
+ * ปรับปรุงการแยกประเภทและระบบตัวกรองให้ละเอียดขึ้นตามคำขอของผู้ดูแลค่ะ 👓✨
  */
 const EventLogs = ({
   logFilters,
@@ -119,14 +119,14 @@ const EventLogs = ({
           </div>
 
           {/* Unified Filter Bar */}
-          <Card className="flex flex-wrap items-center gap-2 p-1.5 border shadow-sm bg-card transition-all">
+          <Card className="flex flex-wrap items-center gap-2 p-1.5 border shadow-xs bg-card transition-all">
             <div className="flex items-center gap-2 px-3 border-r h-8">
               <Calendar className="size-3.5 text-muted-foreground opacity-50" />
               <input 
                 type="date" 
                 value={logFilters.date} 
                 onChange={(e) => setLogFilters({ ...logFilters, date: e.target.value })}
-                className="bg-transparent text-[11px] font-black uppercase outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                className="bg-transparent text-[11px] font-black uppercase outline-hidden [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
             
@@ -153,7 +153,7 @@ const EventLogs = ({
           <Button 
             variant="outline"
             onClick={handleExportCSV}
-            className="h-11 px-6 text-[10px] font-black uppercase tracking-widest gap-2 hover:bg-primary hover:text-primary-foreground border-muted-foreground/20 shadow-sm transition-all active:scale-95"
+            className="h-11 px-6 text-[10px] font-black uppercase tracking-widest gap-2 hover:bg-primary hover:text-primary-foreground border-muted-foreground/20 shadow-xs transition-all active:scale-95"
           >
             <Download className="size-4" />
             Export CSV
@@ -175,7 +175,7 @@ const EventLogs = ({
       </div>
 
       {/* Audit Database Table */}
-      <Card className="border shadow-md overflow-hidden bg-card/50 backdrop-blur-sm">
+      <Card className="border shadow-md overflow-hidden bg-card/50 backdrop-blur-xs">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/40 border-b">
@@ -242,7 +242,7 @@ const EventLogs = ({
                                  const parts = log.details.split(' | ');
                                  if (parts[1]) setSelectedEventImage(`${parts[1]}`);
                               }}
-                              className="h-8 text-[10px] font-black gap-2 bg-card hover:bg-primary hover:text-primary-foreground border-muted-foreground/20 shadow-sm uppercase tracking-widest px-4"
+                              className="h-8 text-[10px] font-black gap-2 bg-card hover:bg-primary hover:text-primary-foreground border-muted-foreground/20 shadow-xs uppercase tracking-widest px-4"
                             >
                               <ImageIcon className="size-3.5" />
                               Inspect

@@ -24,7 +24,7 @@ public partial class PlaybackDownloadWindow : Window
     private bool _closeWhenDone;
 
     public PlaybackDownloadWindow(GatewayClient client, V1Camera camera, DateTime day,
-        double second, IReadOnlyList<(double Start, double End)> ranges)
+        double second, IReadOnlyList<(double Start, double End)> ranges, double? selectedEnd = null)
     {
         InitializeComponent();
         _client = client; _camera = camera; _day = day; _ranges = ranges;
@@ -34,6 +34,7 @@ public partial class PlaybackDownloadWindow : Window
         var end = Math.Min(start + 300, 86399);
         foreach (var range in ranges)
             if (start >= range.Start && start < range.End) { end = Math.Min(end, (int)range.End); break; }
+        if(selectedEnd is not null) end = (int)Math.Clamp(selectedEnd.Value, 0, 86399);
         StartBox.Text = TimeSpan.FromSeconds(start).ToString(@"hh\:mm\:ss");
         EndBox.Text = TimeSpan.FromSeconds(Math.Min(end, 86399)).ToString(@"hh\:mm\:ss");
     }
@@ -79,7 +80,9 @@ public partial class PlaybackDownloadWindow : Window
                 if (_busy) DownloadStatus.Text = string.Format(Strings.T("playback.downloadProgress"), bytes / 1000000.0);
             });
             await _client.DownloadPlaybackAsync(_camera.Id, at, seconds, save.FileName, progress, _download.Token);
-            DownloadStatus.Text = string.Format(Strings.T("playback.downloadSaved"), save.FileName);
+            try { await ClientDiagnostics.WriteEvidenceAsync(save.FileName, _camera, at, seconds, _download.Token);
+                DownloadStatus.Text = Strings.T("evidence.saved", save.FileName); }
+            catch (Exception) { DownloadStatus.Text = Strings.T("evidence.manifestFailed", save.FileName); }
         }
         catch (OperationCanceledException) { DownloadStatus.Text = Strings.T("playback.downloadCancelled"); }
         catch (Exception ex) { DownloadStatus.Text = ex.Message; }

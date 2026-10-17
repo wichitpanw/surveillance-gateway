@@ -86,6 +86,7 @@ public partial class MainWindow : Window
         _settings = settings;
         _client = client;
         _libVlc = libVlc;
+        InitialiseWorkspace();
 
         TabItems.ItemsSource = _tabs;
 
@@ -229,6 +230,8 @@ public partial class MainWindow : Window
 
         _home = new HomeView();
         _home.Open += (_, kind) => Open(kind);
+        // หน้าต่าง Diagnostics รายงานสตรีมของ wall; ถ้าปิดแท็บ wall ไปแล้วให้เปิดกลับก่อน
+        _home.DiagnosticsRequested += (_, _) => { if (_wall is null) Open(PageKind.Wall); _wall?.ShowDiagnostics(); };
         _pages[PageKind.Home] = _home;
 
         ClearTabs();
@@ -240,6 +243,7 @@ public partial class MainWindow : Window
 
         StartEvents();
         StatusText.Text = Strings.T("shell.connected", _client.BaseUrl, health.StreamCore ?? "-");
+        MonitorWallWindow.Restore(_client, _settings, _libVlc, this);
         CheckBuilds(health);
 
         // After the pages are up, never before: an update check is the least urgent thing this
@@ -369,6 +373,7 @@ public partial class MainWindow : Window
         if (kind == PageKind.Events && _eventsView is null)
         {
             _eventsView = new EventsView(_client);
+            _eventsView.InvestigationRequested += async (_, request) => await InvestigateEventAsync(request.Event, request.Playback);
             _pages[PageKind.Events] = _eventsView;
             _ = _eventsView.LoadAsync();
         }
@@ -377,6 +382,8 @@ public partial class MainWindow : Window
         {
             _playbackView ??= new PlaybackView(_client, _libVlc);
             _playbackView.SetCameras(_cameras);
+            _playbackView.LiveRequested -= OnWorkspaceLive;
+            _playbackView.LiveRequested += OnWorkspaceLive;
             _pages[PageKind.Playback] = _playbackView;
         }
 
@@ -425,8 +432,7 @@ public partial class MainWindow : Window
     {
         _sidebarCollapsed = !_sidebarCollapsed;
         var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-        Sidebar.BeginAnimation(WidthProperty, new System.Windows.Media.Animation.DoubleAnimation(
-            _sidebarCollapsed ? 64 : 220, TimeSpan.FromMilliseconds(280)) { EasingFunction = ease });
+        Sidebar.Width = _sidebarCollapsed ? 64 : 188;
         CollapseRotate.BeginAnimation(RotateTransform.AngleProperty, new System.Windows.Media.Animation.DoubleAnimation(
             _sidebarCollapsed ? 90 : 0, TimeSpan.FromMilliseconds(280)) { EasingFunction = ease });
 
@@ -670,6 +676,7 @@ public partial class MainWindow : Window
     private VideoWallView BuildWall()
     {
         var wall = new VideoWallView(_client, _settings, _libVlc);
+        wall.PlaybackRequested += OnWorkspacePlayback;
         wall.CamerasLoaded += (_, cameras) =>
         {
             _cameras = cameras;
@@ -963,6 +970,8 @@ public partial class MainWindow : Window
 
     private void Teardown()
     {
+        MonitorWallWindow.CloseAll();
+        foreach (var window in OwnedWindows.OfType<EventDetailWindow>().ToArray()) window.Close();
         ContentHost.Content = null;
 
         // Player windows outlive the page they were opened from, so signing out has to close

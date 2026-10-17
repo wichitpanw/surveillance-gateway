@@ -1,12 +1,12 @@
 # Plan: Three-Tier System Central → Regional → Edge (Province)
 
-Written 2026-09-29 · **Status: the real three-tier system has been migrated · migration closed out 2026-09-30; now Gateway d645ed9 / Client 1.9.5 (2026-10-07)** · Decision maker: the system owner · Related code is in `server/vms/edge-*.js`, `server/shared/instance.js`
+Written 2026-09-29 · **Status: the real three-tier system has been migrated · migration closed out 2026-09-30; now Gateway 651549d / Client 1.14.2 (2026-10-17)** · Decision maker: the system owner · Related code is in `server/vms/edge-*.js`, `server/shared/instance.js`
 
-## Current status — 2026-10-07
+## Current status — 2026-10-17
 
-- Gateway `d645ed9` matches across Central (000), the central Regional (100), Windows Edge 101 and Ubuntu Edge 102 (deployed 2026-10-06): per-camera audio, AXIS S30 640x360 sub stream
-- Windows Client `1.9.5` released (per-tile speaker button); 1.9.4 collapsible Camera Library filter; 1.9.3 AI Events images and Edge / group / origin filters
-- 163 cameras: Edge 101 = 7, Edge 102 = 156 · the Regional has 3 child rows: 101, 102 (Online) and **103 "Edge ทดสอบ"** (reserved 2026-10-07)
+- Gateway `651549d` verified across Central (`:5173`), the central Regional (`:5273`), and published Edge update manifests (`windows-x64`, `linux-x64`, `linux-arm64`) on 2026-10-17; Avigilon H.265 Media2 fallback (`48f4298`) and DSS device-tree discovery (`2513ee1`)
+- Windows Client `1.14.2` released (`client-updates/releases.win.json`): VMS-style Live View (`1.14.0–1.14.2`), isometric Home landing page (`1.13.0`), merged-cell layouts (`1.12.0`), workspace redesign (`1.11.0`), Diagnostics & evidence export (`1.10.0`), and per-tile speaker button (`1.9.5`)
+- 163 cameras: Edge 101 = 7, Edge 102 = 156 · the Regional has 3 child rows: 101, 102 (Online) and **103 "Test Edge"** (reserved 2026-10-07)
   — a **test Edge** the owner deliberately links to the central Regional although its province is in another region: the Regional now accepts out-of-region cameras with an "N out of region" badge on Edge Nodes (it used to reject the whole batch with 409), and an Edge whose own province is out of region gets an "Edge out of region" badge
 - Before installing a new Edge, run `build-edge-kit.ps1 -Publish` so Central (and the Regional mirror) hand out the current offline kit, or update right after linking
 - Edges receive AI from cameras / NVRs / VMS / APIs → Regional → Central with JPEGs; none of the three tiers runs inference; the old worker, AI Rules and the Python/GPU installer are removed

@@ -55,10 +55,11 @@ function verifyManifestV2(m, publicKeyPem = null) {
  * เก่ากว่า = ปฏิเสธ (การเล่นซ้ำเพื่อลดเวอร์ชัน) · เวลาเท่ากันแต่คนละไฟล์ = ปฏิเสธ · ตัวเดิมซ้ำ = ผ่าน (central เสนอซ้ำตอนต่อสายใหม่)
  */
 function checkManifestOrder(m, last) {
-  if (!last || !last.issuedAt) return null;
+  if (last === null || last === undefined) return null;
+  if (!last.issuedAt || !/^[0-9a-f]{64}$/.test(String(last.sha256))) return 'accepted manifest ไม่ครบหรือไม่ถูกต้อง — ไม่ลดเวอร์ชัน';
   const now = Date.parse(String(m.issuedAt));
   const prev = Date.parse(String(last.issuedAt));
-  if (!Number.isFinite(prev)) return null;
+  if (!Number.isFinite(prev)) return 'accepted manifest issuedAt ไม่ถูกต้อง — ไม่ลดเวอร์ชัน';
   if (now < prev) return `manifest ออกเมื่อ ${m.issuedAt} เก่ากว่าที่เคยรับ (${last.issuedAt}) — ไม่ลดเวอร์ชัน`;
   if (now === prev && last.sha256 && last.sha256 !== m.sha256) return 'manifest เวลาเดียวกับที่เคยรับแต่คนละแพ็กเกจ';
   return null;

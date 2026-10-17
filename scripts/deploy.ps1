@@ -25,6 +25,8 @@
   entry point ของ pm2 (ไฟล์ bin/pm2 ที่รันด้วย node) หรือ pm2.cmd — ค่าเริ่มต้นตรงกับ start-gateway.cmd
 .PARAMETER ReleaseClient
   ปล่อย Windows client ด้วย (scripts\build-client-release.ps1) เมื่อ <Version> ใน csproj ใหม่กว่ารุ่นที่ release ไว้
+.PARAMETER InstallDependencies
+  หลัง backup หยุด backend แล้วติดตั้ง server/root ตาม lockfile (ใช้เมื่อ dependency เปลี่ยน)
 .PARAMETER SkipBackup
   ไม่ backup (ใช้เมื่อเพิ่ง backup ไปแล้ว)
 
@@ -38,6 +40,7 @@ param(
   [switch]$ReloadRegionalConfig,
   [switch]$ReleaseClient,
   [switch]$SkipBackup,
+  [switch]$InstallDependencies,
   # ตัวเดียวกับ scripts\start-gateway.cmd (Scheduled Task ตอนบูต) — เดิมใช้ pm2.cmd ใน profile Administrator
   # ซึ่งเป็นคนละรุ่นกับตัวที่บูต (audit 2026-09-29)
   [string]$Pm2 = 'D:\gw-pm2\npm\node_modules\pm2\bin\pm2',
@@ -48,6 +51,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+# ตรวจ runtime ของ build ก่อนสร้างชุดติดตั้งหรือ restart service
+& node (Join-Path $PSScriptRoot 'check-build-runtime.cjs')
+if ($LASTEXITCODE) { throw 'Node ของ shell ไม่รองรับ build — ต้องใช้ ^20.19.0 หรือ >=22.12.0' }
 function Step($msg) { Write-Host ''; Write-Host "== $msg" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host ''; Write-Host "deploy ไม่สำเร็จ: $msg" -ForegroundColor Red; exit 1 }
 # เรียก pm2 แบบเดียวกับ start-gateway.cmd (node + entry point ไม่ผ่าน shim .cmd) · ส่ง -Pm2 เป็น .cmd ก็ยังใช้ได้
@@ -97,6 +103,40 @@ try {
     if (-not $?) { Fail 'backup ไม่สำเร็จ — ไม่ deploy ต่อ' }
   }
 
+  if ($InstallDependencies) {
+    # native module ต้องไม่ถูกโหลดอยู่ระหว่าง npm ci; ห้ามลง dependency ผ่าน junction
+    foreach ($dir in @((Join-Path $repo 'node_modules'), (Join-Path $repo 'server\node_modules'))) {
+      if ((Test-Path $dir) -and ((Get-Item -LiteralPath $dir).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        Fail "ห้าม npm ci ลง junction/reparse point: $dir"
+      }
+    }
+    Step 'หยุด backend ก่อนติดตั้ง dependency ตาม lockfile'
+    Invoke-Pm2 stop 2-vms-backend | Out-Null
+    if ($LASTEXITCODE) { Fail 'หยุด Central ไม่สำเร็จ — ยังไม่ติดตั้ง dependency' }
+    if ($hasRegional) {
+      Invoke-Pm2 stop 3-regional-gateway | Out-Null
+      if ($LASTEXITCODE) { Fail 'หยุด Regional ไม่สำเร็จ — Central หยุดอยู่; ยังไม่ติดตั้ง dependency' }
+    }
+    if (-not $hasRegional) {
+      Invoke-Pm2 stop 3-edge-gateway | Out-Null
+      if ($LASTEXITCODE) { Fail 'หยุด Edge เดิมไม่สำเร็จ — ยังไม่ติดตั้ง dependency' }
+    }
+    if ($hasProvincial) {
+      Invoke-Pm2 stop 3-provincial-gateway | Out-Null
+      if ($LASTEXITCODE) { Fail 'หยุด Edge จังหวัดไม่สำเร็จ — ยังไม่ติดตั้ง dependency' }
+    }
+    Step 'ติดตั้ง backend dependency'
+    Push-Location (Join-Path $repo 'server')
+    try {
+      npm ci --omit=dev --no-audit --no-fund
+      if ($LASTEXITCODE) { Fail 'npm ci backend ไม่สำเร็จ — backend ยังหยุดอยู่; แก้การติดตั้งแล้วรัน deploy ซ้ำ ห้าม restart ด้วย native module ที่ติดตั้งไม่ครบ' }
+      & $Node -e "require('sqlite3'); require('axios'); require('express'); require('multer'); console.log('Backend dependency smoke OK')"
+      if ($LASTEXITCODE) { Fail 'dependency/native smoke ไม่ผ่าน — backend ยังหยุดอยู่' }
+    } finally { Pop-Location }
+    Step 'ติดตั้ง web build dependency'
+    npm ci --no-audit --no-fund
+    if ($LASTEXITCODE) { Fail 'npm ci เว็บไม่สำเร็จ — backend ยังหยุดอยู่; แก้การติดตั้งแล้วรัน deploy ซ้ำ' }
+  }
   Step 'restart central (2-vms-backend)'
   Invoke-Pm2 restart 2-vms-backend | Out-Null
   if ($LASTEXITCODE) { Fail 'pm2 restart 2-vms-backend ไม่สำเร็จ' }

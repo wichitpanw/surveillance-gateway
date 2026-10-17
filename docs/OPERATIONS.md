@@ -1,15 +1,16 @@
 # OPERATIONS — Operations Guide
 
-Everything you need to do on the machine running the gateway · updated 2026-10-07
+Everything you need to do on the machine running the gateway · updated 2026-10-17
 Rules for changing code are in [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## Current status — 2026-10-07
+## Current status — 2026-10-17
 
-- Gateway `d645ed9` matches across Central (000), the central Regional (100), Windows Edge 101 and Ubuntu Edge 102 (deployed 2026-10-06 ~20:35; checked with `/api/instance` and `remote_build` at the Regional)
-- Windows Client `1.9.5` released (`client-updates/releases.win.json`): per-tile speaker button for cameras whose Edge has audio enabled · [CAMERA-AUDIO.md](CAMERA-AUDIO.md)
+- Gateway `651549d` verified on Central (`:5173`), Regional (`:5273`), and published Edge update manifests (`windows-x64`, `linux-x64`, `linux-arm64`) on 2026-10-17
+- Windows Client `1.14.2` released (`client-updates/releases.win.json`): VMS-style Live View with accordion rail (`1.14.0–1.14.2`), isometric Home landing page (`1.13.0`), merged-cell layouts (`1.12.0`), Shell/Live/Playback workspace redesign (`1.11.0`), Diagnostics & evidence export (`1.10.0`), and per-tile speaker button (`1.9.5` · [CAMERA-AUDIO.md](CAMERA-AUDIO.md))
 - Before installing a new Edge, run `build-edge-kit.ps1 -Publish` so the offline install kit (`server/edge-kits/kits.json`) is current, or press update right after the machine links (`deploy.ps1` publishes only the update packages)
-- 163 cameras: Edge 101 = 7, Edge 102 = 156 · Edge `103` "Edge ทดสอบ" = a test Edge deliberately linked to the central Regional (2026-10-07) — out-of-region cameras are accepted with an "out of region" warning badge
-- Windows Client `1.9.4` adds the collapsible Camera Library filter; 1.9.3 adds AI Events images and the Edge / group / origin filters
+- 163 cameras: Edge 101 = 7, Edge 102 = 156 · Edge `103` "Test Edge" = a test Edge deliberately linked to the central Regional (2026-10-07) — out-of-region cameras are accepted with an "out of region" warning badge
+- Avigilon H.265: ONVIF Media1 → Media2 fallback (`48f4298`) and Media2 encoder metadata supplement (`398df7e`)
+- DSS behind NAT supports media URL fallback for both live and playback, remembers `playbackType` per DSS, and discovers cameras from the device tree (`2513ee1`)
 - Edges receive AI from cameras / NVRs / VMS / APIs → Regional → Central with JPEGs; no tier runs inference; the old inference worker, AI Rules and the Python/GPU installer are removed
 - AI Sources is general and has a Group filter; new cameras do not enable a receiver automatically — choose the source and enable it per camera
 - Tiandy MODEL-A uses AlarmInfo + alarm images on SD; UNV IPC2325SB uses ONVIF RTSP metadata LineCrossing + GetSnapshotUri for new events (single-channel cameras, channel 1)

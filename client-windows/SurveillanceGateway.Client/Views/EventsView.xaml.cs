@@ -27,6 +27,7 @@ public partial class EventsView : UserControl, IDisposable
 {
     private const int MaxRows = 500;
 
+    public event EventHandler<(V1AiEvent Event, bool Playback)>? InvestigationRequested;
     private readonly GatewayClient _client;
     private readonly ObservableCollection<EventRow> _rows = new();
     private readonly SemaphoreSlim _thumbGate = new(1, 1);
@@ -193,7 +194,7 @@ public partial class EventsView : UserControl, IDisposable
     /// <summary>Row clicked: open the popup on it (Views/EventDetailWindow).</summary>
     private void OnRowClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: EventRow row }) EventDetailWindow.Open(_client, _rows, row.Seq);
+        if (sender is FrameworkElement { DataContext: EventRow row }) EventDetailWindow.Open(_client, _rows, row.Seq, (item, playback) => { if (!_disposed) InvestigationRequested?.Invoke(this, (item, playback)); });
     }
 
     private void RefreshText()

@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const { normalizeEvent } = require('../shared/ai-events');
 const { ownerEdge, filterCameraIds } = require('../shared/ai-camera-filters');
 const { createApiKeyAuth } = require('./auth');
+const { createEventStream } = require('./events');
 const {
   resolveCore,
   streamPathName,
@@ -204,11 +205,12 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
     const { sql, params } = scopeClause(req.apiClient);
     const where = sql ? `${sql} AND id = ?` : 'WHERE id = ?';
     db.get(
-      `SELECT id, name, stream_type FROM cameras ${where}`,
+      `SELECT id, name, stream_type, enabled FROM cameras ${where}`,
       [...params, req.params.id],
       async (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'ไม่พบกล้องนี้' });
+        if (Number(row.enabled ?? 1) === 0) return res.status(409).json({ error: 'กล้องนี้ถูกปิดใช้งาน' });
 
         let live = new Map();
         try {
@@ -928,96 +930,10 @@ function createGatewayRouter({ db, getCameraRow, captureMainSnapshotBuffer, init
    *                  ส่งเมื่อ reachable เปลี่ยนเท่านั้น (online = reachable === true)
    *   camera_removed { cameraId }
    */
-  router.get('/events', async (req, res) => {
-    const PING_MS = 20_000;
-    const SCOPE_REFRESH_MS = 30_000;
-    const { sql, params } = scopeClause(req.apiClient);
-
-    res.set({
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-    res.flushHeaders?.();
-
-    if (!cameraState) {
-      res.write(`event: error\ndata: ${JSON.stringify({ error: 'สถานะกล้องยังไม่พร้อม' })}\n\n`);
-      return res.end();
-    }
-
-    let closed = false;
-    /** id → ชื่อ ของกล้องใน scope ของ client รายนี้ — อ่านใหม่เป็นระยะ เผื่อกลุ่มหรือกล้องเปลี่ยน */
-    let scope = new Map();
-    const loadScope = () => new Promise((resolve) => {
-      db.all(`SELECT id, name FROM cameras ${sql}`, params, (err, rows) => {
-        if (!err) scope = new Map((rows || []).map((r) => [r.id, r.name]));
-        resolve();
-      });
-    });
-    const send = (event) => {
-      if (!closed) res.write(`data: ${JSON.stringify(event)}\n\n`);
-    };
-
-    const onChange = (id, next, prev) => {
-      if (!scope.has(id)) return;
-      const cameraName = scope.get(id);
-      send({
-        type: 'camera_state',
-        cameraId: id,
-        cameraName,
-        enabled: next.enabled,
-        reachable: next.reachable,
-        streaming: next.streaming,
-        at: next.at,
-      });
-      const was = prev ? prev.reachable === true : null;
-      const now = next.reachable === true;
-      if (was !== now) {
-        send({
-          type: 'camera_status',
-          cameraId: id,
-          cameraName,
-          streamType: 'main',
-          path: streamPathName(id, 'main'),
-          from: was === null ? 'unknown' : was ? 'online' : 'offline',
-          to: now ? 'online' : 'offline',
-          at: next.at,
-        });
-      }
-    };
-    const onRemove = (id) => {
-      if (!scope.has(id)) return;
-      send({ type: 'camera_removed', cameraId: id, cameraName: scope.get(id), at: nowIso() });
-    };
-
-    await loadScope();
-    if (closed) return;
-    const unsubscribe = cameraState.subscribe({ onChange, onRemove });
-    // event ของ AI — `{ type: 'ai_event', event }` (ห่อไว้ เพราะ event มี field type ของตัวเอง)
-    // ไม่มีภาพ ภาพขอที่ /ai/events/:seq/snapshot.jpg · ตกหล่นตอนสายขาด = ไล่ตามด้วย GET /ai/events?since=
-    const unsubscribeAi = aiEvents ? aiEvents.subscribe((row) => {
-      if (!scope.has(row.camera_id)) return;
-      void cameraInfo([row.camera_id]).then((info) => {
-        if (!closed && scope.has(row.camera_id)) send({ type: 'ai_event', event: withCamera([row], info)[0] });
-      }).catch((err) => console.warn('[API v1] AI event metadata: ' + err.message));
-    }) : () => {};
-    // edge หลุด/กลับมา (central) — ไม่ผูกกับขอบเขตกล้อง ทุก client ควรรู้ว่าภาพส่วนหนึ่งหายไป
-    const unsubscribeEdge = edgeAlerts ? edgeAlerts.subscribe((ev) => send({ type: 'edge_state', ...ev })) : () => {};
-    // ครั้งแรกคือฐาน ไม่ใช่การเปลี่ยนแปลง — client ที่อยากได้สถานะตั้งต้นอ่าน /cameras (มี state ครบ)
-    res.write(`event: hello\ndata: ${JSON.stringify({ cameras: scope.size })}\n\n`);
-
-    const ping = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, PING_MS);
-    const refresh = setInterval(() => { loadScope(); }, SCOPE_REFRESH_MS);
-    req.on('close', () => {
-      closed = true;
-      unsubscribe();
-      unsubscribeAi();
-      unsubscribeEdge();
-      clearInterval(ping);
-      clearInterval(refresh);
-    });
-  });
+  router.get('/events', createEventStream({
+    db, auth, scopeClause, cameraState, aiEvents, edgeAlerts,
+    cameraInfo, withCamera, streamPathName, nowIso,
+  }));
 
   return {
     router,

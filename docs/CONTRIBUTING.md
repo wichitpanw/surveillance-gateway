@@ -3,7 +3,9 @@
 Read this file before changing anything. The system overview is in [README.md](../README.md); the reasoning behind the design is in [DESIGN-RATIONALE.md](DESIGN-RATIONALE.md).
 Operational commands (restart, backup, logs) are in [docs/OPERATIONS.md](OPERATIONS.md).
 
-Last updated: 2026-10-07 (Gateway `d645ed9` on all four instances — Central, Regional 100, Edge 101/102 · Client 1.9.5 · per-camera audio and the AXIS S30 640x360 sub stream in real use · AI received from the source, no inference worker)
+Last updated: 2026-10-17 (Gateway `651549d` across Central, Regional 100 and published Edge update manifests · Windows Client `1.14.2` in the feed · Avigilon H.265 Media1 → Media2 fallback, ONVIF endpoint & SourceToken preservation, DSS device-tree discovery, and atomic camera deletion · AI received from the source, no inference worker)
+
+Completed Windows Client `1.10.0–1.14.2` and Map worker hotfix: see [docs/WINDOWS-CLIENT-WORKSPACE.md](WINDOWS-CLIENT-WORKSPACE.md).
 
 ## External AI agreement
 

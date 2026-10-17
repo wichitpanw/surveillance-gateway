@@ -1,7 +1,7 @@
 # CAMERA-QUIRKS — brand/model-specific problems encountered so far
 
 The cameras in this system are a "collection of firmware", not a collection of cameras — Tiandy, Uniview, Dahua, Hikvision and generic NVR brands all
-claim to support ONVIF/RTSP, and each one violates the spec in a different corner. This file records the real problems found, how they were fixed, and how to chase the next one · Updated 2026-10-09
+claim to support ONVIF/RTSP, and each one violates the spec in a different corner. This file records the real problems found, how they were fixed, and how to chase the next one · Updated 2026-10-17
 
 ## Guiding principle before reading the list
 
@@ -169,9 +169,18 @@ There is a 15-minute auth backoff in `server/gateway/analytics/poller.js` · the
 - There is no second stream per camera — the sub stream is main + `&resolution=640x360` (`axisS30SubRtsp` in `server/vms/axis-s30.js`; before 2026-10-06 sub = main at 1080p,
   and the server fixes existing rows at startup) · requesting audio with `&audio=1` gets 503 when the camera sends no audio to the S30
 
+### Avigilon (2.0C-H5SL-D1-IR, fw 3.30.0.38) — ONVIF Media 1 rejects GetProfiles when H.265 is enabled
+
+- Tested 2026-10-09 · ONVIF works with the web account (`admin`) · device/media services are at `/onvif/device_service`, `/onvif/media_service` (Media 1 and Media 2 share the same XAddr)
+- Media 1 `GetProfiles` answers `400 InvalidConfiguration` — Detail: `Invalid VideoEncoding H265 for Media 1` (Media 1 has no H.265 enum definition) → `node-onvif` init fails outright and the system previously fell back to guessing `/onvif1`, which has no video
+- **Fixed (`48f4298`, supplemented in `398df7e`):** `server/onvif_patch.js` falls back to Media 2 (`GetServices` for `ver20/media` → `GetProfiles Type=All` → `GetStreamUri`/`GetSnapshotUri` on Media 2) whenever Media 1 returns a non-auth 400/500 fault, and supplements incomplete Media 1 encoder metadata from Media 2 · remembers `host:port` for the life of the process so subsequent calls go straight to Media 2 · works for any strict H.265 camera without a brand-specific Avigilon branch
+- RTSP: `rtsp://<user>:<pass>@<ip>/defaultPrimary?streamType=u` (HEVC 1920×1080 30 fps) · `defaultSecondary?streamType=u` (HEVC 720×480), both with PCMU 8 kHz audio and 2 data tracks · snapshot `http://<ip>/media/cam0/still.jpg` (digest)
+- VideoSourceConfiguration token (`camCfg0`) does not match VideoSource token (`cam0`) — scanning matches by `SourceToken` as well (`videoSourceToken`) to avoid a duplicate offline row
+- Confirmed live video in production on 2026-10-11
+
 ### Dahua ONVIF init fails
 
-A Dahua camera at one site (203.0.113.47) makes `node-onvif` break when reading the `Width` of a profile that has no resolution — not fixed yet (direct RTSP works)
+A Dahua camera at one site (203.0.113.47) makes `node-onvif` break when reading the `Width` of a profile that has no resolution — fixed by safe `Resolution`/`RateControl` parsing in `server/onvif_patch.js`.
 
 ### Camera-side AI (currently disabled — kept for when it is turned back on)
 
@@ -189,6 +198,22 @@ A Dahua camera at one site (203.0.113.47) makes `node-onvif` break when reading 
 - Profile M does not attach a JPEG automatically, and having ONVIF does not guarantee that the same AI rule works on every brand
 - UNV needs its clock offset corrected; events more than 3 s late or images taking more than 5 s to load are not published as events with images; per the user's instruction the camera is not rebooted to clear a stuck JPEG slot
 - Supported scope and three-tier evidence: [EXTERNAL-AI.md](EXTERNAL-AI.md)
+
+### DSS: discovering cameras from the device tree (tested 2026-10-15)
+
+- `server/vms/dss.js` calls `POST /brms/api/v1.0/tree/devices` with `categories: ["1"]`, `containVirtualDevice: "1"`, `resourceTypes: []`, reads `devices[].units[]` with `unitType = 1`, and uses `channels[].channelCode` as returned by DSS
+- Fetches channel details, group names and status via `device/channel/list` in batches of up to 400 IDs instead of guessing sequential device codes or constructing channel IDs by hand
+- Does not filter out offline channels, does not expose raw device-tree responses (which contain device credentials), and never alters existing `source_ref` or Global IDs
+- Malformed trees, insufficient permissions, unsupported endpoints or missing channel details return an explicit error rather than a partial list or sequential-ID fallback
+- Verified with `node scripts/check-dss-discovery.cjs` (isolated loopback fixture covering multi-channel NVRs, duplicate IDs, alarm/offline channels, 805-channel batching, and error cases)
+
+### ONVIF: SourceToken grouping and full XAddr preservation (2026-10-15)
+
+- Groups main/sub profiles by physical camera `VideoSourceConfiguration.SourceToken` before falling back to configuration token; legacy devices without `SourceToken` keep the previous behavior, and Milestone profiles without a source stay separate
+- Rescanning matches secondary profile URIs of the same camera and deduplicates bulk imports across main/sub/profiles without deleting existing rows or changing Global IDs
+- Multicast discovery preserves all usable XAddrs (up to 16) with scheme/host/port/path/query (including IPv6 and HTTPS default port 443) and stores them as JSON in `cameras.onvif_xaddrs`
+- `onvif_xaddrs` rejects embedded credentials and is included in `CAMERA_SECRET_FIELDS` (hidden from roles without `device.secrets` and excluded from `/api/v1` `SAFE_CAMERA_COLUMNS`)
+- Verified with `node scripts/check-onvif-source-grouping.cjs` and `node scripts/check-onvif-endpoints.cjs`
 
 ## go2rtc options worth knowing before chasing the next problem
 

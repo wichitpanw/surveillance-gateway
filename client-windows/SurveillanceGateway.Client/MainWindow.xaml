@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:SurveillanceGateway.Client.Services"
         Title="Surveillance Gateway Client"
-        Icon="/Assets/app.ico"
+        Icon="/SurveillanceGateway;component/Assets/app.ico"
         Width="1280" Height="720"
         MinWidth="1024" MinHeight="640"
         WindowStyle="None"
@@ -62,7 +62,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Border x:Name="Titlebar" Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource SideBgBrush}"
-                BorderBrush="#626B67" BorderThickness="0,0,0,1">
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="13,0,0,0">
                     <Ellipse Width="14" Height="14" Fill="{DynamicResource BrandYellowBrush}" />
@@ -84,7 +84,7 @@
         </Border>
 
         <!-- ===== sidebar ===== -->
-        <Border x:Name="Sidebar" Grid.Row="1" Grid.Column="0" Width="220" Background="{StaticResource SideBgBrush}" ClipToBounds="True">
+        <Border x:Name="Sidebar" Grid.Row="1" Grid.Column="0" Width="188" Background="{StaticResource SideBgBrush}" ClipToBounds="True">
             <DockPanel LastChildFill="True">
                 <!-- Mark + program name: Surveillance Gateway Client (talks to Surveillance Gateway Central). -->
                 <Border DockPanel.Dock="Top" Height="50" BorderBrush="{StaticResource SideLineBrush}" BorderThickness="0,0,0,1" Padding="17,0,0,0">
@@ -173,24 +173,24 @@
             </Grid.RowDefinitions>
 
             <!-- navbar: sidebar toggle · breadcrumb (program / section / page) · status and buttons -->
-            <Border Grid.Row="0" Height="58" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,0,18,0">
-                <Grid>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="CollapseButton" Style="{StaticResource IconButton}" ToolTip="{svc:T shell.toggleMenu}">
+            <Border Grid.Row="0" Height="52" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,0,18,0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <DockPanel VerticalAlignment="Center" LastChildFill="True">
+                        <Button x:Name="CollapseButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" ToolTip="{svc:T shell.toggleMenu}">
                             <Path Style="{StaticResource GlyphIcon}" Data="M4 7 H20 M4 12 H20 M4 17 H20" RenderTransformOrigin="0.5,0.5">
                                 <Path.RenderTransform><RotateTransform x:Name="CollapseRotate" Angle="0" /></Path.RenderTransform>
                             </Path>
                         </Button>
-                        <TextBlock Margin="8,0,0,0" Style="{StaticResource CrumbText}" Text="Surveillance Gateway Client" />
-                        <TextBlock x:Name="CrumbSep1" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
-                        <TextBlock x:Name="CrumbSection" Style="{StaticResource CrumbText}" Text="" />
-                        <TextBlock x:Name="CrumbSep2" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
-                        <TextBlock x:Name="CrumbPage" Style="{StaticResource CrumbText}" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" Text="">
+
+                        <TextBlock Visibility="Collapsed" x:Name="CrumbSep1" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
+                        <TextBlock Visibility="Collapsed" x:Name="CrumbSection" Style="{StaticResource CrumbText}" Text="" />
+                        <TextBlock Visibility="Collapsed" x:Name="CrumbSep2" Margin="8,0" Style="{StaticResource CrumbText}" Foreground="{DynamicResource FaintForegroundBrush}" Text="&#x203A;" />
+                        <TextBlock x:Name="CrumbPage" TextTrimming="CharacterEllipsis" Margin="12,0" Style="{StaticResource CrumbText}" FontWeight="SemiBold" Foreground="{DynamicResource ForegroundBrush}" Text="">
                             <TextBlock.RenderTransform><TranslateTransform x:Name="CrumbShift" /></TextBlock.RenderTransform>
                         </TextBlock>
-                    </StackPanel>
+                    </DockPanel>
 
-                    <StackPanel x:Name="Chrome" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <StackPanel x:Name="Chrome" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                         <!-- Shown only while central reports an edge down: those cameras have no picture. -->
                         <Border x:Name="EdgeDownChip" Style="{StaticResource Chip}" Margin="0,0,8,0" VerticalAlignment="Center"
                                 Visibility="Collapsed" BorderBrush="{DynamicResource StatusCritBrush}">
@@ -203,13 +203,14 @@
                         <Border x:Name="ServerChip" Style="{StaticResource Chip}" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <Ellipse x:Name="FeedDot" Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource FaintForegroundBrush}" />
-                                <TextBlock x:Name="ServerText" Margin="8,0,0,0" Style="{StaticResource MonoText}" Text="" />
+                                <TextBlock x:Name="ServerText" MaxWidth="160" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="8,0,0,0" Style="{StaticResource MonoText}" Text="" />
                             </StackPanel>
                         </Border>
                         <Border x:Name="KeyChip" Style="{StaticResource Chip}" Margin="8,0,0,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="UserText" Style="{StaticResource MonoText}" Text="" />
+                            <TextBlock x:Name="UserText" MaxWidth="110" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Style="{StaticResource MonoText}" Text="" />
                         </Border>
 
+                        <Button x:Name="DensityButton" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="8,6" ToolTip="{svc:T workspace.density}"/>
                         <!-- Only ever shown when an update has finished downloading. -->
                         <Button x:Name="UpdateButton" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Visibility="Collapsed" Content="{svc:T shell.update}" />
 
@@ -230,7 +231,7 @@
                 leave the wall arranged - and on a wall display the tab strip is also the only place
                 that says what is currently loaded and decoding.
             -->
-            <Border x:Name="TabStrip" Grid.Row="1" Height="46" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+            <Border x:Name="TabStrip" Grid.Row="1" Height="40" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center">
                     <ItemsControl x:Name="TabItems">
                         <ItemsControl.ItemsPanel>

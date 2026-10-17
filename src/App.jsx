@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import Login01 from '@/components/login-01'
 import AppShell from '@/components/shell/AppShell'
 import { APPS } from '@/lib/app-config'
+import { nvrImportIdentity } from '@/lib/nvr-import'
 import { API_CAMERA_PROVIDERS, DEFAULT_API_CAMERA_PROVIDER } from '@/lib/camera-api-providers'
 
 // 🏗️ Modular Components
@@ -102,7 +103,7 @@ function App({ role = 'central' }) {
   // Camera Management States
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState('add')
-  const [formData, setFormData] = useState({ id: '', name: '', group: 'Default', type: 'manual', apiProvider: DEFAULT_API_CAMERA_PROVIDER, rtspUrl: '', ip: '', onvifPort: '80', apiPort: '80', rtspPort: '554', onvifUser: 'admin', onvifPass: '', lat: null, lng: null, oldName: '', brand: 'generic', stream_type: 'main', rtspSubUrl: '' })
+  const [formData, setFormData] = useState({ id: '', name: '', group: 'Default', type: 'manual', apiProvider: DEFAULT_API_CAMERA_PROVIDER, rtspUrl: '', ip: '', onvifPort: '80', onvif_xaddrs: [], apiPort: '80', rtspPort: '554', onvifUser: 'admin', onvifPass: '', lat: null, lng: null, oldName: '', brand: 'generic', stream_type: 'main', rtspSubUrl: '' })
   const [isMapFullPickerOpen, setIsMapFullPickerOpen] = useState(false)
   const [mapPinEditCam, setMapPinEditCam] = useState(null)
   const [mapPinCoords, setMapPinCoords] = useState({ lat: MAP_CENTER.lat, lng: MAP_CENTER.lng })
@@ -222,11 +223,26 @@ function App({ role = 'central' }) {
     }
   }, [getHeaders]);
 
-  useEffect(() => {
-    const onAuthExpired = () => setLoggedInUser(null);
-    window.addEventListener('cctv:auth-expired', onAuthExpired);
-    return () => window.removeEventListener('cctv:auth-expired', onAuthExpired);
+  const resetSessionState = useCallback(() => {
+    setLoggedInUser(null);
+    setCameras([]);
+    setUsers([]);
+    setRoles([]);
+    setLogs([]);
+    setCameraStatus({});
+    setSystemSettings({ TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '' });
+    setSelectedCamerasForDelete([]);
+    setVmsSources([]);
+    setLoginForm({ username: '', password: '' });
   }, []);
+
+  useEffect(() => {
+    const onAuthExpired = () => resetSessionState();
+    window.addEventListener('cctv:auth-expired', onAuthExpired);
+    return () => {
+      window.removeEventListener('cctv:auth-expired', onAuthExpired);
+    };
+  }, [resetSessionState]);
 
   // รีเฟรชสิทธิ์จาก /api/me ตอน mount และตอนสลับแท็บกลับมา — user object ใน localStorage
   // ใช้แค่ paint แรก ถ้าแอดมินแก้ role ระหว่างที่ผู้ใช้ล็อกอินอยู่ ค่าจะไม่ค้าง (401 = logout)
@@ -268,10 +284,11 @@ function App({ role = 'central' }) {
   }
 
   const handleLogout = () => {
-    saveLog(loggedInUser.username, 'Logout', 'ออกจากระบบ 🚪');
-    setLoggedInUser(null);
+    if (loggedInUser?.username) {
+      saveLog(loggedInUser.username, 'Logout', 'ออกจากระบบ 🚪');
+    }
+    resetSessionState();
     clearSession();
-    setLoginForm({ username: '', password: '' });
   }
 
   const handleClearLogs = async () => {
@@ -442,6 +459,7 @@ function App({ role = 'central' }) {
       name: device.name,
       ip: device.ip,
       onvifPort: device.onvifPort || '80',
+      onvif_xaddrs: device.onvif_xaddrs || [],
       // ยี่ห้อจากผลสแกนก่อน (backend ถามกล้องเอง เช่น Axis ผ่าน VAPIX) แล้วค่อยเดาจากชื่อ
       brand: device.brand ||
              (device.name.toLowerCase().includes('tiandy') ? 'tiandy' :
@@ -471,6 +489,7 @@ function App({ role = 'central' }) {
         body: JSON.stringify({
            ip: formData.ip,
            onvifPort: formData.onvifPort,
+           onvif_xaddrs: formData.onvif_xaddrs || [],
            ...(apiProvider ? { apiPort: formData.apiPort } : {}),
            user: formData.onvifUser,
            pass: formData.onvifPass,
@@ -646,6 +665,7 @@ function App({ role = 'central' }) {
            group,
            ip: formData.ip,
            onvifPort: formData.onvifPort,
+           onvif_xaddrs: formData.onvif_xaddrs || [],
            ...(apiProvider ? { apiPort: formData.apiPort } : {}),
            rtspPort: formData.rtspPort,
            user: formData.onvifUser,
@@ -656,18 +676,13 @@ function App({ role = 'central' }) {
            // province_code/district_code ไปกับชุดด้วย — เดิมไม่ได้ส่ง จังหวัดที่เลือกในฟอร์มจึงหายทั้งชุด
            province_code: formData.province_code || null,
            district_code: formData.district_code || null,
-           channels: selected.map((c, i) => {
-             // เลขช่องจริงของ NVR (จาก RTSP ที่ NVR ตอบ) — ลำดับในรายการไม่ใช่เลขช่อง
-             const chNo = c.channel || i + 1;
+           channels: selected.map((c) => {
+             const identity = nvrImportIdentity(c, baseName);
              return {
                id: c.id,
-               channel: chNo,
+               ...identity,
                ...(apiProvider?.importMode === 'axis_s30' ? { sourceId: c.sourceId } : {}),
-               // มีชื่อ base ให้ -> ต่อท้ายด้วยชื่อ channel จาก ONVIF (ถ้ามี)
-               // ไม่มีชื่อ base -> ใช้ชื่อ channel จาก ONVIF ตรงๆเลย ไม่ต้องพิมพ์เอง
-               name: baseName
-                 ? `${baseName} CH ${chNo}${c.name ? ` (${c.name})` : ''}`
-                 : (c.name || `CH ${chNo}`),
+               profiles: c.profiles || [],
                main: c.main,
                sub: c.sub || c.main,
              };
@@ -788,7 +803,7 @@ function App({ role = 'central' }) {
   const openAddModal = () => {
     setModalMode('add');
     // กล้องใหม่ยังไม่มีหมุด (null) — จุดกลางแผนที่ไม่ใช่ที่ตั้งของกล้องตัวไหน ปักเองในฟอร์มหรือหน้า Map Pins
-    setFormData({ id: '', name: '', group: 'Default', type: 'manual', apiProvider: DEFAULT_API_CAMERA_PROVIDER, rtspUrl: '', ip: '', onvifPort: '80', apiPort: '80', rtspPort: '554', onvifUser: 'admin', onvifPass: '', lat: null, lng: null, oldName: '', brand: 'generic', stream_type: 'main', rtspSubUrl: '' });
+    setFormData({ id: '', name: '', group: 'Default', type: 'manual', apiProvider: DEFAULT_API_CAMERA_PROVIDER, rtspUrl: '', ip: '', onvifPort: '80', onvif_xaddrs: [], apiPort: '80', rtspPort: '554', onvifUser: 'admin', onvifPass: '', lat: null, lng: null, oldName: '', brand: 'generic', stream_type: 'main', rtspSubUrl: '' });
     setIsModalOpen(true);
   }
 
@@ -808,6 +823,7 @@ function App({ role = 'central' }) {
         && (cam.type === 'manual' || (cam.type === 'onvif_cam' && !cam.onvif_sub_token)) ? cam.rtsp_sub : '',
       ip: cam.ip,
       onvifPort: cam.onvifPort || '80',
+      onvif_xaddrs: cam.onvif_xaddrs,
       rtspPort: cam.rtspPort || '554',
       onvifUser: cam.onvifUser || 'admin',
       onvifPass: cam.onvifPass || '',
@@ -891,16 +907,20 @@ function App({ role = 'central' }) {
         } catch (e) { console.error(`Fetch failed for ${url}`, e); }
       };
 
-      fetchData(`/api/cameras`, setCameras);
+      if (can(loggedInUser, 'menu.cameras')) fetchData(`/api/cameras`, setCameras);
       fetchData(`/api/instance`, setInstanceInfo);
       // /api/vms อยู่หลัง edgeOnly — central ได้ 403 ทุกครั้ง ไม่ต้องถาม
-      if (app.role === 'edge') fetchData(`/api/vms/sources`, (data) => { if (Array.isArray(data)) setVmsSources(data); });
-      fetchData(`/api/users`, setUsers);
-      fetchData(`/api/roles`, (data) => { if (Array.isArray(data)) setRoles(data); });
-      fetchData(`/api/permissions`, (data) => { if (data) setPermCatalogue(data); });
-      fetchData(`/api/settings`, (data) => {
-        if (data) setSystemSettings(data);
-      });
+      if (app.role === 'edge' && can(loggedInUser, 'menu.cameras')) fetchData(`/api/vms/sources`, (data) => { if (Array.isArray(data)) setVmsSources(data); });
+      if (can(loggedInUser, 'menu.users')) {
+        fetchData(`/api/users`, setUsers);
+        fetchData(`/api/roles`, (data) => { if (Array.isArray(data)) setRoles(data); });
+        fetchData(`/api/permissions`, (data) => { if (data) setPermCatalogue(data); });
+      }
+      if (can(loggedInUser, 'menu.settings')) {
+        fetchData(`/api/settings`, (data) => {
+          if (data) setSystemSettings(data);
+        });
+      }
     }
     fetchInitialData();
   }, [loggedInUser, serverIP]); // eslint-disable-line react-hooks/exhaustive-deps

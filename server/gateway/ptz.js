@@ -148,7 +148,7 @@ function createPtz({ initOnvifDevice, edgeClientFor, dssPtz = null }) {
     }
 
     // key รวมทุกอย่างที่ใช้ต่อกล้อง — แก้ IP/รหัสของกล้องแล้ว cache เดิมต้องไม่ถูกใช้ต่อ
-    const key = [target.ip, target.onvifPort, target.user, target.pass, target.rtspPath].join('|');
+    const key = [target.ip, target.onvifPort, target.user, target.pass, target.rtspPath, JSON.stringify(camera.onvif_xaddrs || null)].join('|');
     const hit = devices.get(camera.id);
     if (hit && hit.key === key && Date.now() - hit.at < DEVICE_CACHE_MS) return hit.device;
 
@@ -157,6 +157,7 @@ function createPtz({ initOnvifDevice, edgeClientFor, dssPtz = null }) {
       device = await initOnvifDevice({
         ip: target.ip,
         onvifPort: target.onvifPort,
+        onvifXaddrs: camera.onvif_xaddrs,
         user: target.user,
         pass: target.pass,
       });

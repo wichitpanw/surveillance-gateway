@@ -93,6 +93,15 @@ public partial class PlaybackView : UserControl, IDisposable
     public void SetCameras(IReadOnlyList<V1Camera> cameras)
     {
         _cameras = cameras;
+        // Catalog เปลี่ยน scope แล้วต้องล้างบริบทเดิม ไม่แสดงกล้องที่ถูกถอนสิทธิ์ค้างไว้
+        if (_selected is not null && !cameras.Any(c => c.Id == _selected.Id))
+        {
+            ++_eventNavigation; _load?.Cancel(); StopPlayback(); ClearExportSelection();
+            _selected = null; _position = null; BackLiveButton.IsEnabled = false;
+            _ranges = Array.Empty<(double, double)>(); Timeline.Ranges = _ranges;
+            CameraTitle.Text = Strings.T("playback.selectCamera"); CameraSubtitle.Text = Strings.T("playback.hint");
+            RangeSummary.Text = string.Empty; Status("playback.idle", null);
+        }
         RebuildCameraTree();
     }
 
@@ -121,10 +130,34 @@ public partial class PlaybackView : UserControl, IDisposable
         if (CameraTree is not null) RebuildCameraTree();
     }
 
+    /// <summary>เปิดกล้องและเวลาเหตุการณ์ โดยไม่เลื่อนข้ามช่องว่างไปเวลาอื่นเอง</summary>
+    private int _eventNavigation;
+    public async Task OpenEventAsync(V1Camera camera, DateTimeOffset at)
+    {
+        var navigation = ++_eventNavigation;
+        ClearExportSelection();
+        StopPlayback();
+        _selected = camera;
+        BackLiveButton.IsEnabled = true;
+        CameraTitle.Text = camera.DisplayName;
+        CameraSubtitle.Text = camera.GroupLabel;
+        _day = at.ToOffset(Bangkok).Date;
+        ShowDay();
+        await LoadRangesAsync();
+        if (_disposed || navigation != _eventNavigation || _selected?.Id != camera.Id || _day != at.ToOffset(Bangkok).Date) return;
+        var second = at.ToOffset(Bangkok).TimeOfDay.TotalSeconds;
+        MoveCursor(second);
+        if (_ranges.Any(r => second >= r.Start && second < r.End)) await PlayAtAsync(second);
+        else Status("investigation.noRecording", "warn");
+    }
+
     private void OnCameraSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         if (e.NewValue is not PlaybackCameraItem item) return;
+        ++_eventNavigation;
+        ClearExportSelection();
         _selected = item.Camera;
+        BackLiveButton.IsEnabled = true;
         CameraTitle.Text = item.Camera.DisplayName;
         CameraSubtitle.Text = $"{item.Camera.GroupLabel} · {item.Camera.AvailabilityText}";
         StopPlayback();
@@ -155,6 +188,8 @@ public partial class PlaybackView : UserControl, IDisposable
         day = day.Date;
         if (day > TodayBangkok()) day = TodayBangkok();
         if (day == _day) return;
+        ++_eventNavigation;
+        ClearExportSelection();
         _day = day;
         ShowDay();
         StopPlayback();
@@ -191,9 +226,9 @@ public partial class PlaybackView : UserControl, IDisposable
     {
         if (_selected is null || _disposed || _ranges.Count == 0)
         { Status("playback.downloadSelect", "warn"); return; }
-        var second = CurrentSecond() ?? _ranges[0].Start;
+        var second = _exportStart ?? CurrentSecond() ?? _ranges[0].Start;
         StopPlayback();
-        new PlaybackDownloadWindow(_client, _selected, _day, second, _ranges)
+        new PlaybackDownloadWindow(_client, _selected, _day, second, _ranges, _exportEnd)
         { Owner = Window.GetWindow(this) }.ShowDialog();
     }
 

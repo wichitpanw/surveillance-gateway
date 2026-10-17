@@ -28,12 +28,14 @@ param(
 if ($UpdatesOnly) { $Publish = $true }
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+# ตรวจ runtime ของ build ก่อนสร้างชุดติดตั้งหรือ restart service
+& node (Join-Path $PSScriptRoot 'check-build-runtime.cjs')
+if ($LASTEXITCODE) { throw 'Node ของ shell ไม่รองรับ build — ต้องใช้ ^20.19.0 หรือ >=22.12.0' }
 $cache = Join-Path $Out 'cache'
 $tar = Join-Path $env:SystemRoot 'System32\tar.exe'   # bsdtar ของ Windows — แตก zip และ tar.xz ได้
 
 # เวอร์ชันที่ใช้ — go2rtc ต้องตรงกับของ central (1.9.14 มีข้อจำกัดที่โค้ดอ้อมไว้แล้ว อย่าเปลี่ยนลอย ๆ)
 $GO2RTC = 'v1.9.14'
-$SQLITE3 = '5.1.7'
 $FFMPEG = 'n8.1'   # BtbN FFmpeg-Builds สาขา release (static, gpl)
 
 function Step($msg) { Write-Host "== $msg" -ForegroundColor Cyan }
@@ -67,6 +69,7 @@ function Expand-One($archive, $member, $dest) {
   try {
     & $tar -xf $archive -C $tmp $member
     if ($LASTEXITCODE) { throw "แตก $member จาก $archive ไม่ได้" }
+    New-Item -ItemType Directory -Force (Split-Path -Parent $dest) | Out-Null
     Copy-Item (Join-Path $tmp $member) $dest -Force
   } finally { Remove-Item $tmp -Recurse -Force }
 }
@@ -97,6 +100,10 @@ try {
   & $tar -xf $archive -C $app
   Remove-Item $archive
   Set-Content -Path (Join-Path $app 'BUILD') -Value $build -Encoding ascii
+  # อ่านรุ่นจาก lockfile ของโค้ดที่ archive แล้ว เพื่อให้ native binary ตรงกับ package จริง
+  $SQLITE3 = (& node -e "const fs=require('node:fs'); const lock=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(lock.packages['node_modules/sqlite3'].version)" (Join-Path $app 'server\package-lock.json'))
+  if ($LASTEXITCODE) { throw 'อ่าน SQLite version จาก archived lockfile ไม่สำเร็จ' }
+  if ($SQLITE3 -notmatch '^\d+\.\d+\.\d+$') { throw 'SQLite version ใน archived lockfile ไม่ถูกต้อง' }
 
   Step 'หน้าเว็บ (vite build)'
   npx vite build --outDir (Join-Path $app 'dist') --emptyOutDir --logLevel warn

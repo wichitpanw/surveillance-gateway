@@ -129,6 +129,23 @@ function ensureSchema(db) {
  * (SQLite เปิดซ้อนกันหลาย connection บนไฟล์เดียวใน WAL ทำได้ก็จริง แต่ไม่มีเหตุผล
  * ให้ทำ และจะทำให้ PRAGMA ที่ตั้งไว้ฝั่งโน้นไม่มีผลกับฝั่งนี้)
  */
+// คืนรูปสิทธิ์เดียวกันทั้งตอน login และตรวจ SSE ซ้ำ
+function clientFromRow(row) {
+  let scopeGroups = null;
+  if (row.scope_groups) {
+    try {
+      const parsed = JSON.parse(row.scope_groups);
+      if (Array.isArray(parsed)) scopeGroups = parsed;
+    } catch {
+      // ค่าที่อ่านไม่ออกต้องแปลว่า "ไม่ให้เห็นอะไรเลย" ไม่ใช่ "ให้เห็นทุกอย่าง"
+      // การเดาผิดด้านหลวมคือการเปิดกล้องที่ไม่ควรเปิดให้คนนอกเห็น
+      scopeGroups = [];
+    }
+  }
+
+  return { id: row.id, name: row.name, scopeGroups, allowPtz: Boolean(row.allow_ptz), allowPlayback: Boolean(row.allow_playback), allowEventWrite: Boolean(row.allow_event_write), allowPublic: Boolean(row.allow_public) };
+}
+
 function createApiKeyAuth(db) {
   ensureSchema(db);
 
@@ -203,7 +220,23 @@ function createApiKeyAuth(db) {
 
   const countActiveInstances = (clientId) => listActiveInstances(clientId).length;
 
-  const invalidate = () => cache.clear();
+  const invalidationListeners = new Set();
+  // admin แจ้งหลัง commit แล้ว; ปิด SSE ของ key ที่เปลี่ยนสิทธิ์ก่อนส่ง HTTP success
+  const invalidate = (clientId) => {
+    cache.clear();
+    for (const listener of [...invalidationListeners]) listener(clientId);
+  };
+  const subscribeInvalidation = listener => {
+    invalidationListeners.add(listener);
+    return () => invalidationListeners.delete(listener);
+  };
+  // ตรวจ id และ hash เดิมจาก DB โดยตรง ไม่ให้ cache ยืดอายุสิทธิ์ของ SSE
+  const revalidate = (clientId, keyHash) => new Promise((resolve, reject) => {
+    db.get('SELECT id, name, scope_groups, enabled, allow_ptz, allow_playback, allow_event_write, allow_public FROM api_clients WHERE id = ? AND key_hash = ?', [clientId, keyHash], (err, row) => {
+      if (err) return reject(err);
+      resolve(row && row.enabled && row.id !== 'apic_ai_worker_local' ? clientFromRow(row) : null);
+    });
+  });
 
   /** ใส่ผลลง cache โดยไม่ให้เกินเพดาน — กวาดของหมดอายุก่อน ยังเต็มก็ล้าง (ของจริงโหลดกลับได้ด้วย query เดียว) */
   const remember = (keyHash, client) => {
@@ -236,6 +269,7 @@ function createApiKeyAuth(db) {
     }
 
     const keyHash = hashKey(match[1]);
+    req.apiKeyHash = keyHash;
     const hit = cache.get(keyHash);
     if (hit && Date.now() - hit.at < CLIENT_CACHE_MS) {
       if (!hit.client) return res.status(401).json({ error: 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน' });
@@ -256,19 +290,7 @@ function createApiKeyAuth(db) {
           return res.status(401).json({ error: 'API key ไม่ถูกต้องหรือถูกปิดใช้งาน' });
         }
 
-        let scopeGroups = null;
-        if (row.scope_groups) {
-          try {
-            const parsed = JSON.parse(row.scope_groups);
-            if (Array.isArray(parsed)) scopeGroups = parsed;
-          } catch {
-            // ค่าที่อ่านไม่ออกต้องแปลว่า "ไม่ให้เห็นอะไรเลย" ไม่ใช่ "ให้เห็นทุกอย่าง"
-            // การเดาผิดด้านหลวมคือการเปิดกล้องที่ไม่ควรเปิดให้คนนอกเห็น
-            scopeGroups = [];
-          }
-        }
-
-        const client = { id: row.id, name: row.name, scopeGroups, allowPtz: Boolean(row.allow_ptz), allowPlayback: Boolean(row.allow_playback), allowEventWrite: Boolean(row.allow_event_write), allowPublic: Boolean(row.allow_public) };
+        const client = clientFromRow(row);
         remember(keyHash, client);
         req.apiClient = client;
         touch(client.id);
@@ -281,6 +303,8 @@ function createApiKeyAuth(db) {
   return {
     requireApiKey,
     invalidate,
+    subscribeInvalidation,
+    revalidate,
     listActiveInstances,
     countActiveInstances,
     generateKey,

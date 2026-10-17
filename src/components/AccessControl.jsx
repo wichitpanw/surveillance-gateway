@@ -59,7 +59,7 @@ const AccessControl = ({
               setUserFormData({ id: '', username: '', password: '', role: 'monitor', role_id: 'r_monitor', allowedCameras: [] });
               setIsUserModalOpen(true);
             }}
-            className="h-11 px-6 text-xs font-bold uppercase tracking-widest gap-2 shadow-sm"
+            className="h-11 px-6 text-xs font-bold uppercase tracking-widest gap-2 shadow-xs"
           >
             <UserPlus className="size-4" />
             Create User
@@ -67,7 +67,7 @@ const AccessControl = ({
         ) : (
           <Button
             onClick={() => onOpenRoleModal?.('add', null)}
-            className="h-11 px-6 text-xs font-bold uppercase tracking-widest gap-2 shadow-sm"
+            className="h-11 px-6 text-xs font-bold uppercase tracking-widest gap-2 shadow-xs"
           >
             <Plus className="size-4" />
             Create Role
@@ -95,7 +95,7 @@ const AccessControl = ({
       </div>
 
       {panel === 'roles' && (
-        <Card className="border shadow-sm overflow-hidden bg-card">
+        <Card className="border shadow-xs overflow-hidden bg-card">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/50">
@@ -154,7 +154,7 @@ const AccessControl = ({
 
       {/* Users Table Card */}
       {panel === 'users' && (
-      <Card className="border shadow-sm overflow-hidden bg-card">
+      <Card className="border shadow-xs overflow-hidden bg-card">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/50">
@@ -175,7 +175,7 @@ const AccessControl = ({
                 <TableRow key={u.id} className="group hover:bg-muted/30 transition-colors">
                   <TableCell className="px-6 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="size-10 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground shadow-sm">
+                      <div className="size-10 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground shadow-xs">
                         {u.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex flex-col">

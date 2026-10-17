@@ -30,6 +30,7 @@ const { nowIso } = require('../shared/time');
 const { currentPlatform } = require('../shared/edge-update-manifest');
 // sig2 + issuedAt: กันการเล่นซ้ำ manifest เก่าที่เซ็นถูกเพื่อลดเวอร์ชัน (scripts/edge-update-key.cjs)
 const { verifyManifestV2, checkManifestOrder } = require('../../scripts/edge-update-key.cjs');
+const { readAccepted, writeAccepted } = require('../../scripts/edge-update-state.cjs');
 
 const DIR = stateFile('updates');
 const file = (name) => path.join(DIR, name);
@@ -59,8 +60,6 @@ const IN_PLACE = RUNNER === 'pm2' && process.platform === 'linux' && process.env
   && path.relative(REPO, DIR).startsWith('..');
 const CAN_INSTALL = RUNNER === 'edge-run' || IN_PLACE;
 const HEALTH_WAIT_MS = Number(process.env.GW_EDGE_UPDATE_HEALTH_MS) || 5 * 60_000;
-/** manifest ล่าสุดที่รับ { issuedAt, sha256, build } — ใช้ปฏิเสธ manifest ที่เก่ากว่า (edge-run อ่านชื่อเดียวกัน) */
-const ACCEPTED = 'accepted-manifest.json';
 
 function createEdgeUpdater() {
   let offer = null; // manifest ที่ central เสนอล่าสุด
@@ -152,15 +151,15 @@ function createEdgeUpdater() {
     }
     if (m.platform !== PLATFORM) return;
     // manifest ที่ออกก่อนตัวที่เคยรับ = การเล่นซ้ำเพื่อลดเวอร์ชัน (ลายเซ็นถูกแต่เก่า) — ไม่รับ
-    const stale = checkManifestOrder(m, readJson(ACCEPTED));
-    if (stale) {
-      console.warn(`[Edge update] ไม่รับข้อเสนอจาก central: ${stale}`);
+    try {
+      const stale = checkManifestOrder(m, readAccepted(DIR));
+      if (stale) throw new Error(stale);
+      writeAccepted(DIR, m, nowIso());
+    } catch (err) {
       offer = { build: m.build };
-      setState('failed', stale);
+      setState('failed', err.message);
       return;
     }
-    // จำ manifest ล่าสุดที่รับ — ตัวที่ออกก่อนหน้านี้จะถูกปฏิเสธตั้งแต่นี้ (edge-run ตรวจซ้ำก่อนติดตั้ง)
-    try { writeJson(ACCEPTED, { issuedAt: m.issuedAt, sha256: m.sha256, build: m.build, at: nowIso() }); } catch { /* ไม่มีที่เขียน = ตรวจลำดับไม่ได้รอบหน้า */ }
     offer = m;
     retryContext = { httpBase, token };
     if (m.build === BUILD) { offer = null; setState('idle'); return; }
@@ -339,7 +338,11 @@ function createEdgeUpdater() {
       const ready = readJson('pending.json');
       if (state !== 'ready' || !ready) throw Object.assign(new Error('ยังไม่มีแพ็กเกจที่พร้อมติดตั้ง'), { status: 409 });
       // pending.json อยู่บนดิสก์มาระยะหนึ่ง — ตรวจลายเซ็นและลำดับซ้ำก่อนสลับไฟล์ (edge-run ทำแบบเดียวกันอีกชั้น)
-      const bad = verifyManifestV2(ready) || checkManifestOrder(ready, readJson(ACCEPTED));
+      let bad;
+      try {
+        bad = verifyManifestV2(ready) || checkManifestOrder(ready, readAccepted(DIR, { requireExisting: true }));
+        if (!bad) writeAccepted(DIR, ready, nowIso());
+      } catch (err) { bad = err.message; }
       if (bad) {
         setState('failed', bad);
         throw Object.assign(new Error(`แพ็กเกจที่โหลดไว้ใช้ไม่ได้: ${bad}`), { status: 409 });
