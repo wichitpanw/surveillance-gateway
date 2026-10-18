@@ -1,6 +1,6 @@
 # Full Stack fix plan and results
 
-> A record of the 1.9.2 review and release, kept as of its date. For the current state (2026-10-07: Gateway d645ed9 / Client 1.9.5) and external AI, see [EXTERNAL-AI.md](EXTERNAL-AI.md). Historical test results are not rewritten as results of newer releases.
+> A record of the 1.9.2 review and release, kept as of its date. For the current state (2026-10-17: Gateway 651549d / Client 1.14.2) and external AI, see [EXTERNAL-AI.md](EXTERNAL-AI.md). Historical test results are not rewritten as results of newer releases.
 
 Date 2026-10-01 · code base 9b45ad0 · developed in the dev worktree · production is still 9b45ad0
 

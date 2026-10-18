@@ -1,12 +1,12 @@
 # Edge ↔ Central — How It Works, Agreements, and Remaining Work
 
 > Since 2026-10-02 AI has changed to receiving results from cameras/NVRs/VMSs/external APIs; there is no inference on any of the three tiers.
-> Current state 2026-10-07: Gateway d645ed9 / Client 1.9.5; external AI is received, there is no inference worker — see [EXTERNAL-AI.md](EXTERNAL-AI.md)
+> Current state 2026-10-17: Gateway 651549d / Client 1.14.2; Map worker hotfix closed out — see [WINDOWS-CLIENT-WORKSPACE.md](WINDOWS-CLIENT-WORKSPACE.md); external AI is received, there is no inference worker — see [EXTERNAL-AI.md](EXTERNAL-AI.md)
 > This document was written for the two-tier system: "central" in the operation/link sections means **the edge's parent** — today that is the Regional (and the Regional is a child of Central in the same way); see [REGIONAL-PLAN.md](REGIONAL-PLAN.md)
 > Phase 5 item D describes the current receiver; items A/C and the dated test results are history
 
 
-Updated 2026-10-07 · Central → the central Regional (100) → Edge 101/102 in real use (Edge 103 reserved, not yet linked at the time); the link has no TLS, use it over LAN/VPN
+Updated 2026-10-17 · Central → the central Regional (100) → Edge 101/102 in real use (Edge 103 reserved as a test Edge); the link has no TLS, use it over LAN/VPN
 · new edges are installed from the offline kit and updated over the link with a button on the Edge Nodes page ([EDGE-KIT.md](EDGE-KIT.md)) · phase 5: AI events with JPEGs are received from the source through AI Sources; the inference worker is removed · playback is pulled from the devices (AXIS S30 / Uniview in real use · Hikvision / Dahua / ONVIF Profile G awaiting testing)
 
 ## Overview

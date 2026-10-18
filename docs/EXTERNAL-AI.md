@@ -4,7 +4,7 @@ Agreement 2026-10-02: cameras / NVRs / VMSs / external APIs do their own process
 The Edge receives and converts events → Regional aggregates within the region → Central aggregates all regions.
 None of the three roles runs inference; no additional video recording is made.
 
-Current status (2026-10-07): Gateway d645ed9 runs on Central / Regional / Edge 101 / 102; Client 1.9.5 is released · the AI receive code last changed in 10ea98f (worker removed); per-release checks are at the end of this document
+Current status (2026-10-17): Gateway `651549d` verified on Central / Regional and published Edge update manifests; Client `1.14.2` is in the release feed · external AI is received with no inference worker; per-release checks below remain historical evidence as of their dates
 
 ## Two main receive sources
 

@@ -1,7 +1,7 @@
 # Design rationale — why the system is the way it is
 
 This file records the reasons and history that still affect the code. It is not a manual — see [README.md](../README.md) for the current state
-and [CONTRIBUTING.md](CONTRIBUTING.md) for the rules · updated 2026-10-07
+and [CONTRIBUTING.md](CONTRIBUTING.md) for the rules · updated 2026-10-17
 
 ## New agreement: external AI
 
@@ -15,7 +15,7 @@ Test results and limitations are in [EXTERNAL-AI.md](EXTERNAL-AI.md).
 
 ## Current state
 
-The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; all four instances run Gateway build `d645ed9` (deployed 2026-10-06) · Windows Client `1.9.5` · external AI events with JPEGs are received · per-camera audio is enabled on one camera
+The live system is Central :5173 → Regional (central region) :5273 (node 100) → Windows Edge 101 / Ubuntu Edge 102; Gateway `651549d` is verified across Central, Regional and published Edge update manifests (2026-10-17) · Windows Client `1.14.2` is in the release feed · external AI events with JPEGs are received · per-camera audio is enabled on one camera
 On 2026-10-07 the Regional reserved Edge number `103` as a **test Edge** the user deliberately links to the central Regional although its province is in another region — so the Regional now accepts out-of-region cameras with only a warning (it used to reject the whole batch with 409, silently); permissions and per-region summaries at Central still count cameras by their own province.
 Central issues nation-wide keys and accepts Regionals only; a Regional issues in-region keys and accepts Edges only, so Clients can point at the region directly when the link to Central is down.
 One province can have several sites by installing separate Edges and using Remark; there is no Sub-edge.

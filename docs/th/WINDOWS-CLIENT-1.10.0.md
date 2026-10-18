@@ -1,6 +1,6 @@
 # Windows Client 1.10.0 — release validation
 
-วันที่ตรวจ: 2026-10-11 · publish production feed 1.10.0 แล้ว (`bb58d2d`); รุ่นปัจจุบัน 1.11.0
+วันที่ตรวจ: 2026-10-11 · publish production feed 1.10.0 แล้ว (`bb58d2d`); รุ่นปัจจุบันใน feed 1.14.2 (2026-10-17)
 
 ## สิ่งที่ทำ
 - Diagnostics: codec/resolution/FPS/lost frames/reconnect/fallback/error, CPU/RAM และ export JSON แบบ whitelist ไม่เก็บ URL/key/credential

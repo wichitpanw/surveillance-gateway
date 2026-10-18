@@ -1,6 +1,6 @@
 # Windows Client workspace redesign — released 1.11.0
 
-วันที่: 2026-10-11 · branch codex/client-workspace-redesign · ฐาน bb58d2d / Client 1.10.0
+วันที่: 2026-10-11 · branch codex/client-workspace-redesign · ฐาน bb58d2d / Client 1.10.0 · รุ่นต่อยอดปัจจุบันใน feed: 1.14.2 (2026-10-17)
 
 ## ปิดงานรอบ Client และ Map — 2026-10-12
 

@@ -1,4 +1,4 @@
-> สถานะปัจจุบัน 2026-10-12: Gateway a0d8867 (Central/Regional ตรวจ API; ผู้ดูแลยืนยันอัปเดตแล้ว) / Client 1.11.0 (ตรวจ full/delta feed); Map worker hotfix ปิดงานแล้ว ดู [WINDOWS-CLIENT-WORKSPACE.md](WINDOWS-CLIENT-WORKSPACE.md); รับ AI ภายนอก ไม่มี inference worker
+> สถานะปัจจุบัน 2026-10-17: Gateway 651549d (ตรวจ Central/Regional API และ edge-updates manifest) / Client 1.14.2 (ตรวจ full/delta feed); Map worker hotfix ปิดงานแล้ว ดู [WINDOWS-CLIENT-WORKSPACE.md](WINDOWS-CLIENT-WORKSPACE.md); รับ AI ภายนอก ไม่มี inference worker
 > เอกสารนี้เขียนตอนระบบสองชั้น คำว่า "central" ในหัวข้อการทำงาน/link หมายถึง **parent ของ edge** — ปัจจุบันคือ Regional (และ Regional เป็นลูกของ Central แบบเดียวกัน) ดู [REGIONAL-PLAN.md](REGIONAL-PLAN.md)
 
 # Edge ↔ Central — การทำงาน ข้อตกลง และงานที่เหลือ
@@ -7,7 +7,7 @@
 > เฟส 5 ข้อ D อธิบาย receiver ปัจจุบัน; ข้อ A/C และผลทดสอบตามวันที่เดิมเป็นประวัติ
 
 
-อัปเดต 2026-10-12 · Central → Regional ภาคกลาง (100) → Edge ใช้จริงแล้ว; Edge 103 เป็น Edge ทดสอบจังหวัดทดสอบที่ตั้งใจต่อภาคกลาง (สถานะสายล่าสุดยังไม่ได้ตรวจ); สาย link ไม่มี TLS ใช้ LAN/VPN
+อัปเดต 2026-10-17 · Central → Regional ภาคกลาง (100) → Edge ใช้จริงแล้ว; Edge 103 เป็น Edge ทดสอบจังหวัดทดสอบที่ตั้งใจต่อภาคกลาง (สถานะสายล่าสุดยังไม่ได้ตรวจ); สาย link ไม่มี TLS ใช้ LAN/VPN
 · ติดตั้ง edge ใหม่จากชุด offline และอัปเดตผ่านสายด้วยปุ่มในหน้า Edge Nodes ([EDGE-KIT.md](EDGE-KIT.md)) · เฟส 5: รับ AI event พร้อม JPEG จากต้นทางผ่าน AI Sources; ลบ inference worker แล้ว · ดูย้อนหลังดึงจากอุปกรณ์ (AXIS S30 / Uniview ใช้จริง · Hikvision / Dahua / ONVIF Profile G รอทดสอบ)
 
 ## ภาพรวม

@@ -1,6 +1,6 @@
 # Camera audio (enabled per camera)
 
-Updated: 2026-10-07 · in real use since the 2026-10-06 deploy (Gateway `d645ed9` on all four instances, Windows Client 1.9.5)
+Updated: 2026-10-17 · currently Gateway `651549d` / Windows Client `1.14.2`; per-camera audio in real use since the 2026-10-06 deploy (Gateway `d645ed9`, Windows Client `1.9.5`)
 · enabled on 1 camera as of 2026-10-07 (a Tiandy at Edge 101)
 
 ## Principles
